@@ -1,0 +1,15 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: #03060f;
+  color: #e6edf7;
+  font-family: "Helvetica Neue", Calibri, Arial, sans-serif;
+}
+
+.app {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
