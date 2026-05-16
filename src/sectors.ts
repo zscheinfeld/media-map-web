@@ -1,7 +1,12 @@
+// Canvas bounding box in slide-coord space — drives the SVG viewBox and the
+// physics bounds. Two layouts: a wide landscape canvas for desktop, and a
+// portrait canvas for mobile so planets fill a vertical viewport.
+export const CANVAS_DESKTOP = { x: -1875, y: -1253, w: 5052, h: 3279 };
+export const CANVAS_MOBILE = { x: -1200, y: -2500, w: 2400, h: 5000 };
+
 // Sector → canvas position (slide-coord space). These are the "gravity wells"
 // the physics simulation pulls each sector's planets toward.
 //
-// The canvas bbox is { x:-1875, y:-1253, w:5052, h:3279 } (see MediaMap.tsx CANVAS).
 // Edit these positions to relocate a sector on the map. Sector names below
 // match the values in the SECTOR column of the Google Sheet (case-insensitive
 // match — see `lookupSectorCenter`).
@@ -38,6 +43,44 @@ export const SECTOR_CENTERS: Record<string, { x: number; y: number }> = {
   "Uncategorized":     { x:   688, y:  386 },
 };
 
+// Mobile sector centers — two-column grid arranged top-to-bottom inside
+// CANVAS_MOBILE. Large Cap sits solo on its center row since its planets
+// (Apple, etc.) are large and need vertical clearance from the side rows.
+//
+// X positions are pushed near the canvas edges (±900 in a 2400-wide canvas)
+// so that with `xMidYMid slice` the side-column planets extend visually to the
+// edges of the phone screen. Y range is kept inside [-1900, 1900] so the top
+// and bottom rows aren't clipped on common phone aspect ratios.
+export const SECTOR_CENTERS_MOBILE: Record<string, { x: number; y: number }> = {
+  "Telecom":           { x: -900, y: -1900 },
+  "MVPD/BB":           { x:  900, y: -1900 },
+
+  "Local TV":          { x: -900, y: -1525 },
+  "Content Platform":  { x:  900, y: -1525 },
+
+  "PSM":               { x: -900, y: -1150 },
+  "Studio":            { x:  900, y: -1150 },
+
+  "HoldingCo":         { x: -900, y:  -775 },
+  "Advertising":       { x:  900, y:  -775 },
+
+  "Large Cap":         { x:    0, y:     0 },
+
+  "Publishing":        { x: -900, y:   775 },
+  "Audio":             { x:  900, y:   775 },
+
+  "Sports Leagues":    { x: -900, y:  1150 },
+  "Gaming":            { x:  900, y:  1150 },
+
+  "Exhibition":        { x: -900, y:  1525 },
+  "Hardware/Physical": { x:  900, y:  1525 },
+
+  "Social/Creator":    { x: -900, y:  1900 },
+  "AI":                { x:  900, y:  1900 },
+
+  "Uncategorized":     { x:    0, y:     0 },
+};
+
 // Stable color per sector (HSL hue). Anything not listed gets a hash-derived hue.
 export const SECTOR_HUES: Record<string, number> = {
   "Large Cap":          210,
@@ -62,11 +105,15 @@ export const SECTOR_HUES: Record<string, number> = {
 
 // Build a case-insensitive lookup so "telecom"/"TELECOM"/"Telecom" all match.
 const centersByLower = new Map<string, { x: number; y: number }>();
+const mobileCentersByLower = new Map<string, { x: number; y: number }>();
 const huesByLower = new Map<string, number>();
 const canonicalByLower = new Map<string, string>();
 for (const k of Object.keys(SECTOR_CENTERS)) {
   centersByLower.set(k.toLowerCase(), SECTOR_CENTERS[k]);
   canonicalByLower.set(k.toLowerCase(), k);
+}
+for (const k of Object.keys(SECTOR_CENTERS_MOBILE)) {
+  mobileCentersByLower.set(k.toLowerCase(), SECTOR_CENTERS_MOBILE[k]);
 }
 for (const k of Object.keys(SECTOR_HUES)) {
   huesByLower.set(k.toLowerCase(), SECTOR_HUES[k]);
@@ -102,10 +149,16 @@ export function sectorCenterFor(
   sector: string,
   index: number,
   totalUnknown: number,
+  mobile = false,
 ): { x: number; y: number } {
-  const known = centersByLower.get(sector.toLowerCase());
+  const centers = mobile ? mobileCentersByLower : centersByLower;
+  const known = centers.get(sector.toLowerCase());
   if (known) return known;
   const angle = (index / Math.max(1, totalUnknown)) * Math.PI * 2;
+  if (mobile) {
+    const radius = 900;
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  }
   const radius = 1400;
   return {
     x: 688 + Math.cos(angle) * radius,

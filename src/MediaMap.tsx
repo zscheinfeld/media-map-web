@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import { usePhysicsLayout, type PlanetNode, type ViewMode } from "./usePhysicsLayout";
-import { SECTOR_CENTERS, hueForSector, isKnownSector, sectorCenterFor } from "./sectors";
+import {
+  CANVAS_DESKTOP,
+  CANVAS_MOBILE,
+  SECTOR_CENTERS,
+  hueForSector,
+  isKnownSector,
+  sectorCenterFor,
+} from "./sectors";
 import {
   CURRENT_DATE,
   buildDateRange,
@@ -13,9 +20,21 @@ import {
   type MapDate,
 } from "./historical";
 
-// The slide-coordinate bounding box we render into. Matches the prior slide canvas
-// so the existing sector positions still feel right.
-const CANVAS = { x: -1875, y: -1253, w: 5052, h: 3279 };
+const MOBILE_BREAKPOINT_PX = 768;
+
+function useIsMobile(): boolean {
+  const [m, setM] = useState<boolean>(() =>
+    typeof window !== "undefined" &&
+    window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`);
+    const handler = (e: MediaQueryListEvent) => setM(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return m;
+}
 
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 8;
@@ -125,21 +144,7 @@ function Planet({
   );
 }
 
-function Sidebar({
-  sectors,
-  counts,
-  enabled,
-  onToggle,
-  onAll,
-  total,
-  loading,
-  error,
-  showLabels,
-  onToggleLabels,
-  hoveredSector,
-  onHoverSector,
-  onFocusSector,
-}: {
+type SectorPanelProps = {
   sectors: string[];
   counts: Record<string, number>;
   enabled: Set<string>;
@@ -153,23 +158,26 @@ function Sidebar({
   hoveredSector: string | null;
   onHoverSector: (s: string | null) => void;
   onFocusSector: (s: string) => void;
-}) {
+};
+
+function SectorPanelContent({
+  sectors,
+  counts,
+  enabled,
+  onToggle,
+  onAll,
+  total,
+  loading,
+  error,
+  showLabels,
+  onToggleLabels,
+  hoveredSector,
+  onHoverSector,
+  onFocusSector,
+  showLabelsToggle = true,
+}: SectorPanelProps & { showLabelsToggle?: boolean }) {
   return (
-    <aside
-      style={{
-        width: 240,
-        flex: "0 0 240px",
-        height: "100vh",
-        overflowY: "auto",
-        background: "rgba(7, 14, 32, 0.85)",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
-        color: "#e6edf7",
-        padding: "16px 14px",
-        boxSizing: "border-box",
-        fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
-        userSelect: "none",
-      }}
-    >
+    <>
       <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>
         Sectors
       </div>
@@ -195,28 +203,30 @@ function Sidebar({
         <button onClick={() => onAll(true)} style={pillBtn}>All</button>
         <button onClick={() => onAll(false)} style={pillBtn}>None</button>
       </div>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginTop: 10,
-          padding: "6px 8px",
-          borderRadius: 6,
-          cursor: "pointer",
-          fontSize: 12,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={showLabels}
-          onChange={onToggleLabels}
-          style={{ accentColor: "#9aa6b8" }}
-        />
-        <span style={{ opacity: 0.85 }}>Show sector labels</span>
-      </label>
+      {showLabelsToggle && (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginTop: 10,
+            padding: "6px 8px",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontSize: 12,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showLabels}
+            onChange={onToggleLabels}
+            style={{ accentColor: "#9aa6b8" }}
+          />
+          <span style={{ opacity: 0.85 }}>Show sector labels</span>
+        </label>
+      )}
       <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 4 }}>
         {sectors.map(s => {
           const hue = hueForSector(s);
@@ -297,7 +307,152 @@ function Sidebar({
           );
         })}
       </div>
+    </>
+  );
+}
+
+function Sidebar(props: SectorPanelProps) {
+  return (
+    <aside
+      style={{
+        width: 240,
+        flex: "0 0 240px",
+        height: "100vh",
+        overflowY: "auto",
+        background: "rgba(7, 14, 32, 0.85)",
+        borderRight: "1px solid rgba(255,255,255,0.08)",
+        color: "#e6edf7",
+        padding: "16px 14px",
+        boxSizing: "border-box",
+        fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+        userSelect: "none",
+      }}
+    >
+      <SectorPanelContent {...props} />
     </aside>
+  );
+}
+
+function MobileSectorTriggerBar({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div
+      style={{
+        flex: "0 0 auto",
+        display: "flex",
+        alignItems: "center",
+        padding: "10px 12px",
+        background: "rgba(7,14,32,0.95)",
+        borderTop: "1px solid rgba(255,255,255,0.10)",
+        boxSizing: "border-box",
+      }}
+    >
+      <button
+        onClick={onOpen}
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.18)",
+          borderRadius: 10,
+          color: "white",
+          padding: "10px 14px",
+          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          fontSize: 14,
+          fontWeight: 600,
+          letterSpacing: 0.6,
+          cursor: "pointer",
+        }}
+      >
+        + Sectors
+      </button>
+    </div>
+  );
+}
+
+function MobileSectorDrawer({
+  open,
+  onClose,
+  ...sectorProps
+}: SectorPanelProps & { open: boolean; onClose: () => void }) {
+  return (
+    <>
+      {/* Backdrop — click anywhere outside the drawer to close */}
+      <div
+        onClick={onClose}
+        aria-hidden={!open}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.55)",
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+          transition: "opacity 240ms ease",
+          zIndex: 50,
+        }}
+      />
+      {/* Drawer */}
+      <div
+        role="dialog"
+        aria-label="Sectors"
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxHeight: "82vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "rgba(7,14,32,0.97)",
+          borderTop: "1px solid rgba(255,255,255,0.12)",
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          color: "#e6edf7",
+          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          userSelect: "none",
+          transform: open ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 280ms cubic-bezier(0.4, 0, 0.2, 1)",
+          zIndex: 51,
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 14px 6px",
+          }}
+        >
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.18)", margin: "0 auto" }} />
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 14px 20px" }}>
+          <SectorPanelContent {...sectorProps} showLabelsToggle={false} />
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close sectors panel"
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 12,
+            background: "rgba(255,255,255,0.10)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            borderRadius: 8,
+            color: "white",
+            width: 32,
+            height: 32,
+            display: "grid",
+            placeItems: "center",
+            cursor: "pointer",
+            fontSize: 14,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -314,7 +469,6 @@ const pillBtn: React.CSSProperties = {
 
 const THUMB_ANCHOR_VAL = 4308;
 const THUMB_ANCHOR_DIAM = 1143;
-const THUMB_CANVAS = { x: -1875, y: -1253, w: 5052, h: 3279 };
 
 // Carousel slot sizing
 const CAROUSEL_SLOT_W = 220;
@@ -331,6 +485,7 @@ function MapThumbnail({
   date,
   baseCompanies,
   nodes,
+  canvas,
   isActive,
   isSelected,
   onClick,
@@ -339,6 +494,7 @@ function MapThumbnail({
   date: MapDate;
   baseCompanies: SheetCompany[];
   nodes: PlanetNode[];
+  canvas: { x: number; y: number; w: number; h: number };
   isActive: boolean;
   isSelected: boolean;
   onClick: () => void;
@@ -376,7 +532,7 @@ function MapThumbnail({
       <div
         style={{
           width: "100%",
-          aspectRatio: `${THUMB_CANVAS.w / THUMB_CANVAS.h}`,
+          aspectRatio: `${canvas.w / canvas.h}`,
           background:
             "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)",
           borderRadius: 10,
@@ -398,7 +554,7 @@ function MapThumbnail({
         <svg
           width="100%"
           height="100%"
-          viewBox={`${THUMB_CANVAS.x} ${THUMB_CANVAS.y} ${THUMB_CANVAS.w} ${THUMB_CANVAS.h}`}
+          viewBox={`${canvas.x} ${canvas.y} ${canvas.w} ${canvas.h}`}
           preserveAspectRatio="xMidYMid meet"
         >
           {nodes.map(n => {
@@ -445,6 +601,7 @@ function Carousel({
   activeIdx,
   baseCompanies,
   nodes,
+  canvas,
   onSelect,
   onHover,
   onAddView,
@@ -455,6 +612,7 @@ function Carousel({
   activeIdx: number;
   baseCompanies: SheetCompany[];
   nodes: PlanetNode[];
+  canvas: { x: number; y: number; w: number; h: number };
   onSelect: (d: MapDate) => void;
   onHover: (d: MapDate | null) => void;
   onAddView: () => void;
@@ -559,6 +717,7 @@ function Carousel({
                 date={d}
                 baseCompanies={baseCompanies}
                 nodes={nodes}
+                canvas={canvas}
                 isActive={isActive}
                 isSelected={isSelected}
                 onClick={() => onSelect(d)}
@@ -711,6 +870,12 @@ function TimelineStrip({
 }
 
 export default function MediaMap() {
+  const isMobile = useIsMobile();
+  const canvas = useMemo(
+    () => (isMobile ? CANVAS_MOBILE : CANVAS_DESKTOP),
+    [isMobile],
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
   const [containerH, setContainerH] = useState(0);
@@ -724,6 +889,7 @@ export default function MediaMap() {
   const [showSectorLabels, setShowSectorLabels] = useState(true);
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
+  const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
   // The currently-rendered date.
   const [activeDate, setActiveDate] = useState<MapDate>(CURRENT_DATE);
   // Bookmarks the user explicitly saved via the "Add view" button.
@@ -834,25 +1000,25 @@ export default function MediaMap() {
   // Bounds for the physics simulation: inset inside the canvas bbox so planets
   // keep breathing room from the edges.
   const physicsBounds = useMemo(() => ({
-    x0: CANVAS.x + 120,
-    y0: CANVAS.y + 120,
-    x1: CANVAS.x + CANVAS.w - 120,
-    y1: CANVAS.y + CANVAS.h - 120,
-  }), []);
-  const nodes = usePhysicsLayout(displayedCompanies, enabled, physicsBounds, viewMode);
+    x0: canvas.x + 120,
+    y0: canvas.y + 120,
+    x1: canvas.x + canvas.w - 120,
+    y1: canvas.y + canvas.h - 120,
+  }), [canvas]);
+  const nodes = usePhysicsLayout(displayedCompanies, enabled, physicsBounds, viewMode, isMobile);
 
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
   // and a horizontal scrollbar appears.
   const linearStripSlideWidth = useMemo(() => {
-    if (viewMode !== "linear") return CANVAS.w;
-    let maxRight = CANVAS.x + CANVAS.w;
+    if (viewMode !== "linear") return canvas.w;
+    let maxRight = canvas.x + canvas.w;
     for (const n of nodes) {
       const right = n.x + n.r + 80;
       if (right > maxRight) maxRight = right;
     }
-    return Math.max(CANVAS.w, maxRight - CANVAS.x);
-  }, [nodes, viewMode]);
+    return Math.max(canvas.w, maxRight - canvas.x);
+  }, [nodes, viewMode, canvas]);
 
   // measure container
   useEffect(() => {
@@ -868,12 +1034,12 @@ export default function MediaMap() {
   }, []);
 
   const view = useMemo(() => {
-    const w = CANVAS.w / zoom;
-    const h = CANVAS.h / zoom;
-    const cx = CANVAS.x + CANVAS.w / 2 + pan.x;
-    const cy = CANVAS.y + CANVAS.h / 2 + pan.y;
+    const w = canvas.w / zoom;
+    const h = canvas.h / zoom;
+    const cx = canvas.x + canvas.w / 2 + pan.x;
+    const cy = canvas.y + canvas.h / 2 + pan.y;
     return { x: cx - w / 2, y: cy - h / 2, w, h };
-  }, [zoom, pan]);
+  }, [zoom, pan, canvas]);
 
   const slideUnitsPerPx = containerW > 0 ? view.w / containerW : 1;
 
@@ -907,12 +1073,12 @@ export default function MediaMap() {
     const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
     const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
     if (newZoom === zoom) return;
-    const newW = CANVAS.w / newZoom;
-    const newH = CANVAS.h / newZoom;
+    const newW = canvas.w / newZoom;
+    const newH = canvas.h / newZoom;
     const newCx = slideX + (0.5 - mx / rect.width) * newW;
     const newCy = slideY + (0.5 - my / rect.height) * newH;
     setZoom(newZoom);
-    setPan({ x: newCx - (CANVAS.x + CANVAS.w / 2), y: newCy - (CANVAS.y + CANVAS.h / 2) });
+    setPan({ x: newCx - (canvas.x + canvas.w / 2), y: newCy - (canvas.y + canvas.h / 2) });
   };
 
   const zoomRafRef = useRef<number | null>(null);
@@ -985,11 +1151,11 @@ export default function MediaMap() {
 
   // Click-to-focus on a planet.
   const focusOnPlanet = (node: PlanetNode) => {
-    const targetViewW = Math.max(node.r * 6, CANVAS.w / MAX_ZOOM);
-    const targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, CANVAS.w / targetViewW));
+    const targetViewW = Math.max(node.r * 6, canvas.w / MAX_ZOOM);
+    const targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, canvas.w / targetViewW));
     const targetPan = {
-      x: node.x - (CANVAS.x + CANVAS.w / 2),
-      y: node.y - (CANVAS.y + CANVAS.h / 2),
+      x: node.x - (canvas.x + canvas.w / 2),
+      y: node.y - (canvas.y + canvas.h / 2),
     };
     animateView(targetZoom, targetPan);
   };
@@ -1018,11 +1184,11 @@ export default function MediaMap() {
     const bh = Math.max(maxY - minY, 1) * PAD;
     const targetZoom = Math.min(
       MAX_ZOOM,
-      Math.max(MIN_ZOOM, Math.min(CANVAS.w / bw, CANVAS.h / bh)),
+      Math.max(MIN_ZOOM, Math.min(canvas.w / bw, canvas.h / bh)),
     );
     const targetPan = {
-      x: cx - (CANVAS.x + CANVAS.w / 2),
-      y: cy - (CANVAS.y + CANVAS.h / 2),
+      x: cx - (canvas.x + canvas.w / 2),
+      y: cy - (canvas.y + canvas.h / 2),
     };
     animateView(targetZoom, targetPan, 950);
   };
@@ -1054,23 +1220,33 @@ export default function MediaMap() {
     });
   }, [nodes, view, viewMode]);
 
+  const sectorPanelProps: SectorPanelProps = {
+    sectors: allSectors,
+    counts,
+    enabled,
+    onToggle: toggleSector,
+    onAll: setAll,
+    total: companies.length,
+    loading,
+    error,
+    showLabels: showSectorLabels,
+    onToggleLabels: () => setShowSectorLabels(v => !v),
+    hoveredSector,
+    onHoverSector: setHoveredSector,
+    onFocusSector: focusOnSector,
+  };
+
   return (
-    <div style={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <Sidebar
-        sectors={allSectors}
-        counts={counts}
-        enabled={enabled}
-        onToggle={toggleSector}
-        onAll={setAll}
-        total={companies.length}
-        loading={loading}
-        error={error}
-        showLabels={showSectorLabels}
-        onToggleLabels={() => setShowSectorLabels(v => !v)}
-        hoveredSector={hoveredSector}
-        onHoverSector={setHoveredSector}
-        onFocusSector={focusOnSector}
-      />
+    <div
+      style={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
+      {!isMobile && <Sidebar {...sectorPanelProps} />}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
             background: "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)" }}>
         {/* Live interactive map — always mounted so physics keeps running.
@@ -1103,16 +1279,22 @@ export default function MediaMap() {
           <svg
             width={
               viewMode === "linear" && containerH > 0
-                ? Math.max(containerW, (linearStripSlideWidth / CANVAS.h) * containerH)
+                ? Math.max(containerW, (linearStripSlideWidth / canvas.h) * containerH)
                 : "100%"
             }
             height="100%"
             viewBox={
               viewMode === "linear"
-                ? `${CANVAS.x} ${CANVAS.y} ${linearStripSlideWidth} ${CANVAS.h}`
+                ? `${canvas.x} ${canvas.y} ${linearStripSlideWidth} ${canvas.h}`
                 : `${view.x} ${view.y} ${view.w} ${view.h}`
             }
-            preserveAspectRatio={viewMode === "linear" ? "xMinYMax meet" : "xMidYMid meet"}
+            preserveAspectRatio={
+              viewMode === "linear"
+                ? "xMinYMax meet"
+                : isMobile
+                  ? "xMidYMid slice"
+                  : "xMidYMid meet"
+            }
             style={{ display: "block" }}
           >
             <defs>
@@ -1136,23 +1318,23 @@ export default function MediaMap() {
             </defs>
 
             <rect
-              x={CANVAS.x}
-              y={CANVAS.y}
-              width={viewMode === "linear" ? linearStripSlideWidth : CANVAS.w}
-              height={CANVAS.h}
+              x={canvas.x}
+              y={canvas.y}
+              width={viewMode === "linear" ? linearStripSlideWidth : canvas.w}
+              height={canvas.h}
               fill="url(#starfield)"
               opacity={0.6}
             />
 
-            {/* Sector labels — only in map mode; the linear view doesn't have
-                sector regions. */}
-            {viewMode === "map" && showSectorLabels && (() => {
+            {/* Sector labels — only in map mode (and never on mobile, where
+                they would clutter the smaller viewport). */}
+            {viewMode === "map" && showSectorLabels && !isMobile && (() => {
               const visibleSectors = allSectors.filter(s => enabled.has(s));
               const unknownVisible = visibleSectors.filter(s => !isKnownSector(s));
               const labelFontPx = 16 * slideUnitsPerPx;
               return visibleSectors.map(s => {
                 const unknownIdx = unknownVisible.indexOf(s);
-                const c = sectorCenterFor(s, unknownIdx, unknownVisible.length);
+                const c = sectorCenterFor(s, unknownIdx, unknownVisible.length, isMobile);
                 const isHighlighted = hoveredSector === s;
                 const isFaded = hoveredSector !== null && !isHighlighted;
                 const fill = isHighlighted
@@ -1263,6 +1445,7 @@ export default function MediaMap() {
               activeIdx={dateRange.findIndex(d => sameDate(d, activeDate))}
               baseCompanies={companies}
               nodes={nodes}
+              canvas={canvas}
               onSelect={(d) => { setHoveredDateSettled(null); selectDate(d); }}
               onHover={setHoveredDateSettled}
               onAddView={addActiveToSavedViews}
@@ -1501,6 +1684,18 @@ export default function MediaMap() {
         )}
 
       </div>
+
+      {/* Mobile-only: bottom pill bar that opens the sectors drawer. */}
+      {isMobile && (
+        <MobileSectorTriggerBar onOpen={() => setMobileSectorsOpen(true)} />
+      )}
+      {isMobile && (
+        <MobileSectorDrawer
+          {...sectorPanelProps}
+          open={mobileSectorsOpen}
+          onClose={() => setMobileSectorsOpen(false)}
+        />
+      )}
     </div>
   );
 }
