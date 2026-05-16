@@ -5,6 +5,8 @@ import {
   CANVAS_DESKTOP,
   CANVAS_MOBILE,
   SECTOR_CENTERS,
+  flatStyleForSector,
+  hexToRgba,
   hueForSector,
   isKnownSector,
   sectorCenterFor,
@@ -67,16 +69,43 @@ function Planet({
   onClick: (node: PlanetNode) => void;
   dimmed: boolean;
 }) {
-  const gradId = `planet-${node.name.replace(/[^a-z0-9]/gi, "_")}`;
+  const safeName = node.name.replace(/[^a-z0-9]/gi, "_");
+  const gradId = `planet-${safeName}`;
+  const clipId = `planet-clip-${safeName}`;
+  const glowFilterId = `planet-glow-${safeName}`;
   const hue = node.hue;
+  const style = node.style;
+  const stripes = style?.stripes && style.stripes.length >= 2 ? style.stripes : null;
+  const hasExplicitFill = !!(stripes || style?.fill);
+  const glow = style?.glow ?? null;
+  // Glow params are screen-pixel based for consistency at any zoom level.
+  const glowBlur = glow ? (glow.blurPx ?? 5) * slideUnitsPerPx : 0;
+  const glowSpread = glow ? (glow.spreadPx ?? 4) * slideUnitsPerPx : 0;
   const labelFontPx = LABEL_SCREEN_PX * slideUnitsPerPx;
   const screenDiameter = (node.r * 2) / slideUnitsPerPx;
   const showLabel = screenDiameter >= LABEL_MIN_SCREEN_DIAMETER || isHovered;
 
-  const baseStrokeColor = `hsla(${hue}, 70%, 75%, 0.55)`;
-  const baseStrokeWidth = Math.max(1, node.r * 0.01);
+  // Stroke defaults: explicit override > stripes[0] at 0.55 alpha > fill at 0.55 alpha > hue-based.
+  const baseStrokeColor =
+    style?.stroke
+    ?? (stripes ? hexToRgba(stripes[0], 0.55) : null)
+    ?? (style?.fill ? hexToRgba(style.fill, 0.55) : null)
+    ?? `hsla(${hue}, 70%, 75%, 0.55)`;
+  const baseStrokeWidth = style?.strokeWidthPx !== undefined
+    ? style.strokeWidthPx * slideUnitsPerPx
+    : Math.max(1, node.r * 0.01);
   // Hover stroke is computed in screen px (so it looks consistent at any zoom).
   const hoverStrokeWidth = 2.5 * slideUnitsPerPx;
+
+  // Stripe geometry: equal-height rectangles in a "stripe frame", clipped to
+  // the planet circle, then rotated to the chosen orientation. The rectangles
+  // are sized to cover the circle's bounding box; the clipPath does the rest.
+  // Default orientation is "vertical" (90°). Apple etc. opt back to horizontal.
+  const stripeAngle = stripes
+    ? (style?.stripeOrientation === "horizontal" ? 0
+        : style?.stripeOrientation === "diagonal" ? 45
+        : 90)
+    : 0;
 
   return (
     <g
@@ -89,21 +118,74 @@ function Planet({
       onMouseLeave={() => onHoverChange(null)}
       onClick={() => onClick(node)}
     >
-      <defs>
-        <radialGradient id={gradId} cx="38%" cy="38%" r="65%">
-          <stop offset="0%" stopColor={`hsl(${hue}, 75%, 72%)`} stopOpacity="0.95" />
-          <stop offset="55%" stopColor={`hsl(${hue}, 65%, 45%)`} stopOpacity="0.85" />
-          <stop offset="100%" stopColor={`hsl(${hue}, 55%, 22%)`} stopOpacity="0.9" />
-        </radialGradient>
-      </defs>
-      <circle
-        cx={node.x}
-        cy={node.y}
-        r={node.r}
-        fill={`url(#${gradId})`}
-        stroke={isHovered ? "rgba(255,255,255,0.95)" : baseStrokeColor}
-        strokeWidth={isHovered ? hoverStrokeWidth : baseStrokeWidth}
-      />
+      {glow && (
+        <>
+          <defs>
+            <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation={glowBlur} />
+            </filter>
+          </defs>
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={node.r + glowSpread}
+            fill={glow.color}
+            filter={`url(#${glowFilterId})`}
+          />
+        </>
+      )}
+      {!hasExplicitFill && (
+        <defs>
+          <radialGradient id={gradId} cx="38%" cy="38%" r="65%">
+            <stop offset="0%" stopColor={`hsl(${hue}, 75%, 72%)`} stopOpacity="0.95" />
+            <stop offset="55%" stopColor={`hsl(${hue}, 65%, 45%)`} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={`hsl(${hue}, 55%, 22%)`} stopOpacity="0.9" />
+          </radialGradient>
+        </defs>
+      )}
+      {stripes ? (
+        <>
+          <defs>
+            <clipPath id={clipId}>
+              <circle cx={0} cy={0} r={node.r} />
+            </clipPath>
+          </defs>
+          <g transform={`translate(${node.x},${node.y}) rotate(${stripeAngle})`}>
+            <g clipPath={`url(#${clipId})`}>
+              {stripes.map((c, i) => {
+                const stripeH = (2 * node.r) / stripes.length;
+                return (
+                  <rect
+                    key={i}
+                    x={-node.r}
+                    y={-node.r + i * stripeH}
+                    width={2 * node.r}
+                    height={stripeH + 0.5 /* fudge to hide hairline seams */}
+                    fill={c}
+                  />
+                );
+              })}
+            </g>
+          </g>
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={node.r}
+            fill="none"
+            stroke={isHovered ? "rgba(255,255,255,0.95)" : baseStrokeColor}
+            strokeWidth={isHovered ? hoverStrokeWidth : baseStrokeWidth}
+          />
+        </>
+      ) : (
+        <circle
+          cx={node.x}
+          cy={node.y}
+          r={node.r}
+          fill={style?.fill ?? `url(#${gradId})`}
+          stroke={isHovered ? "rgba(255,255,255,0.95)" : baseStrokeColor}
+          strokeWidth={isHovered ? hoverStrokeWidth : baseStrokeWidth}
+        />
+      )}
       {showLabel && (
         <foreignObject
           x={node.x - node.r}
@@ -121,20 +203,22 @@ function Planet({
               alignItems: "center",
               justifyContent: "center",
               textAlign: "center",
-              fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
               color: "#fff",
               fontSize: `${labelFontPx}px`,
               lineHeight: 1.15,
               padding: `${labelFontPx * 0.3}px`,
               boxSizing: "border-box",
               textShadow: "0 0 4px rgba(0,0,0,0.7)",
+              WebkitTextStroke: `${0.7 * slideUnitsPerPx}px #000`,
+              paintOrder: "stroke fill",
               wordBreak: "keep-all",
               overflowWrap: "normal",
               hyphens: "none",
             }}
           >
-            <div style={{ fontWeight: 600 }}>{node.name}</div>
-            <div style={{ fontWeight: 400, opacity: 0.85, marginTop: labelFontPx * 0.15 }}>
+            <div style={{ fontWeight: 700 }}>{node.name}</div>
+            <div style={{ fontWeight: 700, opacity: 0.85, marginTop: labelFontPx * 0.15 }}>
               {formatValuation(node.valuation_b)}
             </div>
           </div>
@@ -230,6 +314,27 @@ function SectorPanelContent({
       <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 4 }}>
         {sectors.map(s => {
           const hue = hueForSector(s);
+          const flat = flatStyleForSector(s);
+          const customBg = flat?.swatchBackground ?? null;
+          const primary = flat?.fill ?? flat?.stripes?.[0] ?? null;
+          const swatchBg = customBg ?? primary ?? `hsl(${hue}, 70%, 55%)`;
+          const swatchBorder =
+            customBg ? "none"
+            : flat?.stroke && flat.stroke !== "transparent" ? `1px solid ${flat.stroke}`
+            : "none";
+          const swatchGlow = customBg
+            ? "rgba(255,255,255,0.25)"
+            : primary ? hexToRgba(primary, 0.6) : `hsla(${hue}, 80%, 60%, 0.6)`;
+          // Sectors with a `glow` get a stronger, sector-tinted halo around
+          // the swatch — matches the on-map effect (e.g. PSM red glow).
+          const swatchBoxShadow = flat?.glow
+            ? `0 0 8px 2px ${flat.glow.color}`
+            : `0 0 6px ${swatchGlow}`;
+          // For sectors with a contrasting stroke (e.g. AI: black fill on dark sidebar),
+          // use the stroke color for the checkbox accent so the tick stays visible.
+          const accent =
+            (flat?.stroke && flat.stroke !== "transparent" ? flat.stroke : null)
+            ?? primary ?? `hsl(${hue}, 70%, 60%)`;
           const on = enabled.has(s);
           const isHovered = hoveredSector === s;
           return (
@@ -257,23 +362,125 @@ function SectorPanelContent({
                   transition: "background 120ms",
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => onToggle(s)}
-                  style={{ accentColor: `hsl(${hue}, 70%, 60%)`, cursor: "pointer" }}
-                  aria-label={`Toggle ${s}`}
-                />
-                <span
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 3,
-                    background: `hsl(${hue}, 70%, 55%)`,
-                    boxShadow: `0 0 6px hsla(${hue}, 80%, 60%, 0.6)`,
-                    flex: "0 0 auto",
-                  }}
-                />
+                {customBg ? (
+                  <span
+                    role="checkbox"
+                    tabIndex={0}
+                    aria-checked={on}
+                    aria-label={`Toggle ${s}`}
+                    onClick={() => onToggle(s)}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        onToggle(s);
+                      }
+                    }}
+                    style={{
+                      position: "relative",
+                      width: 13,
+                      height: 13,
+                      // border-box keeps the visual footprint identical whether
+                      // we render a border (unchecked) or not (checked), so the
+                      // row height doesn't shift between states.
+                      boxSizing: "border-box",
+                      margin: 0,
+                      borderRadius: 2,
+                      // No border when checked (matches native look across the rest of the panel).
+                      // A faint outline on the unchecked state keeps the box visible.
+                      border: on ? "none" : "1px solid rgba(255,255,255,0.35)",
+                      overflow: "hidden",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flex: "0 0 auto",
+                      verticalAlign: "middle",
+                      transition: "border-color 120ms",
+                    }}
+                  >
+                    {on && (
+                      <>
+                        {/* Gradient layer — blurred so the color transitions feel softer. */}
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            position: "absolute",
+                            inset: -2,
+                            background: customBg,
+                            filter: "blur(1px)",
+                          }}
+                        />
+                        {/* Native-style check, rendered crisply on top of the blurred gradient. */}
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 16 16"
+                          width={11}
+                          height={11}
+                          style={{ position: "relative", display: "block", overflow: "visible" }}
+                        >
+                          <path
+                            d="M 3.5 8.5 L 6.8 11.6 L 12.5 5.4"
+                            stroke="white"
+                            strokeWidth={2}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </>
+                    )}
+                  </span>
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => onToggle(s)}
+                    style={{
+                      width: 13,
+                      height: 13,
+                      margin: 0,
+                      boxSizing: "border-box",
+                      verticalAlign: "middle",
+                      accentColor: accent,
+                      cursor: "pointer",
+                    }}
+                    aria-label={`Toggle ${s}`}
+                  />
+                )}
+                {customBg ? (
+                  <span
+                    style={{
+                      position: "relative",
+                      width: 10,
+                      height: 10,
+                      borderRadius: 3,
+                      boxShadow: `0 0 6px ${swatchGlow}`,
+                      overflow: "hidden",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    <span
+                      style={{
+                        position: "absolute",
+                        inset: -2,
+                        background: customBg,
+                        filter: "blur(1px)",
+                      }}
+                    />
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 3,
+                      background: swatchBg,
+                      border: swatchBorder,
+                      boxShadow: swatchBoxShadow,
+                      flex: "0 0 auto",
+                    }}
+                  />
+                )}
               </label>
               {/* Name half — fires hover (highlight on map) and click (focus zoom) */}
               <div
@@ -324,7 +531,7 @@ function Sidebar(props: SectorPanelProps) {
         color: "#e6edf7",
         padding: "16px 14px",
         boxSizing: "border-box",
-        fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
         userSelect: "none",
       }}
     >
@@ -358,7 +565,7 @@ function MobileSectorTriggerBar({ onOpen }: { onOpen: () => void }) {
           borderRadius: 10,
           color: "white",
           padding: "10px 14px",
-          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
           fontSize: 14,
           fontWeight: 600,
           letterSpacing: 0.6,
@@ -409,7 +616,7 @@ function MobileSectorDrawer({
           borderTopLeftRadius: 18,
           borderTopRightRadius: 18,
           color: "#e6edf7",
-          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
           userSelect: "none",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: "transform 280ms cubic-bezier(0.4, 0, 0.2, 1)",
@@ -561,14 +768,20 @@ function MapThumbnail({
             const v = valByName.get(n.name) ?? 0;
             const r = (THUMB_ANCHOR_DIAM * Math.sqrt(Math.max(v, 0) / THUMB_ANCHOR_VAL)) / 2;
             if (r < 2) return null;
+            // Thumbnail dots are too small for visible stripes; show the first
+            // stripe color (or the flat fill) as a representative dot.
+            const primary = n.style?.fill ?? n.style?.stripes?.[0] ?? null;
+            const fill = primary ?? `hsl(${n.hue}, 65%, 55%)`;
+            const stroke = n.style?.stroke
+              ?? (primary ? hexToRgba(primary, 0.5) : `hsla(${n.hue}, 70%, 75%, 0.5)`);
             return (
               <circle
                 key={n.name}
                 cx={n.x}
                 cy={n.y}
                 r={r}
-                fill={`hsl(${n.hue}, 65%, 55%)`}
-                stroke={`hsla(${n.hue}, 70%, 75%, 0.5)`}
+                fill={fill}
+                stroke={stroke}
                 strokeWidth={Math.max(1, r * 0.04)}
               />
             );
@@ -577,7 +790,7 @@ function MapThumbnail({
       </div>
       <div
         style={{
-          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
           fontSize: isSelected ? 13 : 11,
           fontWeight: isSelected ? 700 : isActive ? 600 : 500,
           color: isSelected
@@ -747,7 +960,7 @@ function Carousel({
           background: canAddView ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.03)",
           border: `1px solid ${canAddView ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"}`,
           color: canAddView ? "white" : "rgba(255,255,255,0.4)",
-          fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: 1.2,
@@ -829,7 +1042,7 @@ function TimelineStrip({
               padding: 0,
               cursor: "pointer",
               color: isHovered || active ? "white" : "rgba(255,255,255,0.55)",
-              fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
               fontSize: 10,
               letterSpacing: 0.5,
               position: "relative",
@@ -1349,12 +1562,15 @@ export default function MediaMap() {
                     y={c.y}
                     textAnchor="middle"
                     fill={fill}
+                    stroke="#000"
+                    strokeWidth={0.8 * slideUnitsPerPx}
                     fontSize={labelFontPx}
-                    fontWeight={isHighlighted ? 700 : 600}
+                    fontWeight={700}
                     style={{
                       letterSpacing: 1.5,
                       textTransform: "uppercase",
                       pointerEvents: "none",
+                      paintOrder: "stroke fill",
                       transition: "fill 220ms ease",
                     }}
                   >
@@ -1413,7 +1629,7 @@ export default function MediaMap() {
                     border: "none",
                     borderRadius: 7,
                     padding: "6px 14px",
-                    fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+                    fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
                     fontSize: 12,
                     fontWeight: active ? 700 : 500,
                     letterSpacing: 1.2,
@@ -1507,7 +1723,7 @@ export default function MediaMap() {
                   padding: "8px 14px",
                   backdropFilter: "blur(6px)",
                   color: isActive ? "white" : isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.7)",
-                  fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+                  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
                   fontSize: 13,
                   fontWeight: isActive ? 600 : 500,
                   letterSpacing: 1,
@@ -1564,7 +1780,7 @@ export default function MediaMap() {
               padding: "8px 14px",
               backdropFilter: "blur(6px)",
               color: "white",
-              fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
               fontSize: 13,
               fontWeight: 600,
               letterSpacing: 1,
@@ -1598,7 +1814,7 @@ export default function MediaMap() {
               padding: "8px 14px",
               backdropFilter: "blur(6px)",
               color: "white",
-              fontFamily: '"Helvetica Neue", Calibri, Arial, sans-serif',
+              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
               fontSize: 13,
               fontWeight: 600,
               letterSpacing: 1,
