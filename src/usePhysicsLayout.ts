@@ -113,6 +113,7 @@ export function usePhysicsLayout(
   enabledSectors: Set<string>,
   bounds: Bounds,
   viewMode: ViewMode = "map",
+  isMobile: boolean = false,
 ) {
   const [nodes, setNodes] = useState<PlanetNode[]>([]);
   const simRef = useRef<Simulation<PlanetNode, undefined> | null>(null);
@@ -142,7 +143,7 @@ export function usePhysicsLayout(
     const map = nodeMapRef.current;
     const built: PlanetNode[] = active.map(c => {
       const unknownIdx = unknownSectors.indexOf(c.sector);
-      const center = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length);
+      const center = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, isMobile);
       const r = diameterFor(c.valuation_b) / 2;
       const existing = map.get(c.name);
       if (existing) {
@@ -291,7 +292,7 @@ export function usePhysicsLayout(
       sim.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies, filterKey, viewMode]);
+  }, [companies, filterKey, viewMode, isMobile]);
 
   return nodes;
 }
