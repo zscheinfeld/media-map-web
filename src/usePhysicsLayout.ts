@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { forceSimulation, forceX, forceY, type Simulation } from "d3-force";
 import type { SheetCompany } from "./loadCompanies";
-import { hueForSector, isKnownSector, sectorCenterFor } from "./sectors";
+import { hueForSector, isKnownSector, planetStyleFor, sectorCenterFor, type PlanetStyle } from "./sectors";
 
 export type PlanetNode = {
   name: string;
@@ -10,6 +10,7 @@ export type PlanetNode = {
   r: number;       // currently-displayed radius (tweens toward targetR)
   targetR: number; // size implied by the current month's valuation
   hue: number;
+  style: PlanetStyle | null;
   // d3 mutates these in place
   x: number;
   y: number;
@@ -152,6 +153,7 @@ export function usePhysicsLayout(
         // Tween the displayed `r` toward the new target — don't snap.
         existing.targetR = r;
         existing.hue = hueForSector(c.sector);
+        existing.style = planetStyleFor(c.name, c.sector);
         existing.targetX = center.x;
         existing.targetY = center.y;
         return existing;
@@ -163,6 +165,7 @@ export function usePhysicsLayout(
         r,
         targetR: r,
         hue: hueForSector(c.sector),
+        style: planetStyleFor(c.name, c.sector),
         x: center.x + (Math.random() - 0.5) * 120,
         y: center.y + (Math.random() - 0.5) * 120,
         targetX: center.x,

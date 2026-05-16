@@ -81,6 +81,114 @@ export const SECTOR_CENTERS_MOBILE: Record<string, { x: number; y: number }> = {
   "Uncategorized":     { x:    0, y:     0 },
 };
 
+// Planet style — drives the look of a single planet. A sector entry sets the
+// default look for every planet in that sector; a company entry overrides the
+// sector look for one company (e.g. NVIDIA inside Large Cap).
+//
+// - `fill`        : single flat color. Used when there are no `stripes`.
+// - `stripes`     : array of colors. When 2+ are present, the planet renders as
+//                   equal-width stripes in the chosen orientation. `fill` is
+//                   ignored.
+// - `stripeOrientation` : "vertical" (default), "horizontal", or "diagonal" (45°).
+// - `stroke`      : optional outline color. Defaults to fill (or first stripe)
+//                   at 0.55 alpha.
+// - `strokeWidthPx` : optional outline width in screen pixels. Defaults to a
+//                     small fraction of the planet radius.
+export type StripeOrientation = "horizontal" | "vertical" | "diagonal";
+export type PlanetStyle = {
+  fill?: string;
+  stripes?: string[];
+  stripeOrientation?: StripeOrientation;
+  stroke?: string;
+  strokeWidthPx?: number;
+  // Soft glow rendered behind the planet (e.g. PSM = yellow planet on a
+  // halo of red). `spreadPx` extends the glow beyond the planet's radius;
+  // `blurPx` is the Gaussian blur amount. Both are in screen pixels.
+  glow?: {
+    color: string;
+    blurPx?: number;
+    spreadPx?: number;
+  };
+  // Sidebar-only override. When set, the sector's indicator dot and checkbox
+  // render with this CSS `background` value (gradient, etc.). Has no effect
+  // on planet rendering — use this when a sector's planets vary too much for
+  // any single color to represent them (e.g. Large Cap, where each company
+  // gets its own brand palette).
+  swatchBackground?: string;
+};
+
+// Sector-level default styles. Sectors not listed fall back to the legacy
+// HSL gradient look driven by SECTOR_HUES.
+export const SECTOR_FLAT_STYLES: Record<string, PlanetStyle> = {
+  "Audio":          { fill: "#EE7D31" },
+  "Advertising":    { fill: "#FF7F7C" },
+  "Telecom":        { fill: "#548235" },
+  "Gaming":         { fill: "#9437FF" },
+  "Sports Leagues": { fill: "#5B0615" },
+  "AI":             { fill: "#000000", stroke: "#FFFFFF", strokeWidthPx: 0.5 },
+  "MVPD/BB":        { fill: "#BF9001" },
+  "Publishing":     { fill: "#FFFFFF" },
+  "HoldingCo":      { fill: "#5A2D00" },
+  "Studio":         { fill: "#C00000" },
+  "Hardware/Physical": { fill: "#767171" },
+  "PSM":            {
+    fill: "#FCFC06",
+    glow: { color: "#F40B0A", blurPx: 5, spreadPx: 2.8 },
+  },
+  "Social/Creator": { fill: "#74FEFF" },
+  "Exhibition":     { fill: "#FF23D9" },
+  // Large Cap: planets vary per-company (Apple, NVIDIA, Alphabet etc. each
+  // have their own brand palette). The sector-level entry contributes a
+  // rainbow swatch for the sidebar and a transparent stroke that every Large
+  // Cap planet inherits (unless a company entry explicitly overrides it).
+  "Large Cap":      {
+    stroke: "transparent",
+    // Vertical color bands (90deg = horizontal sweep, so bands are vertical).
+    // The sidebar applies a small filter:blur() on top to soften the transitions.
+    swatchBackground:
+      "linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #5ac8fa, #007aff, #af52de)",
+  },
+};
+
+// Per-company style overrides. Takes precedence over the sector default.
+// CMS-friendly shape: each entry is the same `PlanetStyle` object the sector
+// map uses, so the CMS only needs to expose one schema.
+export const COMPANY_STYLES: Record<string, PlanetStyle> = {
+  "NVIDIA":    { stripes: ["#78CF3F", "#2D2D36", "#4DBCA1", "#686775", "#999AA3"] },
+  "Alphabet":  { stripes: ["#3E5FB0", "#A63632", "#B0801F", "#357550", "#533089"] },
+  "Meta":      { stripes: ["#94959F", "#7D849D", "#64789D", "#3F4D9C", "#29409E"] },
+  "ByteDance": { stripes: ["#A11C22", "#3DA4B7", "#0F0D17", "#A81E28", "#45ACB5"] },
+  "Amazon":    { stripes: ["#A7662B", "#224D87", "#110D1F", "#242843", "#9F99A9"] },
+  "Samsung":   {
+    stripes: [
+      "#575362", "#1B5FA1", "#B18828", "#B24825", "#A10C32",
+      "#8D097E", "#4E3F97", "#113D8D", "#1D74A7", "#1A6D7F", "#1E7A3E",
+    ],
+  },
+  "Apple":     {
+    stripes: ["#155E9D", "#969AB2", "#64667B", "#48495B", "#0C0D1D"],
+    stripeOrientation: "horizontal",
+  },
+  "Alibaba":   { stripes: ["#D1541E", "#D0CED8", "#04020B"] },
+  "Walmart":   { stripes: ["#10162D", "#A7105F", "#B4ABAF", "#1B4D89", "#B58217"] },
+  "Microsoft": {
+    stripes: ["#A5442D", "#5E812E", "#1973AD", "#A9812E", "#585762"],
+    stripeOrientation: "diagonal",
+  },
+  "Netflix":   { stripes: ["#8C122D", "#75122B", "#5F0F29", "#4C0E26", "#07051D"] },
+  "Oracle":    {
+    stripes: [
+      "#8F0D1A", "#8F0D1A", "#9F9DA4", "#8F0D1A", "#8F0D1A",
+      "#8F0D1A", "#8F0D1A", "#9F9DA4", "#8F0D1A", "#8F0D1A",
+    ],
+    stripeOrientation: "horizontal",
+  },
+  "Reliance":  { stripes: ["#042969", "#B2040A", "#5F943B", "#2B4314"] },
+  // Tencent: outline only — transparent fill with a thin white stroke. The
+  // explicit stroke overrides the Large Cap sector's `stroke: "transparent"`.
+  "Tencent":   { fill: "transparent", stroke: "#FFFFFF", strokeWidthPx: 0.5 },
+};
+
 // Stable color per sector (HSL hue). Anything not listed gets a hash-derived hue.
 export const SECTOR_HUES: Record<string, number> = {
   "Large Cap":          210,
@@ -107,6 +215,8 @@ export const SECTOR_HUES: Record<string, number> = {
 const centersByLower = new Map<string, { x: number; y: number }>();
 const mobileCentersByLower = new Map<string, { x: number; y: number }>();
 const huesByLower = new Map<string, number>();
+const flatStylesByLower = new Map<string, PlanetStyle>();
+const companyStylesByLower = new Map<string, PlanetStyle>();
 const canonicalByLower = new Map<string, string>();
 for (const k of Object.keys(SECTOR_CENTERS)) {
   centersByLower.set(k.toLowerCase(), SECTOR_CENTERS[k]);
@@ -117,6 +227,12 @@ for (const k of Object.keys(SECTOR_CENTERS_MOBILE)) {
 }
 for (const k of Object.keys(SECTOR_HUES)) {
   huesByLower.set(k.toLowerCase(), SECTOR_HUES[k]);
+}
+for (const k of Object.keys(SECTOR_FLAT_STYLES)) {
+  flatStylesByLower.set(k.toLowerCase(), SECTOR_FLAT_STYLES[k]);
+}
+for (const k of Object.keys(COMPANY_STYLES)) {
+  companyStylesByLower.set(k.toLowerCase(), COMPANY_STYLES[k]);
 }
 
 export function normSector(s: string | undefined): string {
@@ -135,6 +251,36 @@ function hashHue(s: string): number {
 
 export function hueForSector(sector: string): number {
   return huesByLower.get(sector.toLowerCase()) ?? hashHue(sector);
+}
+
+/**
+ * Style for a single planet. The sector default provides baseline fields; the
+ * per-company override extends/overrides individual keys. Either may be absent.
+ *
+ * Example: Large Cap sets `stroke: "transparent"` at the sector level; Apple's
+ * company entry adds `stripes` + `stripeOrientation` but inherits the transparent
+ * stroke from the sector default.
+ */
+export function planetStyleFor(name: string, sector: string): PlanetStyle | null {
+  const company = companyStylesByLower.get(name.toLowerCase());
+  const sec = flatStylesByLower.get(sector.toLowerCase());
+  if (!company && !sec) return null;
+  return { ...(sec ?? {}), ...(company ?? {}) };
+}
+
+/** Sidebar swatches show the sector default, never a per-company override. */
+export function flatStyleForSector(sector: string): PlanetStyle | null {
+  return flatStylesByLower.get(sector.toLowerCase()) ?? null;
+}
+
+/** Convert "#EE7D31" (or "#eee") to "rgba(r, g, b, a)". */
+export function hexToRgba(hex: string, alpha: number): string {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 export function isKnownSector(sector: string): boolean {

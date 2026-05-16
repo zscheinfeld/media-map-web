@@ -1,9 +1,25 @@
+@font-face {
+  font-family: "Calibri";
+  src: url("/calibri.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibri";
+  src: url("/calibri_bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
   background: #03060f;
   color: #e6edf7;
-  font-family: "Helvetica Neue", Calibri, Arial, sans-serif;
+  font-family: Calibri, "Helvetica Neue", Arial, sans-serif;
 }
 
 .app {
