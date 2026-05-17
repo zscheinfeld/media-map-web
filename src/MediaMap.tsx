@@ -1258,16 +1258,27 @@ export default function MediaMap() {
 
   // Drag-to-pan (no auto-recenter on release — felt distracting).
   const dragRef = useRef<{ startX: number; startY: number; pan0: { x: number; y: number } } | null>(null);
+  // True once the cursor has moved beyond DRAG_THRESHOLD_PX from mousedown.
+  // Consumed by the planet onClick so that drag gestures don't accidentally
+  // fire the focus-zoom interaction on a planet under the cursor.
+  const didDragRef = useRef(false);
+  const DRAG_THRESHOLD_PX = 4;
 
   const onMouseDown = (e: React.MouseEvent) => {
     cancelZoomAnim();
     dragRef.current = { startX: e.clientX, startY: e.clientY, pan0: { ...pan } };
+    didDragRef.current = false;
     (e.currentTarget as HTMLElement).style.cursor = "grabbing";
   };
   const onMouseMove = (e: React.MouseEvent) => {
     if (!dragRef.current || containerW === 0) return;
-    const dx = (e.clientX - dragRef.current.startX) * slideUnitsPerPx;
-    const dy = (e.clientY - dragRef.current.startY) * slideUnitsPerPx;
+    const screenDx = e.clientX - dragRef.current.startX;
+    const screenDy = e.clientY - dragRef.current.startY;
+    if (!didDragRef.current && Math.hypot(screenDx, screenDy) > DRAG_THRESHOLD_PX) {
+      didDragRef.current = true;
+    }
+    const dx = screenDx * slideUnitsPerPx;
+    const dy = screenDy * slideUnitsPerPx;
     setPan({ x: dragRef.current.pan0.x - dx, y: dragRef.current.pan0.y - dy });
   };
   const onMouseUp = (e: React.MouseEvent) => {
@@ -1591,7 +1602,10 @@ export default function MediaMap() {
                 slideUnitsPerPx={slideUnitsPerPx}
                 isHovered={hoveredPlanet === n.name}
                 onHoverChange={setHoveredPlanet}
-                onClick={focusOnPlanet}
+                onClick={(node) => {
+                  if (didDragRef.current) return;
+                  focusOnPlanet(node);
+                }}
                 dimmed={hoveredSector !== null && n.sector !== hoveredSector}
               />
             ))}
