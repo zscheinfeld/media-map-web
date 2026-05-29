@@ -4,7 +4,6 @@ export type SheetCompany = {
   name: string;
   valuation_b: number;
   sector: string;
-  planetSize?: number;
 };
 
 const SHEET_ID = "1ZVOsVf4fcoh1y08MecBcYtuVWfM54hTP9WVhBDAmgrc";
@@ -44,10 +43,9 @@ function findHeaderRow(rows: string[][]): { index: number; map: Record<string, n
     const valCol = r.findIndex(c => c.startsWith("valuation"));
     if (nameCol >= 0 && valCol >= 0) {
       const sectorCol = r.findIndex(c => c === "sector" || c === "category");
-      const sizeCol = r.findIndex(c => c === "planet size" || c === "planet_size");
       return {
         index: i,
-        map: { name: nameCol, val: valCol, sector: sectorCol, size: sizeCol },
+        map: { name: nameCol, val: valCol, sector: sectorCol },
       };
     }
   }
@@ -86,8 +84,7 @@ export async function loadCompanies(): Promise<SheetCompany[]> {
     if (seen.has(key)) continue;
     seen.add(key);
     const sector = normSector(map.sector >= 0 ? r[map.sector] : undefined);
-    const planetSize = map.size >= 0 ? toNum(r[map.size]) : undefined;
-    out.push({ name, valuation_b: val, sector, planetSize });
+    out.push({ name, valuation_b: val, sector });
   }
   return out;
 }
