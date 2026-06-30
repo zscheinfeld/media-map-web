@@ -5,7 +5,7 @@ name: Ingest valuations
 # after adding a company in Sanity to sync the sheet immediately.
 on:
   schedule:
-    - cron: "0 9 * * *" # daily at 09:00 UTC
+    - cron: "0 0 * * *" # daily at 00:00 UTC (~7-8pm US Eastern, after market close)
   workflow_dispatch: {}
 
 jobs:

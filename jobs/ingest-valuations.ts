@@ -128,19 +128,23 @@ async function openSheet(): Promise<SheetTarget> {
   return {sheets, spreadsheetId, tabName}
 }
 
-/** Existing per-slug month values + vetting status — preserved across runs. */
+/** Existing per-slug month values, vetting status, and the ticker each row was
+ *  built from — all preserved across runs. The stored ticker lets a daily run
+ *  notice when Sanity's ticker changed and re-pull that row's whole history. */
 async function readExisting(
   t: SheetTarget,
-): Promise<{values: Map<string, Map<string, number>>; status: Map<string, string>}> {
+): Promise<{values: Map<string, Map<string, number>>; status: Map<string, string>; tickers: Map<string, string>}> {
   const values = new Map<string, Map<string, number>>()
   const status = new Map<string, string>()
+  const tickers = new Map<string, string>()
   const resp = await t.sheets.spreadsheets.values.get({spreadsheetId: t.spreadsheetId, range: t.tabName})
   const rows = resp.data.values ?? []
-  if (rows.length < 2) return {values, status}
+  if (rows.length < 2) return {values, status, tickers}
   const header = rows[0].map((h) => String(h).trim().toLowerCase())
   const slugIdx = header.indexOf('slug')
-  if (slugIdx < 0) return {values, status}
+  if (slugIdx < 0) return {values, status, tickers}
   const statusIdx = header.indexOf('vetting_status')
+  const tickerIdx = header.indexOf('ticker')
   const monthCols = header.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}-\d{2}$/.test(h))
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r]
@@ -156,8 +160,10 @@ async function readExisting(
     values.set(slug, months)
     const st = statusIdx >= 0 ? String(row[statusIdx] ?? '').trim() : ''
     if (st) status.set(slug, st)
+    const tk = tickerIdx >= 0 ? String(row[tickerIdx] ?? '').trim() : ''
+    if (tk) tickers.set(slug, tk)
   }
-  return {values, status}
+  return {values, status, tickers}
 }
 
 async function writeGrid(t: SheetTarget, grid: (string | number)[][]): Promise<void> {
@@ -191,11 +197,13 @@ async function main() {
   let target: SheetTarget | null = null
   let preserve = new Map<string, Map<string, number>>()
   let preserveStatus = new Map<string, string>()
+  let preserveTicker = new Map<string, string>()
   if (writeMode) {
     target = await openSheet()
     const ex = await readExisting(target)
     preserve = ex.values
     preserveStatus = ex.status
+    preserveTicker = ex.tickers
     console.log(`Write mode → tab "${target.tabName}". Preserving values + status from ${preserve.size} existing rows.`)
   }
   console.log(`${roster.length} companies; ${fetchable.length} market-cap with a ticker. Columns: ${months.length} months.`)
@@ -225,7 +233,11 @@ async function main() {
         na++
       } else {
         const existing = preserve.get(c.slug ?? '')
-        const hasHistory = !!existing && [...existing.keys()].some((m) => m !== currentMonth)
+        const prevTicker = preserveTicker.get(c.slug ?? '')
+        // A changed ticker (edited in Sanity) invalidates the stored history —
+        // it belonged to the OLD symbol. Force a full re-pull for the new one.
+        const tickerChanged = !!prevTicker && prevTicker.toUpperCase() !== ticker.toUpperCase()
+        const hasHistory = !!existing && !tickerChanged && [...existing.keys()].some((m) => m !== currentMonth)
         if (hasHistory) {
           // DAILY: history is frozen — preserve every past month from the sheet,
           // refresh ONLY the current month from the live profile.
@@ -235,7 +247,9 @@ async function main() {
           lastUpdated = today
           filled++
         } else {
-          // BACKFILL: first time we've seen this company → pull its full history once.
+          // BACKFILL: first time we've seen this company, OR its ticker changed →
+          // re-pull the entire history for the (new) symbol.
+          if (tickerChanged) console.log(`  ticker changed for "${c.slug}": ${prevTicker} → ${ticker} — re-pulling full history`)
           const {covered, daily} = await fetchHistory(ticker, windows)
           if (!covered || daily.length === 0) {
             valueCells = cols.map(() => 'NA')
