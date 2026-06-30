@@ -106,7 +106,7 @@ async function fetchProfile(ticker: string): Promise<Profile> {
 }
 
 // ── Google Sheets write mode (Action / service account) ─────────────────────
-type SheetTarget = {sheets: ReturnType<typeof google.sheets>; spreadsheetId: string; tabName: string}
+type SheetTarget = {sheets: ReturnType<typeof google.sheets>; spreadsheetId: string; tabName: string; sheetId: number}
 
 const isWriteMode = () =>
   !!(process.env.SHEET_ID && (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS))
@@ -125,7 +125,29 @@ async function openSheet(): Promise<SheetTarget> {
   // Target the named tab if given, else the first sheet in the spreadsheet.
   const meta = await sheets.spreadsheets.get({spreadsheetId})
   const tabName = process.env.SHEET_TAB ?? meta.data.sheets?.[0]?.properties?.title ?? 'Sheet1'
-  return {sheets, spreadsheetId, tabName}
+  const sheetId = meta.data.sheets?.find((s) => s.properties?.title === tabName)?.properties?.sheetId ?? 0
+  return {sheets, spreadsheetId, tabName, sheetId}
+}
+
+/** Force the month columns to a plain number format. A freshly created month
+ *  column can otherwise inherit a neighbour's date format, which renders market
+ *  caps as dates (e.g. 151.61 → "1900-05-30") and breaks the published-CSV parse.
+ *  Only the month block is touched — vetting_status validation etc. is untouched. */
+async function enforceMonthFormat(t: SheetTarget, firstMonthCol: number, monthCount: number): Promise<void> {
+  await t.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: t.spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {sheetId: t.sheetId, startRowIndex: 1, startColumnIndex: firstMonthCol, endColumnIndex: firstMonthCol + monthCount},
+            cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0.##'}}},
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+      ],
+    },
+  })
 }
 
 /** Existing per-slug month values, vetting status, and the ticker each row was
@@ -287,6 +309,7 @@ async function main() {
   ]
   if (writeMode && target) {
     await writeGrid(target, grid)
+    await enforceMonthFormat(target, grid[0].length - cols.length, cols.length)
     console.log(`\nWrote ${rows.length} rows directly to the sheet — ${filled} with FMP data, ${na} "NA", manual values preserved.`)
   } else {
     writeFileSync('market_cap.csv', toCsv(grid))
