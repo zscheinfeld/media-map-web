@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run build --workspace @media-map/map-core && vite",
+    "build": "npm run build --workspace @media-map/map-core && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@media-map/map-core": "*",
     "@types/d3-force": "^3.0.10",
     "d3-force": "^3.0.0",
     "react": "^19.2.6",

@@ -2,15 +2,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import {
   usePhysicsLayout,
-  sheetPlanetSize,
-  ANCHOR_VAL,
-  SHEET_SIZE_ANCHOR,
-  ANCHOR_DIAM_FALLBACK,
+  Planet,
+  ConnectionLine,
+  computeAnchorDiam,
+  makeMoment,
   type PlanetNode,
   type ViewMode,
-} from "./usePhysicsLayout";
+  type LayoutInput,
+} from "@media-map/map-core";
 import { COMPANY_POSITIONS, type PlanetPosition } from "./layout";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
+import { isSanityConfigured } from "./sanityClient";
+import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
+
+// Side-panel label for each company's primary metric (chosen in Sanity).
+const VALUATION_LABELS: Record<ValuationType, string> = {
+  market_cap: "Latest Market Cap",
+  fundraising_valuation: "Fundraising Valuation",
+  yearly_revenue: "Yearly Revenue",
+};
 import {
   CANVAS_DESKTOP,
   SECTOR_CENTERS,
@@ -18,18 +28,19 @@ import {
   hexToRgba,
   hueForSector,
   isKnownSector,
+  planetStyleFor,
   sectorCenterFor,
 } from "./sectors";
 import {
   CURRENT_DATE,
   buildDateRange,
-  companiesForDate,
   dateIndex,
   formatDate,
   sameDate,
   valuationForDate,
   type MapDate,
 } from "./historical";
+import { useValuations, valuationAt, latestMonth, type ValuationData } from "./loadValuations";
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -75,18 +86,6 @@ const VALUATION_ZOOM_THRESHOLD = 1.9;
 // labels appear. Doesn't affect desktop.
 const MOBILE_LABEL_ZOOM_THRESHOLD = 2.5;
 
-const LABEL_SCREEN_PX = 12;
-// Below this on-screen diameter, planets render without a visible label
-// (label still appears on hover). 0 = always show labels regardless of zoom.
-const LABEL_MIN_SCREEN_DIAMETER = 0;
-// Minimum label-box dimensions in screen pixels. Small planets need a label
-// box that's larger than the planet itself so the text isn't crushed; this
-// gives every label enough room for ~12-character names on two lines without
-// wrapping mid-word. The box centers on the planet so labels visually extend
-// outside the circle, matching the reference design.
-const LABEL_MIN_BOX_W_PX = 130;
-const LABEL_MIN_BOX_H_PX = 52;
-
 function formatValuation(b: number): string {
   if (b >= 1000) return `$${(b / 1000).toFixed(b >= 10000 ? 1 : 2)}T`;
   if (b >= 10) return `$${b.toFixed(0)}B`;
@@ -112,236 +111,6 @@ function measureLabelTextWidth(text: string, fontPx: number, weight: number = 70
   return w;
 }
 
-function Planet({
-  node,
-  slideUnitsPerPx,
-  isHovered,
-  onHoverChange,
-  onClick,
-  dimmed,
-  labelSizePx = LABEL_SCREEN_PX,
-  isEditMode = false,
-  isSelected = false,
-  onPlanetMouseDown,
-  showValuation = false,
-  suppressNonLargeCapLabel = false,
-}: {
-  node: PlanetNode;
-  slideUnitsPerPx: number;
-  isHovered: boolean;
-  onHoverChange: (name: string | null) => void;
-  onClick: (node: PlanetNode) => void;
-  dimmed: boolean;
-  labelSizePx?: number;
-  isEditMode?: boolean;
-  isSelected?: boolean;
-  onPlanetMouseDown?: (node: PlanetNode, e: React.MouseEvent) => void;
-  showValuation?: boolean;
-  suppressNonLargeCapLabel?: boolean;
-}) {
-  const safeName = node.name.replace(/[^a-z0-9]/gi, "_");
-  const gradId = `planet-${safeName}`;
-  const clipId = `planet-clip-${safeName}`;
-  const glowFilterId = `planet-glow-${safeName}`;
-  const hue = node.hue;
-  const style = node.style;
-  const stripes = style?.stripes && style.stripes.length >= 2 ? style.stripes : null;
-  const hasExplicitFill = !!(stripes || style?.fill);
-  const glow = style?.glow ?? null;
-  // Glow params are screen-pixel based for consistency at any zoom level.
-  const glowBlur = glow ? (glow.blurPx ?? 5) * slideUnitsPerPx : 0;
-  const glowSpread = glow ? (glow.spreadPx ?? 4) * slideUnitsPerPx : 0;
-  const labelFontPx = labelSizePx * slideUnitsPerPx;
-  const screenDiameter = (node.r * 2) / slideUnitsPerPx;
-  // Mobile temporary plan: hide non-Large-Cap labels until zoomed in. Hover
-  // (desktop only in practice) always wins.
-  const labelHidden = suppressNonLargeCapLabel && node.sector !== "Large Cap";
-  const showLabel = isHovered || (!labelHidden && screenDiameter >= LABEL_MIN_SCREEN_DIAMETER);
-
-  // Stroke defaults: explicit override > stripes[0] at 0.55 alpha > fill at 0.55 alpha > hue-based.
-  const baseStrokeColor =
-    style?.stroke
-    ?? (stripes ? hexToRgba(stripes[0], 0.55) : null)
-    ?? (style?.fill ? hexToRgba(style.fill, 0.55) : null)
-    ?? `hsla(${hue}, 70%, 75%, 0.55)`;
-  const baseStrokeWidth = style?.strokeWidthPx !== undefined
-    ? style.strokeWidthPx * slideUnitsPerPx
-    : Math.max(1, node.r * 0.01);
-  // Hover stroke is computed in screen px (so it looks consistent at any zoom).
-  const hoverStrokeWidth = 2.5 * slideUnitsPerPx;
-
-  // Stripe geometry: equal-height rectangles in a "stripe frame", clipped to
-  // the planet circle, then rotated to the chosen orientation. The rectangles
-  // are sized to cover the circle's bounding box; the clipPath does the rest.
-  // Default orientation is "vertical" (90°). Apple etc. opt back to horizontal.
-  const stripeAngle = stripes
-    ? (style?.stripeOrientation === "horizontal" ? 0
-        : style?.stripeOrientation === "diagonal" ? 45
-        : 90)
-    : 0;
-
-  return (
-    <g
-      style={{
-        cursor: isEditMode ? "grab" : "pointer",
-        opacity: dimmed ? 0.2 : 1,
-        transition: "opacity 220ms ease",
-      }}
-      onMouseEnter={() => onHoverChange(node.name)}
-      onMouseLeave={() => onHoverChange(null)}
-      onMouseDown={onPlanetMouseDown ? (e) => onPlanetMouseDown(node, e) : undefined}
-      onClick={() => onClick(node)}
-    >
-      {glow && (
-        <>
-          <defs>
-            <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
-              <feGaussianBlur stdDeviation={glowBlur} />
-            </filter>
-          </defs>
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={node.r + glowSpread}
-            fill={glow.color}
-            filter={`url(#${glowFilterId})`}
-          />
-        </>
-      )}
-      {!hasExplicitFill && (
-        <defs>
-          <radialGradient id={gradId} cx="38%" cy="38%" r="65%">
-            <stop offset="0%" stopColor={`hsl(${hue}, 75%, 72%)`} stopOpacity="0.95" />
-            <stop offset="55%" stopColor={`hsl(${hue}, 65%, 45%)`} stopOpacity="0.85" />
-            <stop offset="100%" stopColor={`hsl(${hue}, 55%, 22%)`} stopOpacity="0.9" />
-          </radialGradient>
-        </defs>
-      )}
-      {stripes ? (
-        <>
-          <defs>
-            <clipPath id={clipId}>
-              <circle cx={0} cy={0} r={node.r} />
-            </clipPath>
-          </defs>
-          <g transform={`translate(${node.x},${node.y}) rotate(${stripeAngle})`}>
-            <g clipPath={`url(#${clipId})`}>
-              {stripes.map((c, i) => {
-                const stripeH = (2 * node.r) / stripes.length;
-                return (
-                  <rect
-                    key={i}
-                    x={-node.r}
-                    y={-node.r + i * stripeH}
-                    width={2 * node.r}
-                    height={stripeH + 0.5 /* fudge to hide hairline seams */}
-                    fill={c}
-                  />
-                );
-              })}
-            </g>
-          </g>
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={node.r}
-            fill="none"
-            stroke={isHovered ? "rgba(255,255,255,0.95)" : baseStrokeColor}
-            strokeWidth={isHovered ? hoverStrokeWidth : baseStrokeWidth}
-          />
-        </>
-      ) : (
-        <circle
-          cx={node.x}
-          cy={node.y}
-          r={node.r}
-          fill={style?.fill ?? `url(#${gradId})`}
-          stroke={isHovered ? "rgba(255,255,255,0.95)" : baseStrokeColor}
-          strokeWidth={isHovered ? hoverStrokeWidth : baseStrokeWidth}
-        />
-      )}
-      {/* Edit-mode visual cues — only rendered when ?edit=1 is on. */}
-      {/* Pinned planets get a red ring just outside the planet edge. The gap
-          (between the planet at r and the ring) keeps it visible even on red
-          planets. */}
-      {isEditMode && node.pinned && (
-        <circle
-          cx={node.x}
-          cy={node.y}
-          r={node.r + 5 * slideUnitsPerPx}
-          fill="none"
-          stroke="#ff3b30"
-          strokeWidth={2 * slideUnitsPerPx}
-          pointerEvents="none"
-        />
-      )}
-      {isEditMode && isSelected && (
-        <circle
-          cx={node.x}
-          cy={node.y}
-          r={node.r + 6 * slideUnitsPerPx}
-          fill="none"
-          stroke="#ffe066"
-          strokeWidth={2 * slideUnitsPerPx}
-          strokeDasharray={`${4 * slideUnitsPerPx} ${3 * slideUnitsPerPx}`}
-          pointerEvents="none"
-        />
-      )}
-      {showLabel && (() => {
-        // For big planets, the label box matches the circle diameter (label
-        // fits inside). For small planets, the box is larger than the circle
-        // so the text can render legibly outside the planet's bounding shape.
-        const minBoxW = LABEL_MIN_BOX_W_PX * slideUnitsPerPx;
-        const minBoxH = LABEL_MIN_BOX_H_PX * slideUnitsPerPx;
-        const boxW = Math.max(node.r * 2, minBoxW);
-        const boxH = Math.max(node.r * 2, minBoxH);
-        return (
-          <foreignObject
-            x={node.x - boxW / 2}
-            y={node.y - boxH / 2}
-            width={boxW}
-            height={boxH}
-            style={{ pointerEvents: "none", overflow: "visible" }}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-                color: "#fff",
-                fontSize: `${labelFontPx}px`,
-                lineHeight: 1.0,
-                boxSizing: "border-box",
-                textShadow: "0 0 4px rgba(0,0,0,0.7)",
-                WebkitTextStroke: `${0.7 * slideUnitsPerPx}px #000`,
-                paintOrder: "stroke fill",
-                wordBreak: "keep-all",
-                overflowWrap: "normal",
-                hyphens: "none",
-              }}
-            >
-              <div style={{ fontWeight: 700 }}>
-                {node.name.trim().split(/\s+/).map((word, i) => (
-                  <div key={i}>{word}</div>
-                ))}
-              </div>
-              {(node.sector === "Large Cap" || showValuation) && (
-                <div style={{ fontWeight: 700, opacity: 0.85, marginTop: labelFontPx * 0.15 }}>
-                  {formatValuation(node.valuation_b)}
-                </div>
-              )}
-            </div>
-          </foreignObject>
-        );
-      })()}
-    </g>
-  );
-}
 
 type SectorPanelProps = {
   sectors: string[];
@@ -819,24 +588,122 @@ function MobileSectorDrawer({
   );
 }
 
+// Minimum months of data before a company is "complete" enough to chart.
+const CHART_MONTHS_MIN = 12;
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtMonthLabel(m: string): string {
+  const [y, mo] = m.split("-");
+  return `${MONTHS_SHORT[Number(mo) - 1] ?? mo} ${y}`;
+}
+
+// "Nice" round number ≥ x (1/2/5 × 10ⁿ) — for clean axis steps.
+function niceNum(x: number): number {
+  if (x <= 0) return 1;
+  const exp = Math.floor(Math.log10(x));
+  const f = x / 10 ** exp;
+  const nf = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
+  return nf * 10 ** exp;
+}
+// Evenly-spaced round tick values spanning [min, max].
+function niceTicks(min: number, max: number, count: number): number[] {
+  const step = niceNum((max - min || max || 1) / count);
+  const start = Math.floor(min / step) * step;
+  const end = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = start; v <= end + step * 0.5; v += step) ticks.push(Math.round(v * 100) / 100);
+  return ticks.length >= 2 ? ticks : [min, max];
+}
+
+/** Scrubable historical market-cap line chart with year (X) + value (Y) axes. */
+function HistoryChart({ series }: { series: { month: string; value: number }[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const W = 300, H = 132;
+  const M = { top: 8, right: 6, bottom: 18, left: 36 };
+  const plotW = W - M.left - M.right;
+  const plotH = H - M.top - M.bottom;
+  const n = series.length;
+
+  const values = series.map((s) => s.value);
+  const yTicks = niceTicks(Math.min(...values), Math.max(...values), 3);
+  const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
+  const yRange = yMax - yMin || 1;
+
+  const xAt = (i: number) => M.left + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
+  const yAt = (v: number) => M.top + (1 - (v - yMin) / yRange) * plotH;
+
+  const path = series
+    .map((s, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(s.value).toFixed(1)}`)
+    .join(" ");
+
+  // X year labels — thinned to ~5 across the span.
+  const years = [...new Set(series.map((s) => s.month.slice(0, 4)))];
+  const yearStep = Math.max(1, Math.ceil(years.length / 5));
+  const yearTicks = years
+    .filter((_, i) => i % yearStep === 0)
+    .map((y) => ({ year: y, x: xAt(series.findIndex((s) => s.month.startsWith(y))) }));
+
+  const cur = hoverIdx ?? n - 1; // default readout = latest point
+  const cs = series[cur];
+
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const vbX = ((e.clientX - rect.left) / rect.width) * W;
+    const ratio = (vbX - M.left) / plotW;
+    setHoverIdx(Math.round(Math.max(0, Math.min(1, ratio)) * (n - 1)));
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, opacity: 0.6 }}>{fmtMonthLabel(cs.month)}</span>
+        <span style={{ fontSize: 16, fontWeight: 700 }}>{formatValuation(cs.value)}</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{ display: "block", cursor: "crosshair", overflow: "visible" }}
+        onMouseMove={onMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        {/* Y gridlines + value labels */}
+        {yTicks.map((t, i) => (
+          <g key={`y${i}`}>
+            <line x1={M.left} y1={yAt(t)} x2={W - M.right} y2={yAt(t)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+            <text x={M.left - 5} y={yAt(t) + 3} textAnchor="end" fontSize={9} fill="rgba(255,255,255,0.4)">
+              {formatValuation(t)}
+            </text>
+          </g>
+        ))}
+        {/* X year labels */}
+        {yearTicks.map((yt, i) => (
+          <text key={`x${i}`} x={yt.x} y={H - 4} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.4)">
+            {yt.year}
+          </text>
+        ))}
+        <path d={path} fill="none" stroke="#7aa2ff" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+        <line x1={xAt(cur)} y1={M.top} x2={xAt(cur)} y2={M.top + plotH} stroke="rgba(255,255,255,0.22)" strokeWidth={1} />
+        <circle cx={xAt(cur)} cy={yAt(cs.value)} r={3.5} fill="#fff" stroke="#7aa2ff" strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
+}
+
 function PlanetDetailPanel({
   node,
-  anchorDiam,
+  detail,
+  lastUpdated,
+  history,
   onClose,
 }: {
   node: PlanetNode | null;
-  anchorDiam: number;
+  detail: CompanyDetail | null;
+  lastUpdated?: string;
+  history: { month: string; value: number }[];
   onClose: () => void;
 }) {
   const open = node !== null;
   const valuation = node?.valuation_b ?? 0;
-  // What the renderer actually uses: sqrt(val / 2900) × anchorDiam (slide units).
-  const rendererDiameter = node
-    ? Math.sqrt(Math.max(valuation, 0) / ANCHOR_VAL) * anchorDiam
-    : 0;
-  // What the source spreadsheet computes — same formula, fixed anchor 9.77,
-  // shown for cross-checking against the original sheet.
-  const sheetSize = node ? sheetPlanetSize(valuation) : 0;
 
   return (
     <aside
@@ -905,62 +772,85 @@ function PlanetDetailPanel({
             </div>
           </div>
 
-          <PanelSection label="Data Source">
-            <span style={{ fontStyle: "italic", opacity: 0.55, fontSize: 13 }}>
-              (placeholder — to be added)
-            </span>
-          </PanelSection>
-
-          <PanelSection label="Valuation">
-            <span style={{ fontSize: 20, fontWeight: 700 }}>
+          <PanelSection label={VALUATION_LABELS[detail?.valuationType ?? "market_cap"]}>
+            <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
               {formatValuation(valuation)}
             </span>
-            <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 8 }}>
-              ({valuation.toFixed(1)} B)
-            </span>
+            {lastUpdated && (
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 5 }}>
+                Updated {formatContentDate(lastUpdated)}
+              </div>
+            )}
           </PanelSection>
 
-          <PanelSection label="Planet Size">
-            <div style={{ fontSize: 10, opacity: 0.65, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
-              Formula
-            </div>
-            <div style={panelCodeStyle}>
-              sqrt(valuation / {ANCHOR_VAL}) × appleSize
-            </div>
+          {history.length >= CHART_MONTHS_MIN && (
+            <PanelSection label="Historical Market Cap">
+              <HistoryChart series={history} />
+            </PanelSection>
+          )}
 
-            <div style={{ fontSize: 11, opacity: 0.7, marginTop: 10, lineHeight: 1.55 }}>
-              <div>
-                <strong style={{ color: "#ffe066" }}>{ANCHOR_VAL}</strong> — Apple's reference
-                valuation in billions USD. Dividing by it converts any company's valuation
-                into a ratio relative to Apple. Constant.
+          {detail?.dataSource && (
+            <PanelSection label="Data Source">
+              <span style={{ fontSize: 14 }}>{detail.dataSource}</span>
+            </PanelSection>
+          )}
+
+          {detail?.description && (
+            <PanelSection label="Eshap's Overview">
+              <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, opacity: 0.9 }}>
+                {detail.description}
+              </p>
+            </PanelSection>
+          )}
+
+          {detail && detail.vitals.length > 0 && (
+            <PanelSection label="Vitals">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {detail.vitals.map((v, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: "rgba(255,255,255,0.07)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      borderRadius: 7,
+                      padding: "8px 11px",
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.1 }}>{v.name}</div>
+                    {v.statistic && (
+                      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>{v.statistic}</div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div style={{ marginTop: 6 }}>
-                <strong style={{ color: "#ffe066" }}>appleSize</strong> — Apple's rendered
-                diameter. Auto-computed each render so the cluster fills a target fraction
-                of the canvas without overlapping (currently <strong>{anchorDiam.toFixed(1)}</strong> slide units).
-                The source spreadsheet uses a fixed value of {SHEET_SIZE_ANCHOR} for the same role,
-                in its own units — the formula is identical, only the unit changes.
-              </div>
-            </div>
+            </PanelSection>
+          )}
 
-            <div style={{ fontSize: 10, opacity: 0.65, letterSpacing: 1, textTransform: "uppercase", marginTop: 16, marginBottom: 6 }}>
-              Calculation (renderer)
-            </div>
-            <div style={panelCodeStyle}>
-              sqrt({valuation.toFixed(1)} / {ANCHOR_VAL}) × {anchorDiam.toFixed(2)}
-              {"\n"}= sqrt({(valuation / ANCHOR_VAL).toFixed(6)}) × {anchorDiam.toFixed(2)}
-              {"\n"}= {Math.sqrt(valuation / ANCHOR_VAL).toFixed(6)} × {anchorDiam.toFixed(2)}
-            </div>
+          {detail && detail.eshapContent.length > 0 && (
+            <PanelSection label="Related Eshap Content">
+              <ContentList
+                rows={detail.eshapContent.map((c) => ({
+                  title: c.title,
+                  meta: c.kind,
+                  date: c.published_date,
+                  url: c.url,
+                }))}
+              />
+            </PanelSection>
+          )}
 
-            <div style={{ marginTop: 12, fontSize: 18, fontWeight: 700, color: "#ffe066" }}>
-              = {rendererDiameter.toFixed(4)} <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 500 }}>slide units</span>
-            </div>
-
-            <div style={{ marginTop: 14, fontSize: 11, opacity: 0.55 }}>
-              Sheet cross-check (appleSize = {SHEET_SIZE_ANCHOR}):&nbsp;
-              <strong style={{ color: "rgba(255,255,255,0.8)" }}>{sheetSize.toFixed(4)}</strong>
-            </div>
-          </PanelSection>
+          {detail && detail.externalArticles.length > 0 && (
+            <PanelSection label="External Articles">
+              <ContentList
+                rows={detail.externalArticles.map((a) => ({
+                  title: a.title,
+                  meta: a.source,
+                  date: a.published_date,
+                  url: a.url,
+                }))}
+              />
+            </PanelSection>
+          )}
         </>
       )}
     </aside>
@@ -978,17 +868,62 @@ function PanelSection({ label, children }: { label: string; children: React.Reac
   );
 }
 
-const panelCodeStyle: React.CSSProperties = {
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-  fontSize: 12,
-  color: "rgba(255,255,255,0.85)",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: 5,
-  padding: "8px 10px",
-  whiteSpace: "pre-wrap",
-  lineHeight: 1.55,
-};
+/** Format a Sanity date ("2022-11-14") as "Nov 14, 2022" for the content lists. */
+function formatContentDate(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+}
+
+/** A list of dated, optionally-linked rows (Eshap content / external articles). */
+function ContentList({
+  rows,
+}: {
+  rows: { title: string; meta?: string; date?: string; url?: string }[];
+}) {
+  return (
+    <div>
+      {rows.map((r, i) => {
+        const rowStyle: React.CSSProperties = {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 0",
+          borderTop: i > 0 ? "1px solid rgba(255,255,255,0.08)" : "none",
+          color: "#e6edf7",
+          textDecoration: "none",
+        };
+        const inner = (
+          <>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ fontWeight: 700, fontSize: 13 }}>{r.title}</span>
+              {r.meta && (
+                <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 6, textTransform: "capitalize" }}>
+                  {r.meta}
+                </span>
+              )}
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {r.date && <span style={{ opacity: 0.55, fontSize: 12 }}>{formatContentDate(r.date)}</span>}
+              {r.url && <span style={{ opacity: 0.7 }}>→</span>}
+            </span>
+          </>
+        );
+        return r.url ? (
+          <a key={i} href={r.url} target="_blank" rel="noreferrer" style={rowStyle}>
+            {inner}
+          </a>
+        ) : (
+          <div key={i} style={rowStyle}>
+            {inner}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function EditorToolbar({
   selectedName,
@@ -1612,6 +1547,7 @@ const CAROUSEL_VISIBLE_HALFWIDTH = 8; // how many slots to render on each side
 function MapThumbnail({
   date,
   baseCompanies,
+  valData,
   nodes,
   canvas,
   isActive,
@@ -1620,6 +1556,7 @@ function MapThumbnail({
 }: {
   date: MapDate;
   baseCompanies: SheetCompany[];
+  valData: ValuationData;
   nodes: PlanetNode[];
   canvas: { x: number; y: number; w: number; h: number };
   isActive: boolean;
@@ -1628,9 +1565,11 @@ function MapThumbnail({
 }) {
   const valByName = useMemo(() => {
     const m = new Map<string, number>();
-    for (const c of baseCompanies) m.set(c.name, valuationForDate(c, date));
+    // Real value from the sheet at this month (by slug); else the legacy mock.
+    for (const c of baseCompanies)
+      m.set(c.name, valuationAt(valData, c.slug, makeMoment(date.year, date.month)) ?? valuationForDate(c, date));
     return m;
-  }, [baseCompanies, date]);
+  }, [baseCompanies, valData, date]);
 
   // Local hover state — only used to surface a stroke that signals
   // clickability. It does NOT propagate up to the carousel, so hovering
@@ -1744,6 +1683,7 @@ function Carousel({
   selectedIdx,
   activeIdx,
   baseCompanies,
+  valData,
   nodes,
   canvas,
   onSelect,
@@ -1754,6 +1694,7 @@ function Carousel({
   selectedIdx: number;
   activeIdx: number;
   baseCompanies: SheetCompany[];
+  valData: ValuationData;
   nodes: PlanetNode[];
   canvas: { x: number; y: number; w: number; h: number };
   onSelect: (d: MapDate) => void;
@@ -1857,6 +1798,7 @@ function Carousel({
               <MapThumbnail
                 date={d}
                 baseCompanies={baseCompanies}
+                valData={valData}
                 nodes={nodes}
                 canvas={canvas}
                 isActive={isActive}
@@ -2301,6 +2243,92 @@ export default function MediaMap() {
   const [connectCursor, setConnectCursor] = useState<{ x: number; y: number } | null>(null);
   // The currently-rendered date.
   const [activeDate, setActiveDate] = useState<MapDate>(CURRENT_DATE);
+
+  // --- Sanity read side (Phase 4b) ---------------------------------------
+  // When VITE_SANITY_PROJECT_ID is set, the map's STRUCTURE (which companies +
+  // entities exist, sector centers, hues, styles, positions, connections) comes
+  // from Sanity, resolved at the viewed month. Valuations still come from the
+  // sheet (joined by company name) until Supabase lands (4c). Unset → `sanity`
+  // is null and the app uses the Google Sheet + local files exactly as before.
+  const { docs: sanityDocs, loading: sanityLoading, error: sanityError } = useSanityMapDocs();
+  const sanity = useResolvedSanityMap(sanityDocs, makeMoment(activeDate.year, activeDate.month));
+  // Surface a failed Sanity read (otherwise it falls back to the sheet silently).
+  useEffect(() => {
+    if (sanityError) console.warn("[media-map] Sanity read failed — using the sheet instead:", sanityError);
+  }, [sanityError]);
+  // Real market caps from the valuation Google Sheet (Phase 4c), indexed by
+  // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
+  const { data: valData, lastUpdated: lastUpdatedBySlug } = useValuations();
+  // The map's "current" month = the newest month in the valuation sheet (so the
+  // view advances automatically when the daily ingest adds a column), falling
+  // back to the calendar month until the sheet loads.
+  const currentDate = useMemo<MapDate>(() => {
+    const latest = latestMonth(valData);
+    if (latest) {
+      const [y, m] = latest.split("-").map(Number);
+      return { year: y, month: m };
+    }
+    return CURRENT_DATE;
+  }, [valData]);
+  const CURRENT_MOMENT = makeMoment(currentDate.year, currentDate.month);
+  // Once the sheet loads, advance the default view to its latest month — unless
+  // the user has already scrubbed away from the initial (calendar) month.
+  useEffect(() => {
+    setActiveDate((prev) =>
+      sameDate(prev, CURRENT_DATE) && !sameDate(currentDate, CURRENT_DATE) ? currentDate : prev,
+    );
+  }, [currentDate]);
+  // Legacy valuation lookup (by lowercased name) — the fallback for companies the
+  // new sheet doesn't cover yet (non-US "NA", or not in it).
+  const sheetValByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of companies) m.set(c.name.toLowerCase(), c.valuation_b);
+    return m;
+  }, [companies]);
+  // Valuation at a date: the new sheet (by slug + month) wins; else the legacy mock.
+  const valAt = (c: SheetCompany, d: MapDate): number =>
+    valuationAt(valData, c.slug, makeMoment(d.year, d.month)) ?? valuationForDate(c, d);
+  // Base company set: Sanity names/sectors + sheet valuations when configured,
+  // else the raw sheet companies. Feeds the timeline mock + ATH/ATL stats.
+  const baseCompanies = useMemo<SheetCompany[]>(() => {
+    // While Sanity is configured but still loading, return NOTHING. Otherwise the
+    // physics first-load animation fires on the sheet fallback, then the real
+    // Sanity data (and sector seeding) arrives mid-animation, changes the layout
+    // hook's deps, tears the running tween down, and freezes a half-settled,
+    // overlapping frame. Holding empty until the data lands makes the first-anim
+    // run once on stable data and complete every time.
+    if (isSanityConfigured() && sanityLoading) return [];
+    if (!sanity) return companies;
+    return sanity.companies.map((c) => {
+      const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
+      const detail = sanity.detailByName[c.name];
+      // Precedence: the valuation sheet's market cap at the current month (by
+      // slug) → the manually-entered Sanity value (private/PSM) → the legacy
+      // sheet (so non-US "NA" / uncovered companies still render).
+      const valuation_b =
+        valuationAt(valData, c.slug, CURRENT_MOMENT) ?? detail?.manualValue ?? sheetVal;
+      return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
+    });
+  }, [sanity, sanityLoading, companies, sheetValByName, valData, CURRENT_MOMENT]);
+  // "Last updated" date per company name (join slug → date from the sheet).
+  const lastUpdatedByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of baseCompanies) {
+      const lu = c.slug ? lastUpdatedBySlug.get(c.slug) : undefined;
+      if (lu) m.set(c.name, lu);
+    }
+    return m;
+  }, [baseCompanies, lastUpdatedBySlug]);
+  // Monthly market-cap series (oldest → newest) for the inspected company's chart.
+  const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
+    if (!inspectedPlanet) return [];
+    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
+    const months = slug ? valData.get(slug) : undefined;
+    if (!months) return [];
+    return [...months.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([month, value]) => ({ month, value }));
+  }, [inspectedPlanet, baseCompanies, valData]);
   // Bookmarks the user explicitly saved via the "Add view" button.
   // Seeded with the latest map so it always appears as a pill by default.
   const [savedViews, setSavedViews] = useState<MapDate[]>([CURRENT_DATE]);
@@ -2350,10 +2378,11 @@ export default function MediaMap() {
 
   const dateRange = useMemo(() => buildDateRange(), []);
   const displayedCompanies = useMemo(
-    () => sameDate(activeDate, CURRENT_DATE)
-      ? companies
-      : companiesForDate(companies, activeDate),
-    [companies, activeDate],
+    () => sameDate(activeDate, currentDate)
+      ? baseCompanies
+      : baseCompanies.map((c) => ({ ...c, valuation_b: valAt(c, activeDate) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [baseCompanies, activeDate, currentDate, valData],
   );
 
   // All-time high / low (with the date each occurred) for every company,
@@ -2362,18 +2391,19 @@ export default function MediaMap() {
   // (see historical.ts) — fine as placeholders until real history lands.
   const valuationStats = useMemo(() => {
     const m = new Map<string, { ath: number; athDate: MapDate; atl: number; atlDate: MapDate }>();
-    for (const c of companies) {
+    for (const c of baseCompanies) {
       let ath = -Infinity, atl = Infinity;
       let athDate = dateRange[0], atlDate = dateRange[0];
       for (const d of dateRange) {
-        const v = valuationForDate(c, d);
+        const v = valAt(c, d);
         if (v > ath) { ath = v; athDate = d; }
         if (v < atl) { atl = v; atlDate = d; }
       }
       m.set(c.name, { ath, athDate, atl, atlDate });
     }
     return m;
-  }, [companies, dateRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCompanies, dateRange, valData]);
 
   // Rows for the list view: enabled sectors only (so the sidebar filter still
   // applies), valuation at the active date, ATH/ATL across all time, sorted by
@@ -2425,8 +2455,6 @@ export default function MediaMap() {
       .then(rows => {
         if (cancelled) return;
         setCompanies(rows);
-        const sectors = new Set(rows.map(r => r.sector));
-        setEnabled(sectors);
         setError(null);
       })
       .catch(e => {
@@ -2437,23 +2465,41 @@ export default function MediaMap() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Seed the sector legend once data is available, from whichever source is live:
+  // Sanity when configured + loaded, otherwise the sheet. If the Sanity read is
+  // still pending we wait; if it FAILS, `baseCompanies` is the sheet, so we seed
+  // from the sheet and the map never blanks. One-shot (ref) so user toggles
+  // survive timeline scrubbing.
+  const enabledSeeded = useRef(false);
+  useEffect(() => {
+    if (enabledSeeded.current) return;
+    if (isSanityConfigured() && sanityLoading) return; // wait for the Sanity read to settle
+    const sectors = new Set<string>();
+    for (const c of baseCompanies) sectors.add(c.sector);
+    for (const e of sanity?.entities ?? []) sectors.add(e.sector);
+    if (sectors.size === 0) return; // no data yet (sheet still loading)
+    setEnabled(sectors);
+    enabledSeeded.current = true;
+  }, [baseCompanies, sanity, sanityLoading]);
 
   const allSectors = useMemo(() => {
     const set = new Set<string>();
-    for (const c of companies) set.add(c.sector);
+    for (const c of baseCompanies) set.add(c.sector);
     // Known sectors first (in the order declared in SECTOR_CENTERS), then unknown alphabetically.
     const known = Object.keys(SECTOR_CENTERS).filter(s => set.has(s));
     const knownSet = new Set(known);
     const unknown = [...set].filter(s => !knownSet.has(s)).sort();
     return [...known, ...unknown];
-  }, [companies]);
+  }, [baseCompanies]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const c of companies) out[c.sector] = (out[c.sector] ?? 0) + 1;
+    for (const c of baseCompanies) out[c.sector] = (out[c.sector] ?? 0) + 1;
     return out;
-  }, [companies]);
+  }, [baseCompanies]);
 
   // Bounds for the physics simulation: inset inside the canvas bbox so planets
   // keep breathing room from the edges.
@@ -2474,18 +2520,29 @@ export default function MediaMap() {
   // PACKING_DENSITY (live-tunable via the editor) is the only knob: fraction
   // of canvas area covered by planet ink. ~0.55 packs tightly without
   // overflowing; bump down for breathing room, up for a denser cluster.
-  const anchorDiam = useMemo(() => {
-    if (displayedCompanies.length === 0 || canvas.w <= 0 || canvas.h <= 0) {
-      return ANCHOR_DIAM_FALLBACK;
-    }
-    const ratioSum = displayedCompanies.reduce(
-      (sum, c) => sum + Math.max(c.valuation_b, 0) / 2900,
-      0,
-    );
-    if (ratioSum <= 0) return ANCHOR_DIAM_FALLBACK;
-    const canvasArea = canvas.w * canvas.h;
-    return Math.sqrt((4 * packingDensity * canvasArea) / (Math.PI * ratioSum));
-  }, [displayedCompanies, canvas, packingDensity]);
+  // Layout knobs: Sanity's saved Map Editor settings (at the viewed moment) win
+  // over the local edit-toolbar state, so the public map matches the editor's
+  // spacing/density. Falls back to the local defaults when Sanity has no settings.
+  const eff = {
+    packingDensity: sanity?.settings?.packingDensity ?? packingDensity,
+    collidePadding: sanity?.settings?.collidePadding ?? collidePadding,
+    labelSizePx: sanity?.settings?.labelSizePx ?? labelSizePx,
+    connectionPull: sanity?.settings?.connectionPull ?? connectionPull,
+    entityRadius: sanity?.settings?.entityRadius,
+    sizeSpacing: sanity?.settings?.sizeSpacing,
+    sectorPull: sanity?.settings?.sectorPull,
+    repulsion: sanity?.settings?.repulsion,
+  };
+
+  const anchorDiam = useMemo(
+    () =>
+      computeAnchorDiam(
+        displayedCompanies.map((c) => c.valuation_b),
+        canvas.w * canvas.h,
+        eff.packingDensity,
+      ),
+    [displayedCompanies, canvas, eff.packingDensity],
+  );
 
   // Natural slide-units-per-pixel at zoom=1 — used to size label-collision
   // radii. We base the layout on the un-zoomed ratio so the same physics
@@ -2512,20 +2569,76 @@ export default function MediaMap() {
     for (const c of displayedCompanies) {
       const words = c.name.trim().split(/\s+/);
       const maxWordPx = words.reduce(
-        (m, w) => Math.max(m, measureLabelTextWidth(w, labelSizePx, 700)),
+        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 700)),
         0,
       );
       const lineCount = words.length + (c.sector === "Large Cap" ? 1 : 0);
-      const heightPx = lineCount * labelSizePx;
+      const heightPx = lineCount * eff.labelSizePx;
       const halfExtentPx = Math.max(maxWordPx, heightPx) / 2;
       result[c.name] = halfExtentPx * naturalSlideUnitsPerPx;
     }
     return result;
-  }, [displayedCompanies, labelSizePx, naturalSlideUnitsPerPx, containerW]);
+  }, [displayedCompanies, eff.labelSizePx, naturalSlideUnitsPerPx, containerW]);
 
-  // Pass `false` for the mobile flag so the layout uses desktop sector centers
-  // on phones too (temporary mobile plan — preserve the desktop arrangement).
-  const nodes = usePhysicsLayout(displayedCompanies, enabled, physicsBounds, layoutMode, false, positions, isEditMode, anchorDiam, collidePadding, sectorPositions, labelRadii, connections, connectionPull);
+  // Adapter: resolve the sheet's companies into map-core's data-source-agnostic
+  // LayoutInput (visible-only, with each planet's default center, hue, and style
+  // resolved from sectors.ts). The `false` mobile flag keeps desktop sector
+  // centers on phones too (temporary mobile plan). Sector overrides win over the
+  // default center; a per-company position override (passed via `positions`)
+  // then wins over that inside the hook.
+  const inputs = useMemo<LayoutInput[]>(() => {
+    const allSectors = Array.from(new Set(displayedCompanies.map((c) => c.sector))).sort();
+    const unknownSectors = allSectors.filter((s) => !isKnownSector(s));
+    const activeMoment = makeMoment(activeDate.year, activeDate.month);
+    const companyInputs = displayedCompanies
+      .filter((c) => enabled.has(c.sector))
+      .map((c) => {
+        const unknownIdx = unknownSectors.indexOf(c.sector);
+        // Sanity wins for center/hue/style when configured; else the local
+        // sectors.ts defaults (and edit-mode sector overrides).
+        const center =
+          sanity?.centerBySector[c.sector] ??
+          sectorPositions[c.sector] ??
+          sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
+        // Red label when the value isn't live-sourced from the valuation sheet
+        // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
+        const live = valuationAt(valData, c.slug, activeMoment) !== undefined;
+        return {
+          name: c.name,
+          sector: c.sector,
+          valuation_b: c.valuation_b,
+          center,
+          hue: sanity?.hueBySector[c.sector] ?? hueForSector(c.sector),
+          style: sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector),
+          labelColor: live ? undefined : "#ff6b6b",
+        };
+      });
+    // Text-only entity nodes (Sanity only), filtered to enabled sectors.
+    const entityInputs = (sanity?.entities ?? []).filter((e) => enabled.has(e.sector));
+    return [...companyInputs, ...entityInputs];
+  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate]);
+
+  // Connections used for both physics and rendering: Sanity (windowed at T) when
+  // configured, else the local edit-state. The edit-mode connection authoring
+  // (selection/draw/export) still operates on the local `connections` state.
+  const effectiveConnections = sanity ? sanity.connections : connections;
+
+  const nodes = usePhysicsLayout({
+    inputs,
+    bounds: physicsBounds,
+    viewMode: layoutMode,
+    positions: sanity ? sanity.positions : positions,
+    isEditMode,
+    anchorDiam,
+    collidePadding: eff.collidePadding,
+    entityRadius: eff.entityRadius,
+    sizeSpacing: eff.sizeSpacing,
+    sectorPull: eff.sectorPull,
+    repulsion: eff.repulsion,
+    labelRadii,
+    connections: effectiveConnections,
+    connectionStrength: eff.connectionPull,
+  });
 
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -3184,7 +3297,7 @@ export default function MediaMap() {
             {/* Connection lines — drawn beneath the planets so the circles and
                 labels stay on top. Map mode only (in linear mode the planets
                 are reordered into a strip, so lines would be meaningless). */}
-            {layoutMode === "map" && connections.map((conn, idx) => {
+            {layoutMode === "map" && effectiveConnections.map((conn, idx) => {
               const a = nodeByName.get(conn.from);
               const b = nodeByName.get(conn.to);
               if (!a || !b) return null;
@@ -3193,59 +3306,27 @@ export default function MediaMap() {
               const ay = dragState?.name === a.name ? dragState.y : a.y;
               const bx = dragState?.name === b.name ? dragState.x : b.x;
               const by = dragState?.name === b.name ? dragState.y : b.y;
-              const isSelected = isEditMode && selectedConnIdx === idx;
-              const isHovered = hoveredConn?.idx === idx;
-              const strokeW = (isSelected ? 3.5 : isHovered ? 3 : 2) * slideUnitsPerPx;
-              const stroke = isSelected
-                ? "#ffe066"
-                : isHovered
-                  ? "rgba(255,255,255,0.95)"
-                  : "rgba(255,255,255,0.6)";
-              // Dotted lines use a dash pattern scaled to screen px so the dash
-              // length looks constant at any zoom.
-              const dash =
-                conn.style === "dotted"
-                  ? `${8 * slideUnitsPerPx} ${7 * slideUnitsPerPx}`
-                  : undefined;
               return (
-                <g key={`conn-${idx}`}>
-                  {/* Wide transparent hit area so the thin line is easy to hover. */}
-                  <line
-                    x1={ax}
-                    y1={ay}
-                    x2={bx}
-                    y2={by}
-                    stroke="transparent"
-                    strokeWidth={Math.max(18 * slideUnitsPerPx, strokeW)}
-                    style={{ cursor: isEditMode ? "pointer" : "default" }}
-                    onMouseEnter={(e) =>
-                      setHoveredConn({ idx, x: e.clientX, y: e.clientY })
-                    }
-                    onMouseMove={(e) =>
-                      setHoveredConn({ idx, x: e.clientX, y: e.clientY })
-                    }
-                    onMouseLeave={() =>
-                      setHoveredConn(prev => (prev?.idx === idx ? null : prev))
-                    }
-                    onClick={(e) => {
-                      if (!isEditMode) return;
-                      e.stopPropagation();
-                      setSelectedConnIdx(idx);
-                    }}
-                  />
-                  <line
-                    x1={ax}
-                    y1={ay}
-                    x2={bx}
-                    y2={by}
-                    stroke={stroke}
-                    strokeWidth={strokeW}
-                    strokeDasharray={dash}
-                    strokeLinecap="round"
-                    pointerEvents="none"
-                    style={{ transition: "stroke 140ms ease" }}
-                  />
-                </g>
+                <ConnectionLine
+                  key={`conn-${idx}`}
+                  ax={ax}
+                  ay={ay}
+                  bx={bx}
+                  by={by}
+                  connectionStyle={conn.style}
+                  slideUnitsPerPx={slideUnitsPerPx}
+                  isSelected={isEditMode && selectedConnIdx === idx}
+                  isHovered={hoveredConn?.idx === idx}
+                  interactive={isEditMode}
+                  onMouseEnter={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                  onMouseMove={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                  onMouseLeave={() => setHoveredConn((prev) => (prev?.idx === idx ? null : prev))}
+                  onClick={(e) => {
+                    if (!isEditMode) return;
+                    e.stopPropagation();
+                    setSelectedConnIdx(idx);
+                  }}
+                />
               );
             })}
 
@@ -3335,7 +3416,8 @@ export default function MediaMap() {
                       } else {
                         setSelectedPlanet(node.name);
                       }
-                    } else {
+                    } else if (!node.isEntity) {
+                      // Entities (text-only sub-brands) have no detail panel.
                       focusOnPlanet(node);
                       setInspectedPlanet(node.name);
                     }
@@ -3349,8 +3431,10 @@ export default function MediaMap() {
                       (connectMode && connectFrom === n.name))
                   }
                   onPlanetMouseDown={isEditMode && !connectMode ? onPlanetDragStart : undefined}
-                  showValuation={zoom >= VALUATION_ZOOM_THRESHOLD}
-                  suppressNonLargeCapLabel={isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD}
+                  showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                  labelSuppressed={
+                    isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
+                  }
                 />
               );
             })}
@@ -3536,7 +3620,8 @@ export default function MediaMap() {
               dates={dateRange}
               selectedIdx={dateRange.findIndex(d => sameDate(d, activeDate))}
               activeIdx={dateRange.findIndex(d => sameDate(d, activeDate))}
-              baseCompanies={companies}
+              baseCompanies={baseCompanies}
+              valData={valData}
               nodes={nodes}
               canvas={canvas}
               onSelect={selectDate}
@@ -3792,13 +3877,15 @@ export default function MediaMap() {
       {/* Right-side planet detail panel — opens on planet click in non-edit mode. */}
       <PlanetDetailPanel
         node={inspectedPlanet ? nodes.find((n) => n.name === inspectedPlanet) ?? null : null}
-        anchorDiam={anchorDiam}
+        detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}
+        lastUpdated={inspectedPlanet ? lastUpdatedByName.get(inspectedPlanet) : undefined}
+        history={inspectedHistory}
         onClose={() => { setInspectedPlanet(null); resetView(); }}
       />
 
       {/* Connection hover tooltip — follows the cursor along a hovered line. */}
-      {hoveredConn && connections[hoveredConn.idx] && (() => {
-        const conn = connections[hoveredConn.idx];
+      {hoveredConn && effectiveConnections[hoveredConn.idx] && (() => {
+        const conn = effectiveConnections[hoveredConn.idx];
         return (
           <div
             style={{

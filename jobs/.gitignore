@@ -1,0 +1,4 @@
+.env
+node_modules/
+# Generated review/output files
+*.csv

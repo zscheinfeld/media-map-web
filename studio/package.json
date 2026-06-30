@@ -1,0 +1,36 @@
+{
+  "name": "media-map-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sanity Studio (CMS) for the Media Map project. Standalone surface in the media-map-web monorepo.",
+  "type": "module",
+  "scripts": {
+    "dev": "sanity dev",
+    "start": "sanity start",
+    "build": "sanity build",
+    "deploy": "sanity deploy",
+    "import": "tsx scripts/import-from-sheet.ts",
+    "publish-drafts": "tsx scripts/publish-drafts.ts",
+    "republish-all": "tsx scripts/republish-all.ts",
+    "test-anon-read": "tsx scripts/test-anon-read.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@media-map/map-core": "file:../packages/map-core",
+    "@sanity/color-input": "^3.1.1",
+    "@sanity/icons": "^3.4.0",
+    "@sanity/ui": "^2.8.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sanity": "^3.57.0",
+    "styled-components": "^6.1.13"
+  },
+  "devDependencies": {
+    "@sanity/client": "^6.21.3",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
