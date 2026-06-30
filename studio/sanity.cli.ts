@@ -9,4 +9,8 @@ export default defineCliConfig({
     projectId: process.env.SANITY_STUDIO_PROJECT_ID,
     dataset: process.env.SANITY_STUDIO_DATASET,
   },
+  // Hosted Studio target: https://eshap-media-map.sanity.studio. Setting this
+  // here skips the interactive `sanity deploy` hostname prompt (which crashes on
+  // the old CLI + Node 23) and pins the deploy target for everyone.
+  studioHost: 'eshap-media-map',
 })
