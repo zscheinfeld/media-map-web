@@ -1,0 +1,31 @@
+name: Ingest valuations
+
+# Pulls FMP market caps and writes them into the valuation Google Sheet.
+# Runs daily, and on-demand via the "Run workflow" button (Actions tab) — use that
+# after adding a company in Sanity to sync the sheet immediately.
+on:
+  schedule:
+    - cron: "0 9 * * *" # daily at 09:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install job deps
+        working-directory: jobs
+        run: npm install
+      - name: Ingest valuations → Google Sheet
+        working-directory: jobs
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_DATASET: production
+          SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: npm run ingest-valuations

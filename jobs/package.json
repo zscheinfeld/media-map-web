@@ -1,0 +1,20 @@
+{
+  "name": "media-map-jobs",
+  "private": true,
+  "type": "module",
+  "description": "Data jobs for the media map: ticker bootstrap + valuation ingest (FMP → Google Sheet). Run with tsx; not part of the app build.",
+  "scripts": {
+    "suggest-tickers": "tsx suggest-tickers.ts",
+    "apply-tickers": "tsx apply-tickers.ts",
+    "ingest-valuations": "tsx ingest-valuations.ts"
+  },
+  "dependencies": {
+    "@sanity/client": "^6.21.3",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
