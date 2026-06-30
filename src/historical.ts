@@ -2,7 +2,14 @@ import type { SheetCompany } from "./loadCompanies";
 
 export type MapDate = { year: number; month: number /* 1-12 */ };
 
-export const CURRENT_DATE: MapDate = { year: 2026, month: 5 };
+// The actual current calendar month — the synchronous fallback for the map's
+// "current" view + the timeline range end. The app overrides this with the
+// latest month present in the valuation sheet (see MediaMap `currentDate`), so
+// the view never sits ahead of the data.
+export const CURRENT_DATE: MapDate = (() => {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+})();
 
 /** Years × 12 months of historical maps to mock — going back from CURRENT_DATE. */
 const HISTORY_YEARS = 10;

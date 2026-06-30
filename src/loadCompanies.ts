@@ -4,6 +4,7 @@ export type SheetCompany = {
   name: string;
   valuation_b: number;
   sector: string;
+  slug?: string;
 };
 
 const SHEET_ID = "1ZVOsVf4fcoh1y08MecBcYtuVWfM54hTP9WVhBDAmgrc";

@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Ignore build output anywhere, and the standalone Studio (its own toolchain
+  // / React version — not this app's lint config).
+  globalIgnores(['**/dist', 'studio']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

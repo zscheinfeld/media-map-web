@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project docs (read these — they're the source of truth)
+
+- **[PHASES.md](PHASES.md)** — engineering build log + the forward roadmap. Current status and what's next (Phase 4 = wire the public app to Sanity + Supabase). Update it as work lands.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — content model (companies, entities, sectors, connections, vitals, content), time-scoping spec, and the manual-vs-dynamic data-ownership matrix.
+- **[LAUNCH_PLAN.md](LAUNCH_PLAN.md)** — the dated launch schedule + parallel client data-entry track + check-in cadence.
+
+The agent memory store only *points* at these; it does not duplicate them. Keep the docs current rather than re-explaining status in memory.
+
 ## Commands
 
 - `npm run dev` — Vite dev server (defaults to http://localhost:5173, falls back to 5174 if busy).
@@ -88,7 +96,7 @@ The schema is intentionally CMS-shaped: future Sanity/Contentful migration just 
 
 Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet A then B creates a line, with a rubber-band preview), a scrollable list of existing connections, a per-connection style toggle + description field + delete, and the same copy/download/reset workflow as positions (paste back into [src/connections.ts](src/connections.ts)).
 
-> **Planned (not yet implemented): time-scoping.** Positions and connections are currently timeline-wide. The intended content model gives each an optional effective date range (year+month start/end, default = entire timeline) so the map can change over time — planets relocating, acquisitions appearing on close. This implies positions become a *list per company* (one entry per window) rather than one override. See [ARCHITECTURE.md](ARCHITECTURE.md#time-scoping-effective-date-ranges) for the content-model details; update both files together when it's built.
+> **Planned (not yet implemented): time-scoping.** Positions use **forward propagation** — each override has a single `start_date` and at viewed moment T the planet renders at the override with the largest `start_date ≤ T`. A company's earliest override is its first appearance; before that date it does not render. Connections use a windowed model — `start_date` (required) + optional `end_date`; a connection renders only when T is inside that window. The Studio editor uses a global year+month selector that stamps `start_date = T` on every edit. See [ARCHITECTURE.md](ARCHITECTURE.md#time-scoping-effective-dates) for the full spec, including the *dotted → solid* convention (two adjacent connection entries). The public renderer ([src/MediaMap.tsx](src/MediaMap.tsx)) currently uses `position_overrides[0]` regardless of date and shows all connections — update both files together when honoring the time selector lands.
 
 ### Data flow
 
