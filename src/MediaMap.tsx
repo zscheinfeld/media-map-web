@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import {
   usePhysicsLayout,
@@ -2153,6 +2153,329 @@ function CompanyListView({
   );
 }
 
+// ---- Aggregate view (stacked market-cap-over-time chart) ----
+// A fourth view alongside map/linear/list. Every company is a vertical run of
+// monthly bars whose height = its valuation; bands are ordered by the CURRENT
+// map's valuation (largest on top) and held in that order across all of time so
+// you can track a company rising/falling. The stack is normalized so the single
+// highest-total month fills the plot height. Multi-color planets collapse to
+// their single most-saturated swatch. The +/- buttons zoom the time axis.
+
+type AppViewMode = ViewMode | "aggregate";
+type AggBand = { name: string; sector: string; color: string; values: number[] };
+type AggregateData = { dates: MapDate[]; bands: AggBand[]; maxTotal: number };
+
+// Same blue gradient the maps use, so the aggregate view feels of a piece.
+const AGG_GRADIENT = "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)";
+const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
+
+// Per-company band color overrides (keyed by lowercased company name). Used when
+// a planet's own palette doesn't read well as a single stacked band.
+const AGG_COLOR_OVERRIDES: Record<string, string> = {
+  apple: "#155E9D",
+  microsoft: "#A9812E",
+  alphabet: "#A73632",
+  meta: "#94959F",
+};
+
+/** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
+ *  vivid swatch from a multi-color planet palette. */
+function colorSaturation(c: string): number {
+  const s = c.trim().toLowerCase();
+  let m = s.match(/^hsla?\(\s*[\d.]+\s*,\s*([\d.]+)%/);
+  if (m) return Math.min(1, parseFloat(m[1]) / 100);
+  let r = 0, g = 0, b = 0;
+  if ((m = s.match(/^#([0-9a-f]{3})$/))) {
+    r = parseInt(m[1][0] + m[1][0], 16); g = parseInt(m[1][1] + m[1][1], 16); b = parseInt(m[1][2] + m[1][2], 16);
+  } else if ((m = s.match(/^#([0-9a-f]{6})$/))) {
+    r = parseInt(m[1].slice(0, 2), 16); g = parseInt(m[1].slice(2, 4), 16); b = parseInt(m[1].slice(4, 6), 16);
+  } else if ((m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/))) {
+    r = +m[1]; g = +m[2]; b = +m[3];
+  } else return 0;
+  const mx = Math.max(r, g, b) / 255, mn = Math.min(r, g, b) / 255;
+  if (mx === mn) return 0;
+  const l = (mx + mn) / 2, d = mx - mn;
+  return l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+}
+
+/** The most-saturated color in a palette (multi-color planets → one band color). */
+function mostSaturatedColor(colors: string[]): string {
+  let best = colors[0] ?? "#888888", bs = -1;
+  for (const c of colors) { const sat = colorSaturation(c); if (sat > bs) { bs = sat; best = c; } }
+  return best;
+}
+
+/** SVG path of discrete monthly rectangles for one company band. */
+function barsPath(xLeft: (i: number) => number, barW: number, upper: number[], lower: number[], values: number[], M: number): string {
+  let d = "";
+  for (let i = 0; i < M; i++) {
+    if (values[i] <= 0) continue;
+    const x = xLeft(i).toFixed(1), x2 = (xLeft(i) + barW).toFixed(1), u = upper[i].toFixed(1), l = lower[i].toFixed(1);
+    d += `M${x},${u} L${x2},${u} L${x2},${l} L${x},${l} Z`;
+  }
+  return d;
+}
+
+// Intro-animation timing/offsets — tuned via the dev overlay, then baked in.
+// posOffset: px the bar slides up from · hFrac: fraction of height that grows ·
+// stagM/stagC: month/company stagger spans · duration: ms · easing: out-cubic.
+const AGG_INTRO = { posOffset: 90, hFrac: 1, stagM: 0.2, stagC: 0.15, duration: 980 };
+
+function AggregateView({ active, data, zoomTarget, highlightSector }: { active: boolean; data: AggregateData; zoomTarget: number; highlightSector: string | null }) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [dims, setDims] = useState({ w: 0, h: 0 });
+  const [hover, setHover] = useState<{ i: number; k: number | null; sx: number; sy: number } | null>(null);
+  const padL = 12, padR = 14, padT = 34, padB = 26;
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => setDims({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Staggered grow-up intro: `intro` eases 0→1 when the view becomes active; the
+  // per-bar transform (slide + grow, staggered) lives in `shapes`.
+  const [intro, setIntro] = useState(0);
+  const introAnimRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (introAnimRef.current !== null) cancelAnimationFrame(introAnimRef.current);
+    if (!active) { setIntro(0); return; }
+    setIntro(0);
+    const t0 = performance.now(), dur = AGG_INTRO.duration;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur);
+      setIntro(p);
+      introAnimRef.current = p < 1 ? requestAnimationFrame(step) : null;
+    };
+    introAnimRef.current = requestAnimationFrame(step);
+    return () => { if (introAnimRef.current !== null) cancelAnimationFrame(introAnimRef.current); };
+  }, [active]);
+
+  // Ease the displayed zoom toward the +/- buttons' target (easeInOutCubic).
+  const [zoom, setZoom] = useState(zoomTarget);
+  const zoomRef = useRef(zoom);
+  const zoomAnimRef = useRef<number | null>(null);
+  useEffect(() => {
+    const from = zoomRef.current, to = zoomTarget;
+    if (Math.abs(to - from) < 1e-3) return;
+    if (zoomAnimRef.current !== null) cancelAnimationFrame(zoomAnimRef.current);
+    const t0 = performance.now(), dur = 320;
+    const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur);
+      zoomRef.current = from + (to - from) * ease(p);
+      setZoom(zoomRef.current);
+      zoomAnimRef.current = p < 1 ? requestAnimationFrame(step) : null;
+    };
+    zoomAnimRef.current = requestAnimationFrame(step);
+    return () => { if (zoomAnimRef.current !== null) cancelAnimationFrame(zoomAnimRef.current); };
+  }, [zoomTarget]);
+
+  // Anchor zoom to the RIGHT edge (the present): keep the chart scrolled fully
+  // right as it grows, so zooming spreads the past out to the left. Runs on each
+  // zoom frame before paint (no flicker); between zooms you can still pan left.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const pw = (el.clientWidth - padL - padR) * zoom;
+    el.scrollLeft = Math.max(0, padL + pw + padR - el.clientWidth);
+  }, [zoom]);
+
+  const { dates, bands, maxTotal } = data;
+  const M = dates.length;
+  const plotW = Math.max(0, (dims.w - padL - padR) * zoom);
+  const svgW = padL + plotW + padR;
+  const plotH = Math.max(0, dims.h - padT - padB);
+  const plotBottom = padT + plotH;
+  const scale = maxTotal > 0 ? plotH / maxTotal : 0;
+  const slotW = M > 0 ? plotW / M : 0;
+  const barGap = 2;
+  const barW = Math.max(0.75, slotW - barGap);
+  const xLeft = (i: number) => padL + i * slotW + barGap / 2;
+  const xCenter = (i: number) => padL + i * slotW + slotW / 2;
+
+  const totals = useMemo(() => {
+    const t = new Array(M).fill(0);
+    for (const b of bands) for (let i = 0; i < M; i++) t[i] += b.values[i];
+    return t;
+  }, [bands, M]);
+
+  const peakIdx = useMemo(() => {
+    let idx = 0;
+    for (let i = 1; i < M; i++) if (totals[i] > totals[idx]) idx = i;
+    return idx;
+  }, [totals, M]);
+
+  // Per-month stacking: within each month, companies are ordered largest-on-top,
+  // so each company's vertical position can differ month to month. `upper[k][i]` /
+  // `lower[k][i]` are the y-edges of company k's bar in month i. Only depends on
+  // the values + vertical scale (not the horizontal zoom).
+  const stacks = useMemo(() => {
+    const N = bands.length;
+    const upper: number[][] = Array.from({ length: N }, () => new Array(M).fill(0));
+    const lower: number[][] = Array.from({ length: N }, () => new Array(M).fill(0));
+    if (scale) {
+      const idx = bands.map((_, k) => k);
+      for (let i = 0; i < M; i++) {
+        const order = idx
+          .filter((k) => bands[k].values[i] > 0)
+          .sort((a, b) => bands[b].values[i] - bands[a].values[i]);
+        let top = plotBottom - totals[i] * scale;
+        for (const k of order) {
+          const h = bands[k].values[i] * scale;
+          upper[k][i] = top;
+          lower[k][i] = top + h;
+          top += h;
+        }
+      }
+    }
+    return { upper, lower };
+  }, [bands, totals, scale, plotBottom, M]);
+
+  // One single-color path per company (discrete monthly bars). A dark stroke +
+  // the 2px month gap separate bars horizontally and companies vertically.
+  const shapes = useMemo(() => {
+    if (!plotW || !plotH || !scale) return [] as { fill: string; sector: string; d: string }[];
+    // Intro transform (driven by the tuning controls): each bar slides up from
+    // `posOffset` px low and grows in height (top eased down by `heightPct`% of its
+    // final height), staggered left→right by month and slightly per company.
+    const animating = intro < 1;
+    const N = bands.length;
+    const { posOffset, hFrac, stagM, stagC } = AGG_INTRO;
+    const denom = 1 - stagM - stagC;
+    const fm = animating ? Array.from({ length: M }, (_, i) => (M <= 1 ? 1 : i / (M - 1))) : null;
+    const progress = (i: number, gc: number) => {
+      const t = Math.max(0, Math.min(1, (intro - stagM * fm![i] - stagC * gc) / denom));
+      return 1 - Math.pow(1 - t, 3); // easeOutCubic
+    };
+    return bands.map((b, k) => {
+      let up = stacks.upper[k];
+      let lo = stacks.lower[k];
+      if (animating) {
+        const gc = N <= 1 ? 0 : k / (N - 1);
+        const u = stacks.upper[k], l = stacks.lower[k];
+        const nu = new Array(M), nl = new Array(M);
+        for (let i = 0; i < M; i++) {
+          const p = progress(i, gc);
+          const translate = (1 - p) * posOffset;                 // whole bar slides up
+          const heightComp = (1 - p) * hFrac * (l[i] - u[i]);    // top eased down = grow
+          nl[i] = l[i] + translate;
+          nu[i] = u[i] + heightComp + translate;
+        }
+        up = nu;
+        lo = nl;
+      }
+      return { fill: b.color, sector: b.sector, d: barsPath(xLeft, barW, up, lo, b.values, M) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bands, stacks, plotW, plotH, scale, barW, slotW, M, intro]);
+
+  // Outline of the hovered band (feedback), recomputed only while hovering.
+  const hoverOutline = useMemo(() => {
+    if (hover?.k == null || !scale) return null;
+    const k = hover.k;
+    return barsPath(xLeft, barW, stacks.upper[k], stacks.lower[k], bands[k].values, M);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover, bands, stacks, scale, barW, slotW, M]);
+
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (M === 0 || slotW <= 0 || !scale) return;
+    const i = Math.max(0, Math.min(M - 1, Math.floor((sx - padL) / slotW)));
+    let k: number | null = null;
+    for (let b = 0; b < bands.length; b++) {
+      if (bands[b].values[i] > 0 && sy >= stacks.upper[b][i] && sy <= stacks.lower[b][i]) { k = b; break; }
+    }
+    setHover({ i, k, sx, sy });
+  };
+
+  const hoverBand = hover?.k != null ? bands[hover.k] : null;
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 5,
+        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        background: AGG_GRADIENT,
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? "auto" : "none",
+        transition: "opacity 320ms ease",
+        overflow: "hidden",
+      }}
+    >
+      {/* Scroll layer — the chart scrolls horizontally when zoomed; the caption
+          and tuning panel below stay fixed. */}
+      <div ref={scrollRef} style={{ width: "100%", height: "100%", overflowX: "auto", overflowY: "hidden" }}>
+        <svg
+          width={svgW}
+          height={dims.h}
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+          style={{ display: "block", cursor: "crosshair" }}
+        >
+          {dims.w > 0 && dates.map((d, i) => (d.month === 1 || i === 0) ? (
+            <g key={i}>
+              <line x1={xCenter(i)} y1={padT} x2={xCenter(i)} y2={plotBottom} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+              <text x={xCenter(i)} y={plotBottom + 16} fill="rgba(255,255,255,0.45)" fontSize={10} textAnchor="middle">{d.year}</text>
+            </g>
+          ) : null)}
+          {shapes.map((s, idx) => (
+            <path
+              key={idx}
+              d={s.d}
+              fill={s.fill}
+              stroke={AGG_GAP_STROKE}
+              strokeWidth={0.75}
+              shapeRendering="crispEdges"
+              style={{ opacity: highlightSector && s.sector !== highlightSector ? 0.12 : 1, transition: "opacity 160ms ease" }}
+            />
+          ))}
+          {hoverOutline && <path d={hoverOutline} fill="none" stroke="#fff" strokeWidth={1.2} />}
+        </svg>
+        {hover && hoverBand && (
+          <div
+            style={{
+              position: "absolute",
+              left: Math.min(hover.sx + 14, svgW - 190),
+              top: Math.max(8, Math.min(hover.sy + 14, dims.h - 70)),
+              pointerEvents: "none",
+              background: "rgba(6,12,28,0.95)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 12,
+              color: "#fff",
+              maxWidth: 200,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>{hoverBand.name}</div>
+            <div style={{ fontVariantNumeric: "tabular-nums" }}>
+              {formatValuation(hoverBand.values[hover.i])} · {formatDate(dates[hover.i])}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {maxTotal > 0 && dims.w > 0 && (
+        <div style={{ position: "absolute", top: 12, left: 14, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
+          Total market cap over time · height relative to peak ({formatValuation(maxTotal)}, {formatDate(dates[peakIdx])})
+        </div>
+      )}
+
+    </div>
+  );
+}
+
 export default function MediaMap() {
   const isMobile = useIsMobile();
   const isEditMode = useIsEditMode();
@@ -2361,7 +2684,7 @@ export default function MediaMap() {
 
   const [hoveredDate, setHoveredDate] = useState<MapDate | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [viewMode, setViewMode] = useState<AppViewMode>("map");
   // The spatial layout shown beneath everything: map | linear. "list" is an
   // overlay that fades over whatever layout was last active, so the layout is
   // frozen here and "list" never drives the SVG geometry or the physics hook.
@@ -2369,12 +2692,18 @@ export default function MediaMap() {
   // briefly snapping to the map) and list→map fade back into place. Updated in
   // lockstep with viewMode via selectView() so the two never drift.
   const [layoutMode, setLayoutMode] = useState<"map" | "linear">("map");
-  const selectView = (mode: ViewMode) => {
+  const selectView = (mode: AppViewMode) => {
     setViewMode(mode);
-    if (mode !== "list") setLayoutMode(mode);
+    if (mode === "map" || mode === "linear") setLayoutMode(mode);
   };
   // List-view column sort. Default: largest valuation first.
   const [listSort, setListSort] = useState<ListSort>({ key: "valuation", dir: "desc" });
+  // Aggregate-view time-axis zoom target (the +/- buttons set it in discrete
+  // steps; AggregateView eases its displayed zoom toward this target).
+  const AGG_ZOOM_STEP = 1.6;
+  const AGG_MAX_ZOOM = 16;
+  const [aggZoomTarget, setAggZoomTarget] = useState(1);
+  const aggZoomBy = (f: number) => setAggZoomTarget((t) => Math.min(AGG_MAX_ZOOM, Math.max(1, t * f)));
 
   const dateRange = useMemo(() => buildDateRange(), []);
   const displayedCompanies = useMemo(
@@ -2384,6 +2713,31 @@ export default function MediaMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [baseCompanies, activeDate, currentDate, valData],
   );
+
+  // Aggregate view: every company's valuation across the whole timeline, ordered
+  // by the CURRENT map's valuation (largest first). Colors mirror the planets.
+  const aggregateData = useMemo<AggregateData>(() => {
+    const bands: AggBand[] = baseCompanies.map((c) => {
+      const style = sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector);
+      const hue = sanity?.hueBySector[c.sector] ?? hueForSector(c.sector);
+      const palette = style?.stripes && style.stripes.length
+        ? style.stripes
+        : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
+      const color = AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()] ?? mostSaturatedColor(palette);
+      const values = dateRange.map((d) => Math.max(0, valAt(c, d)));
+      return { name: c.name, sector: c.sector, color, values };
+    });
+    // Stacking order is decided PER MONTH in AggregateView (largest on top for
+    // that month), so no global ordering is applied here.
+    let maxTotal = 0;
+    for (let i = 0; i < dateRange.length; i++) {
+      let t = 0;
+      for (const b of bands) t += b.values[i];
+      if (t > maxTotal) maxTotal = t;
+    }
+    return { dates: dateRange, bands, maxTotal };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCompanies, dateRange, valData, sanity]);
 
   // All-time high / low (with the date each occurred) for every company,
   // swept across the full timeline. Independent of the active date, so this
@@ -3216,8 +3570,8 @@ export default function MediaMap() {
           style={{
             position: "absolute",
             inset: 0,
-            opacity: timelineOpen || viewMode === "list" ? 0 : 1,
-            pointerEvents: timelineOpen || viewMode === "list" ? "none" : "auto",
+            opacity: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? 0 : 1,
+            pointerEvents: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? "none" : "auto",
             transition: "opacity 360ms ease",
           }}
         >
@@ -3510,6 +3864,14 @@ export default function MediaMap() {
           active={viewMode === "list" && !timelineOpen}
         />
 
+        {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
+        <AggregateView
+          active={viewMode === "aggregate" && !timelineOpen}
+          data={aggregateData}
+          zoomTarget={aggZoomTarget}
+          highlightSector={hoveredSector}
+        />
+
         {/* Editor toolbar — only rendered when ?edit=1 is in the URL. */}
         {isEditMode && (
           <EditorToolbar
@@ -3577,7 +3939,7 @@ export default function MediaMap() {
               gap: 2,
             }}
           >
-            {(["map", "linear", "list"] as ViewMode[]).map(mode => {
+            {(["map", "linear", "aggregate", "list"] as AppViewMode[]).map(mode => {
               const active = viewMode === mode;
               return (
                 <button
@@ -3848,11 +4210,11 @@ export default function MediaMap() {
               zIndex: 10,
             }}
           >
-            <button aria-label="Zoom in" onClick={() => zoomBy(ZOOM_STEP)} style={zoomBtnStyle}>+</button>
-            <button aria-label="Zoom out" onClick={() => zoomBy(1 / ZOOM_STEP)} style={zoomBtnStyle}>−</button>
+            <button aria-label="Zoom in" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
+            <button aria-label="Zoom out" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
             <button
               aria-label="Reset view"
-              onClick={resetView}
+              onClick={() => (viewMode === "aggregate" ? setAggZoomTarget(1) : resetView())}
               style={{ ...zoomBtnStyle, fontSize: 13 }}
             >
               ⟳
