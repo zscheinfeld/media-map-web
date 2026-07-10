@@ -91,7 +91,7 @@ export function Planet({
             lineHeight: 1.0,
             boxSizing: "border-box",
             textShadow: "0 0 4px rgba(0,0,0,0.7)",
-            WebkitTextStroke: `${0.7 * slideUnitsPerPx}px #000`,
+            WebkitTextStroke: `${1.2 * slideUnitsPerPx}px #000`,
             paintOrder: "stroke fill",
             wordBreak: "keep-all",
             overflowWrap: "normal",

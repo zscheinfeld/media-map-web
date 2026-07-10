@@ -29,3 +29,22 @@ html, body, #root {
   padding: 0;
   overflow: hidden;
 }
+
+/* Sidebar collapse/expand icon buttons: white, 50% by default, 100% on hover. */
+.panel-icon-btn {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 150ms ease;
+}
+.panel-icon-btn:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+/* Subtle hover for the zoom / download / view-tab buttons — a faint white
+   overlay via inset shadow (works over any inline background), matching the
+   timeline button's hover feel. */
+.mm-hover {
+  transition: box-shadow 160ms ease;
+}
+.mm-hover:hover {
+  box-shadow: inset 0 0 0 200px rgba(255, 255, 255, 0.08);
+}
