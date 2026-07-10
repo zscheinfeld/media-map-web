@@ -257,10 +257,6 @@ async function main() {
   const leadLower = leadHeader.map((h) => h.trim().toLowerCase())
   const existingColIdx = new Map<string, number>()
   preserveHeader.forEach((h, i) => existingColIdx.set(h.trim().toLowerCase(), i))
-  // "data entry method" = "Manual entry" marks market-cap rows the client fills
-  // by hand (e.g. non-US companies FMP can't reach). We skip FMP for those so
-  // their manual values + FMP-derived columns are left untouched.
-  const methodColIdx = existingColIdx.get('data entry method') ?? existingColIdx.get('data_entry_method')
 
   const rows: (string | number)[][] = []
   let filled = 0
@@ -269,11 +265,8 @@ async function main() {
   for (const c of roster) {
     const type = c.valuation_type ?? 'market_cap'
     const ticker = c.ticker ?? ''
-    const method =
-      methodColIdx !== undefined ? (preserveRaw.get(c.slug ?? '')?.[methodColIdx] ?? '').trim().toLowerCase() : ''
-    // Manual = the Sanity data source is a manual one (primary signal), or the
-    // sheet's "data entry method" says so (kept as a fallback during migration).
-    const manual = c.dataSourceType === 'manual' || method === 'manual entry'
+    // Manual = the company's Sanity data source is a manual one → skip FMP.
+    const manual = c.dataSourceType === 'manual'
     let exchange = ''
     let fmpCompany = ''
     let lastUpdated = ''
@@ -334,6 +327,13 @@ async function main() {
       ['sector', c.sector ?? ''],
       ['type', type],
       ['data type', type], // alias, in case the "type" column was renamed "data type"
+      // The Sanity data source name (e.g. "companiesmarketcap.com"), so the source
+      // is visible in the sheet. Written from Sanity each run. Matches the column
+      // whether it's titled "data source" or the older "data entry method".
+      ['data source', c.dataSourceName ?? ''],
+      ['data_source', c.dataSourceName ?? ''],
+      ['data entry method', c.dataSourceName ?? ''],
+      ['data_entry_method', c.dataSourceName ?? ''],
       ['ticker', ticker],
     ])
     // exchange / fmp_company / last_updated are FMP-derived, so only write them
