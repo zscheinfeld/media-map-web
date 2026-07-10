@@ -228,7 +228,6 @@ async function main() {
   const writeMode = isWriteMode()
   let target: SheetTarget | null = null
   let preserve = new Map<string, Map<string, number>>()
-  let preserveStatus = new Map<string, string>()
   let preserveTicker = new Map<string, string>()
   let preserveHeader: string[] = []
   let preserveRaw = new Map<string, string[]>()
@@ -236,11 +235,10 @@ async function main() {
     target = await openSheet()
     const ex = await readExisting(target)
     preserve = ex.values
-    preserveStatus = ex.status
     preserveTicker = ex.tickers
     preserveHeader = ex.header
     preserveRaw = ex.rawBySlug
-    console.log(`Write mode → tab "${target.tabName}". Preserving values + status from ${preserve.size} existing rows.`)
+    console.log(`Write mode → tab "${target.tabName}". Preserving values, vetting_status + manual columns from ${preserve.size} existing rows.`)
   }
   console.log(`${roster.length} companies; ${fetchable.length} market-cap with a ticker. Columns: ${months.length} months.`)
 
@@ -316,15 +314,8 @@ async function main() {
       const ex = preserve.get(c.slug ?? '')
       valueCells = cols.map((m) => ex?.get(m) ?? '')
     }
-    // Vetting workflow: human "Approved" sticks across runs; otherwise it's
-    // "Needs approval" when there's data to vet, or "Incomplete data" when not.
-    const hasData = valueCells.some((v) => typeof v === 'number')
-    const vettingStatus =
-      preserveStatus.get(c.slug ?? '') === 'Approved'
-        ? 'Approved'
-        : hasData
-          ? 'Needs approval'
-          : 'Incomplete data'
+    // vetting_status is CLIENT-OWNED — the action never writes it. It's preserved
+    // per row by the unknown-column carry-over below (blank on brand-new rows).
     const managed = new Map<string, string | number>([
       ['slug', c.slug ?? ''],
       ['name', c.name],
@@ -333,7 +324,6 @@ async function main() {
       ['ticker', ticker],
       ['exchange', exchange],
       ['fmp_company', fmpCompany],
-      ['vetting_status', vettingStatus],
       ['last_updated', lastUpdated],
     ])
     const raw = preserveRaw.get(c.slug ?? '')
