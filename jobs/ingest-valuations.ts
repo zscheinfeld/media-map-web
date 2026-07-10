@@ -150,42 +150,52 @@ async function enforceMonthFormat(t: SheetTarget, firstMonthCol: number, monthCo
   })
 }
 
-/** Existing per-slug month values, vetting status, and the ticker each row was
- *  built from — all preserved across runs. The stored ticker lets a daily run
- *  notice when Sanity's ticker changed and re-pull that row's whole history. */
+/** Existing sheet state preserved across runs: per-slug month values, vetting
+ *  status, the ticker each row was built from (to detect Sanity ticker changes),
+ *  the raw header (so we keep the sheet's column ORDER + any extra columns like a
+ *  manual "Notes"), and each row's raw cells (to carry those extra columns over). */
 async function readExisting(
   t: SheetTarget,
-): Promise<{values: Map<string, Map<string, number>>; status: Map<string, string>; tickers: Map<string, string>}> {
+): Promise<{
+  values: Map<string, Map<string, number>>
+  status: Map<string, string>
+  tickers: Map<string, string>
+  header: string[]
+  rawBySlug: Map<string, string[]>
+}> {
   const values = new Map<string, Map<string, number>>()
   const status = new Map<string, string>()
   const tickers = new Map<string, string>()
+  const rawBySlug = new Map<string, string[]>()
   const resp = await t.sheets.spreadsheets.values.get({spreadsheetId: t.spreadsheetId, range: t.tabName})
   const rows = resp.data.values ?? []
-  if (rows.length < 2) return {values, status, tickers}
-  const header = rows[0].map((h) => String(h).trim().toLowerCase())
-  const slugIdx = header.indexOf('slug')
-  if (slugIdx < 0) return {values, status, tickers}
-  const statusIdx = header.indexOf('vetting_status')
-  const tickerIdx = header.indexOf('ticker')
-  const monthCols = header.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}-\d{2}$/.test(h))
+  if (rows.length < 2) return {values, status, tickers, header: [], rawBySlug}
+  const header = rows[0].map((h) => String(h))
+  const headerLower = header.map((h) => h.trim().toLowerCase())
+  const slugIdx = headerLower.indexOf('slug')
+  if (slugIdx < 0) return {values, status, tickers, header, rawBySlug}
+  const statusIdx = headerLower.indexOf('vetting_status')
+  const tickerIdx = headerLower.indexOf('ticker')
+  const monthCols = headerLower.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}-\d{2}$/.test(h))
   for (let r = 1; r < rows.length; r++) {
-    const row = rows[r]
-    const slug = String(row[slugIdx] ?? '').trim()
+    const row = (rows[r] ?? []).map((c) => String(c ?? ''))
+    const slug = (row[slugIdx] ?? '').trim()
     if (!slug) continue
     const months = new Map<string, number>()
     for (const {i, h} of monthCols) {
-      const cell = String(row[i] ?? '').trim()
+      const cell = (row[i] ?? '').trim()
       if (!cell || cell.toUpperCase() === 'NA') continue
       const n = Number(cell.replace(/[$,\s]/g, ''))
       if (Number.isFinite(n)) months.set(h, n)
     }
     values.set(slug, months)
-    const st = statusIdx >= 0 ? String(row[statusIdx] ?? '').trim() : ''
+    const st = statusIdx >= 0 ? (row[statusIdx] ?? '').trim() : ''
     if (st) status.set(slug, st)
-    const tk = tickerIdx >= 0 ? String(row[tickerIdx] ?? '').trim() : ''
+    const tk = tickerIdx >= 0 ? (row[tickerIdx] ?? '').trim() : ''
     if (tk) tickers.set(slug, tk)
+    rawBySlug.set(slug, row)
   }
-  return {values, status, tickers}
+  return {values, status, tickers, header, rawBySlug}
 }
 
 async function writeGrid(t: SheetTarget, grid: (string | number)[][]): Promise<void> {
@@ -220,12 +230,16 @@ async function main() {
   let preserve = new Map<string, Map<string, number>>()
   let preserveStatus = new Map<string, string>()
   let preserveTicker = new Map<string, string>()
+  let preserveHeader: string[] = []
+  let preserveRaw = new Map<string, string[]>()
   if (writeMode) {
     target = await openSheet()
     const ex = await readExisting(target)
     preserve = ex.values
     preserveStatus = ex.status
     preserveTicker = ex.tickers
+    preserveHeader = ex.header
+    preserveRaw = ex.rawBySlug
     console.log(`Write mode → tab "${target.tabName}". Preserving values + status from ${preserve.size} existing rows.`)
   }
   console.log(`${roster.length} companies; ${fetchable.length} market-cap with a ticker. Columns: ${months.length} months.`)
@@ -234,6 +248,17 @@ async function main() {
   // `type` (easy to edit, no scrolling) and each new month lands at the left.
   const cols = [...months].reverse()
   const currentMonth = months[months.length - 1] // the only month a daily run refreshes
+
+  // Column layout: keep the sheet's existing non-month columns (their ORDER +
+  // any extra columns like a manual "Notes"), then append the canonical month
+  // columns. Managed fields are refreshed each run; unknown columns are carried
+  // over per row. On a brand-new sheet, fall back to the default layout.
+  const isMonth = (h: string) => /^\d{4}-\d{2}$/.test(h.trim())
+  const DEFAULT_LEAD = ['slug', 'name', 'sector', 'type', 'ticker', 'vetting_status', 'exchange', 'fmp_company', 'last_updated']
+  const leadHeader = preserveHeader.length ? preserveHeader.filter((h) => !isMonth(h)) : DEFAULT_LEAD
+  const leadLower = leadHeader.map((h) => h.trim().toLowerCase())
+  const existingColIdx = new Map<string, number>()
+  preserveHeader.forEach((h, i) => existingColIdx.set(h.trim().toLowerCase(), i))
 
   const rows: (string | number)[][] = []
   let filled = 0
@@ -300,11 +325,29 @@ async function main() {
         : hasData
           ? 'Needs approval'
           : 'Incomplete data'
-    rows.push([c.slug ?? '', c.name, c.sector ?? '', type, ticker, vettingStatus, exchange, fmpCompany, lastUpdated, ...valueCells])
+    const managed = new Map<string, string | number>([
+      ['slug', c.slug ?? ''],
+      ['name', c.name],
+      ['sector', c.sector ?? ''],
+      ['type', type],
+      ['ticker', ticker],
+      ['exchange', exchange],
+      ['fmp_company', fmpCompany],
+      ['vetting_status', vettingStatus],
+      ['last_updated', lastUpdated],
+    ])
+    const raw = preserveRaw.get(c.slug ?? '')
+    const leadCells = leadLower.map((colLower) => {
+      if (managed.has(colLower)) return managed.get(colLower) as string | number
+      // Unknown column (e.g. a manual "Notes") → carry the existing value over.
+      const ci = existingColIdx.get(colLower)
+      return ci !== undefined && raw ? (raw[ci] ?? '') : ''
+    })
+    rows.push([...leadCells, ...valueCells])
   }
 
   const grid = [
-    ['slug', 'name', 'sector', 'type', 'ticker', 'vetting_status', 'exchange', 'fmp_company', 'last_updated', ...cols],
+    [...leadHeader, ...cols],
     ...rows,
   ]
   if (writeMode && target) {
