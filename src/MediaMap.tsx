@@ -83,6 +83,12 @@ const LABEL_GROW_START = 2;
 const LABEL_GROW_MAX = 1.7;
 const labelScaleForZoom = (zoom: number) =>
   Math.min(LABEL_GROW_MAX, Math.max(1, 1 + (zoom - LABEL_GROW_START) * 0.12));
+
+// Ease the pan back to center as the map zooms toward MIN_ZOOM, so the most
+// zoomed-out level is always the centered default view (0 at MIN_ZOOM → 1 by
+// MIN_ZOOM + RECENTER_RANGE).
+const RECENTER_RANGE = 0.5;
+const centerFactorForZoom = (z: number) => Math.min(1, Math.max(0, (z - MIN_ZOOM) / RECENTER_RANGE));
 // Past this zoom, every planet shows its valuation under the name (not just
 // Large Cap, which always shows it). ~2 zoom-button clicks from the default 1×
 // (1 × 1.4 × 1.4 ≈ 1.96), or the equivalent scroll.
@@ -125,6 +131,7 @@ type SectorPanelProps = {
   counts: Record<string, number>;
   enabled: Set<string>;
   onToggle: (s: string) => void;
+  onAll: (on: boolean) => void;
   total: number;
   loading: boolean;
   error: string | null;
@@ -133,11 +140,23 @@ type SectorPanelProps = {
   onFocusSector: (s: string) => void;
 };
 
+const pillBtn: React.CSSProperties = {
+  flex: 1,
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.18)",
+  color: "#fff",
+  borderRadius: 6,
+  padding: "5px 0",
+  fontSize: 12,
+  cursor: "pointer",
+};
+
 function SectorPanelContent({
   sectors,
   counts,
   enabled,
   onToggle,
+  onAll,
   total,
   loading,
   error,
@@ -168,6 +187,10 @@ function SectorPanelContent({
           {error}
         </div>
       )}
+      <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+        <button onClick={() => onAll(true)} className="mm-hover" style={pillBtn}>All</button>
+        <button onClick={() => onAll(false)} className="mm-hover" style={pillBtn}>None</button>
+      </div>
       {/* Clear the hover only when the cursor leaves the whole list — not when
           it crosses between rows — so the map doesn't flicker un/re-highlighting
           in the gaps between sector rows. */}
@@ -3066,6 +3089,9 @@ export default function MediaMap() {
   // Consumed by the planet onClick so that drag gestures don't accidentally
   // fire the focus-zoom interaction on a planet under the cursor.
   const didDragRef = useRef(false);
+  // Set when a planet is clicked, so the click bubbling up to the map container
+  // isn't treated as a background click (which closes the panel + zooms out).
+  const bgClickSuppressRef = useRef(false);
   const DRAG_THRESHOLD_PX = 4;
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -3407,8 +3433,10 @@ export default function MediaMap() {
     const newH = canvas.h / newZoom;
     const newCx = slideX + (0.5 - mx / rect.width) * newW;
     const newCy = slideY + (0.5 - my / rect.height) * newH;
+    // Ease the pan toward center as we approach the fully-zoomed-out level.
+    const cf = centerFactorForZoom(newZoom);
     setZoom(newZoom);
-    setPan({ x: newCx - (canvas.x + canvas.w / 2), y: newCy - (canvas.y + canvas.h / 2) });
+    setPan({ x: (newCx - (canvas.x + canvas.w / 2)) * cf, y: (newCy - (canvas.y + canvas.h / 2)) * cf });
   };
 
   const zoomRafRef = useRef<number | null>(null);
@@ -3430,19 +3458,25 @@ export default function MediaMap() {
     return () => window.removeEventListener("wheel", blockPageZoom);
   }, []);
 
-  const animateZoomTo = (target: number) => {
+  const animateZoomTo = (target: number, targetPan?: { x: number; y: number }) => {
     cancelZoomAnim();
     const DURATION = 280;
     const t0 = performance.now();
-    let from: number | null = null;
+    let fromZoom: number | null = null;
+    let fromPan: { x: number; y: number } | null = null;
     const tick = (now: number) => {
-      const elapsed = now - t0;
-      const t = Math.min(1, elapsed / DURATION);
+      const t = Math.min(1, (now - t0) / DURATION);
       const k = 1 - Math.pow(1 - t, 3); // easeOutCubic
       setZoom(z => {
-        if (from === null) from = z;
-        return from + (target - from) * k;
+        if (fromZoom === null) fromZoom = z;
+        return fromZoom + (target - fromZoom) * k;
       });
+      if (targetPan) {
+        setPan(p => {
+          if (fromPan === null) fromPan = p;
+          return { x: fromPan.x + (targetPan.x - fromPan.x) * k, y: fromPan.y + (targetPan.y - fromPan.y) * k };
+        });
+      }
       if (t < 1) zoomRafRef.current = requestAnimationFrame(tick);
       else zoomRafRef.current = null;
     };
@@ -3452,7 +3486,9 @@ export default function MediaMap() {
   const zoomBy = (factor: number) => {
     const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
     if (target === zoom) return;
-    animateZoomTo(target);
+    // Ease the pan toward center as we zoom out, so full zoom-out lands centered.
+    const cf = centerFactorForZoom(target);
+    animateZoomTo(target, { x: pan.x * cf, y: pan.y * cf });
   };
 
   // Animate zoom + pan together over `duration` ms with easeInOutCubic.
@@ -3681,11 +3717,16 @@ export default function MediaMap() {
     return m;
   }, [nodes]);
 
+  const setAll = (on: boolean) => {
+    setEnabled(on ? new Set(allSectors) : new Set());
+  };
+
   const sectorPanelProps: SectorPanelProps = {
     sectors: allSectors,
     counts,
     enabled,
     onToggle: toggleSector,
+    onAll: setAll,
     total: companies.length,
     loading,
     error,
@@ -3764,6 +3805,17 @@ export default function MediaMap() {
           onMouseUp={layoutMode === "linear" ? undefined : onMouseUp}
           onMouseLeave={layoutMode === "linear" ? undefined : onMouseUp}
           onWheel={layoutMode === "linear" ? undefined : onWheel}
+          onClick={() => {
+            // Click on the map background while zoomed in (a focused planet, a
+            // focused sector, or any pinch/zoom) → close the side panel and zoom
+            // all the way out. Planet clicks set the suppress flag so they focus.
+            if (bgClickSuppressRef.current) { bgClickSuppressRef.current = false; return; }
+            if (didDragRef.current) return;
+            if (inspectedPlanet || zoom > MIN_ZOOM + 0.01) {
+              setInspectedPlanet(null);
+              resetView();
+            }
+          }}
         >
           <svg
             ref={mapSvgRef}
@@ -3946,6 +3998,7 @@ export default function MediaMap() {
                   onHoverChange={setHoveredPlanet}
                   onClick={(node) => {
                     if (didDragRef.current) return;
+                    bgClickSuppressRef.current = true; // a planet click, not a background click
                     if (isEditMode) {
                       if (connectMode) {
                         handleConnectClick(node.name);
