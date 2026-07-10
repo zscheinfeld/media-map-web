@@ -72,9 +72,17 @@ function useIsEditMode(): boolean {
   }, []);
 }
 
-const MIN_ZOOM = 0.6;
+const MIN_ZOOM = 1; // = the on-load / reset view; users can't zoom out past it
 const MAX_ZOOM = 8;
 const ZOOM_STEP = 1.4;
+// Label type stays a constant on-screen size up to LABEL_GROW_START, then grows
+// linearly to LABEL_GROW_MAX at full zoom — so names/values get more prominent
+// as you zoom into a cluster. Line-height is a ratio in Planet, so leading (the
+// line-spacing %) scales with the font automatically.
+const LABEL_GROW_START = 2;
+const LABEL_GROW_MAX = 1.7;
+const labelScaleForZoom = (zoom: number) =>
+  Math.min(LABEL_GROW_MAX, Math.max(1, 1 + (zoom - LABEL_GROW_START) * 0.12));
 // Past this zoom, every planet shows its valuation under the name (not just
 // Large Cap, which always shows it). ~2 zoom-button clicks from the default 1×
 // (1 × 1.4 × 1.4 ≈ 1.96), or the equivalent scroll.
@@ -117,12 +125,9 @@ type SectorPanelProps = {
   counts: Record<string, number>;
   enabled: Set<string>;
   onToggle: (s: string) => void;
-  onAll: (on: boolean) => void;
   total: number;
   loading: boolean;
   error: string | null;
-  showLabels: boolean;
-  onToggleLabels: () => void;
   hoveredSector: string | null;
   onHoverSector: (s: string | null) => void;
   onFocusSector: (s: string) => void;
@@ -133,17 +138,13 @@ function SectorPanelContent({
   counts,
   enabled,
   onToggle,
-  onAll,
   total,
   loading,
   error,
-  showLabels,
-  onToggleLabels,
   hoveredSector,
   onHoverSector,
   onFocusSector,
-  showLabelsToggle = true,
-}: SectorPanelProps & { showLabelsToggle?: boolean }) {
+}: SectorPanelProps) {
   return (
     <>
       <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>
@@ -166,34 +167,6 @@ function SectorPanelContent({
         >
           {error}
         </div>
-      )}
-      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        <button onClick={() => onAll(true)} style={pillBtn}>All</button>
-        <button onClick={() => onAll(false)} style={pillBtn}>None</button>
-      </div>
-      {showLabelsToggle && (
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginTop: 10,
-            padding: "6px 8px",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 12,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showLabels}
-            onChange={onToggleLabels}
-            style={{ accentColor: "#9aa6b8" }}
-          />
-          <span style={{ opacity: 0.85 }}>Show sector labels</span>
-        </label>
       )}
       {/* Clear the hover only when the cursor leaves the whole list — not when
           it crosses between rows — so the map doesn't flicker un/re-highlighting
@@ -405,39 +378,65 @@ function SectorPanelContent({
   );
 }
 
-function Sidebar(props: SectorPanelProps) {
+const iconBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  padding: 2,
+  borderRadius: 6,
+  lineHeight: 0,
+};
+
+function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: boolean; onCollapse: () => void }) {
   return (
     <aside
       style={{
-        width: 240,
-        flex: "0 0 240px",
+        flex: `0 0 ${open ? 240 : 0}px`,
+        width: open ? 240 : 0,
         height: "100vh",
-        // Column layout so the title pins to the top and the logo to the bottom
-        // while only the sector list scrolls in between.
-        display: "flex",
-        flexDirection: "column",
         overflow: "hidden",
-        background: "rgba(7, 14, 32, 0.85)",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
-        color: "#e6edf7",
-        padding: "16px 14px",
-        boxSizing: "border-box",
-        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-        userSelect: "none",
+        // Animate the width so collapse/expand slides smoothly (the map re-fits
+        // live via its ResizeObserver as this animates).
+        transition: "flex-basis 320ms ease, width 320ms ease",
+        borderRight: open ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
       }}
     >
-      {/* Brand title — pinned at the top of the panel. */}
+      {/* Fixed-width inner so the content never reflows while the panel width
+          animates — it simply clips. */}
+      <div
+        style={{
+          width: 240,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          boxSizing: "border-box",
+          background: "rgba(7, 14, 32, 0.85)",
+          color: "#e6edf7",
+          padding: "16px 14px",
+          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          userSelect: "none",
+        }}
+      >
+      {/* Brand title + collapse button — pinned at the top of the panel. */}
       <div style={{ flex: "0 0 auto" }}>
-        <div
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            lineHeight: 1.1,
-          }}
-        >
-          Media Universe
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div
+            style={{
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              textTransform: "uppercase",
+              lineHeight: 1.1,
+            }}
+          >
+            Media Universe
+          </div>
+          <button onClick={onCollapse} aria-label="Collapse panel" title="Collapse panel" className="panel-icon-btn" style={iconBtnStyle}>
+            <span className="material-symbols-outlined" style={{ fontSize: 22 }}>left_panel_close</span>
+          </button>
         </div>
         <div
           style={{
@@ -460,6 +459,7 @@ function Sidebar(props: SectorPanelProps) {
           alt="ESHAP"
           style={{ width: 96, height: "auto", display: "block" }}
         />
+      </div>
       </div>
     </aside>
   );
@@ -560,7 +560,7 @@ function MobileSectorDrawer({
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.18)", margin: "0 auto" }} />
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 14px 20px" }}>
-          <SectorPanelContent {...sectorProps} showLabelsToggle={false} />
+          <SectorPanelContent {...sectorProps} />
         </div>
         <button
           onClick={onClose}
@@ -1519,17 +1519,6 @@ const editorMiniBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const pillBtn: React.CSSProperties = {
-  flex: 1,
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.18)",
-  color: "#fff",
-  borderRadius: 6,
-  padding: "5px 0",
-  fontSize: 12,
-  cursor: "pointer",
-};
-
 const THUMB_ANCHOR_VAL = 4308;
 const THUMB_ANCHOR_DIAM = 1143;
 
@@ -2476,6 +2465,37 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
   );
 }
 
+// Fetch the app's Calibri TTFs and inline them as @font-face data URIs. Used
+// when rasterizing the map SVG to PNG: an <img>-loaded SVG can't fetch external
+// fonts, so embedding them keeps the label typography correct (and same-origin
+// data URIs avoid tainting the export canvas). Cached after the first build.
+let mapFontCssCache: string | null = null;
+async function buildMapFontCss(): Promise<string> {
+  if (mapFontCssCache !== null) return mapFontCssCache;
+  const fonts = [
+    { url: "/calibri.ttf", weight: 400 },
+    { url: "/calibri_bold.ttf", weight: 700 },
+  ];
+  const faces = await Promise.all(
+    fonts.map(async (f) => {
+      try {
+        const res = await fetch(f.url);
+        if (!res.ok) return "";
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        return `@font-face{font-family:'Calibri';font-style:normal;font-weight:${f.weight};src:url(data:font/ttf;base64,${btoa(bin)}) format('truetype');}`;
+      } catch {
+        return "";
+      }
+    }),
+  );
+  mapFontCssCache = faces.filter(Boolean).join("\n");
+  return mapFontCssCache;
+}
+
 export default function MediaMap() {
   const isMobile = useIsMobile();
   const isEditMode = useIsEditMode();
@@ -2524,7 +2544,9 @@ export default function MediaMap() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Set<string>>(new Set());
-  const [showSectorLabels, setShowSectorLabels] = useState(false);
+  const [showSectorLabels] = useState(false); // sector labels off (toggle removed)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const mapSvgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
@@ -3369,14 +3391,16 @@ export default function MediaMap() {
   };
 
   const onWheel = (e: React.WheelEvent) => {
-    if (!containerRef.current) return;
+    // Pinch-to-zoom only: trackpad pinch sends a wheel event with ctrlKey set.
+    // Plain two-finger scroll (no ctrlKey) is ignored, so it never zooms the map.
+    if (!containerRef.current || !e.ctrlKey) return;
     cancelZoomAnim();
     const rect = containerRef.current.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const slideX = view.x + (mx / rect.width) * view.w;
     const slideY = view.y + (my / rect.height) * view.h;
-    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const factor = Math.exp(-e.deltaY * 0.01); // proportional to the pinch amount
     const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
     if (newZoom === zoom) return;
     const newW = canvas.w / newZoom;
@@ -3395,6 +3419,16 @@ export default function MediaMap() {
     }
   };
   useEffect(() => cancelZoomAnim, []);
+
+  // Block the browser from pinch-zooming the whole page (which crops the fixed
+  // UI). Trackpad pinch fires a wheel event with ctrlKey set; we preventDefault
+  // that via a NON-passive listener (React's onWheel is passive and can't). The
+  // map keeps its own JS wheel-zoom, so pinching over the map still zooms it.
+  useEffect(() => {
+    const blockPageZoom = (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); };
+    window.addEventListener("wheel", blockPageZoom, { passive: false });
+    return () => window.removeEventListener("wheel", blockPageZoom);
+  }, []);
 
   const animateZoomTo = (target: number) => {
     cancelZoomAnim();
@@ -3471,6 +3505,122 @@ export default function MediaMap() {
     animateView(1, { x: 0, y: 0 }, 1100);
   };
 
+  // Export the current map as a 1920×1080 PNG. Clones the live map SVG, reframes
+  // it to a 16:9 viewBox around the current view, embeds the fonts, rasterizes to
+  // a canvas over the map's background gradient, and downloads it.
+  const downloadMapImage = async () => {
+    const svg = mapSvgRef.current;
+    if (!svg) return;
+    const W = 3840, H = 2160;
+    const dateStr = `${activeDate.year}-${String(activeDate.month).padStart(2, "0")}`;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    // 16:9 viewBox centered on the current view so the export fills the frame.
+    const targetAspect = W / H;
+    const viewAspect = view.w / view.h;
+    let exW: number, exH: number;
+    if (viewAspect > targetAspect) { exW = view.w; exH = view.w / targetAspect; }
+    else { exH = view.h; exW = view.h * targetAspect; }
+    const exX = view.x + view.w / 2 - exW / 2;
+    const exY = view.y + view.h / 2 - exH / 2;
+    clone.setAttribute("viewBox", `${exX} ${exY} ${exW} ${exH}`);
+    clone.setAttribute("width", String(W));
+    clone.setAttribute("height", String(H));
+    clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+    // Chrome taints a canvas drawn from ANY SVG that contains <foreignObject>, so
+    // convert the (foreignObject) planet labels to native SVG <text>: word-stacked
+    // name + valuation, centered on the planet, keeping the black outline.
+    const SVGNS = "http://www.w3.org/2000/svg";
+    clone.querySelectorAll("foreignObject").forEach((fo) => {
+      const x = parseFloat(fo.getAttribute("x") || "0");
+      const y = parseFloat(fo.getAttribute("y") || "0");
+      const w = parseFloat(fo.getAttribute("width") || "0");
+      const h = parseFloat(fo.getAttribute("height") || "0");
+      const styled = fo.querySelector("div") as HTMLElement | null;
+      const fs = (styled && parseFloat(styled.style.fontSize)) || 12;
+      const fill = styled?.style.color || "#fff";
+      const strokeW =
+        parseFloat(styled?.style.getPropertyValue("-webkit-text-stroke-width") || "") ||
+        parseFloat(styled?.style.getPropertyValue("-webkit-text-stroke") || "") ||
+        fs * 0.1;
+      const lines: string[] = [];
+      fo.querySelectorAll("div").forEach((d) => {
+        if (d.children.length === 0) {
+          const t = (d.textContent || "").trim();
+          if (t) lines.push(t);
+        }
+      });
+      if (!lines.length) { fo.remove(); return; }
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const text = document.createElementNS(SVGNS, "text");
+      text.setAttribute("x", String(cx));
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "central");
+      text.setAttribute("font-family", 'Calibri, "Helvetica Neue", Arial, sans-serif');
+      text.setAttribute("font-weight", "700");
+      text.setAttribute("font-size", String(fs));
+      text.setAttribute("fill", fill);
+      text.setAttribute("stroke", "#000");
+      text.setAttribute("stroke-width", String(strokeW));
+      text.setAttribute("paint-order", "stroke");
+      const y0 = cy - ((lines.length - 1) * fs) / 2;
+      lines.forEach((line, i) => {
+        const ts = document.createElementNS(SVGNS, "tspan");
+        ts.setAttribute("x", String(cx));
+        if (i === 0) ts.setAttribute("y", String(y0));
+        else ts.setAttribute("dy", String(fs));
+        ts.textContent = line;
+        text.appendChild(ts);
+      });
+      fo.replaceWith(text);
+    });
+
+    const fontCss = await buildMapFontCss();
+    if (fontCss) {
+      const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      styleEl.textContent = fontCss;
+      clone.insertBefore(styleEl, clone.firstChild);
+    }
+
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" }));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(svgUrl); return; }
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#1E0300");
+      g.addColorStop(0.51, "#010C4C");
+      g.addColorStop(1, "#070010");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(svgUrl);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement("a");
+        const href = URL.createObjectURL(blob);
+        a.href = href;
+        a.download = `media-universe-${dateStr}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(href);
+      }, "image/png");
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(svgUrl);
+      console.warn("[media-map] map export failed to rasterize");
+    };
+    img.src = svgUrl;
+  };
+
   // Zoom + center on the bounding box of all planets in a sector.
   const focusOnSector = (sector: string) => {
     const matching = nodes.filter(n => n.sector === sector);
@@ -3507,9 +3657,6 @@ export default function MediaMap() {
       return next;
     });
   };
-  const setAll = (on: boolean) => {
-    setEnabled(on ? new Set(allSectors) : new Set());
-  };
 
   // Cull off-view planets in map mode. Linear mode extends far past the
   // map viewBox to the right (the scrollbar handles navigation), so don't
@@ -3539,12 +3686,9 @@ export default function MediaMap() {
     counts,
     enabled,
     onToggle: toggleSector,
-    onAll: setAll,
     total: companies.length,
     loading,
     error,
-    showLabels: showSectorLabels,
-    onToggleLabels: () => setShowSectorLabels(v => !v),
     hoveredSector,
     onHoverSector: setHoveredSector,
     onFocusSector: focusOnSector,
@@ -3560,7 +3704,36 @@ export default function MediaMap() {
         overflow: "hidden",
       }}
     >
-      {!isMobile && <Sidebar {...sectorPanelProps} />}
+      {!isMobile && <Sidebar {...sectorPanelProps} open={sidebarOpen} onCollapse={() => setSidebarOpen(false)} />}
+      {!isMobile && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open panel"
+          title="Open panel"
+          className="panel-icon-btn"
+          style={{
+            position: "fixed",
+            top: 16,
+            left: 16,
+            zIndex: 30,
+            background: "transparent",
+            border: "none",
+            padding: 2,
+            cursor: "pointer",
+            display: "inline-flex",
+            lineHeight: 0,
+            // Fade in after the panel has slid away; fade out quickly when it opens.
+            // (color transition kept so the 50%→100% hover still animates.)
+            opacity: sidebarOpen ? 0 : 1,
+            pointerEvents: sidebarOpen ? "none" : "auto",
+            transition: sidebarOpen
+              ? "opacity 150ms ease, color 150ms ease"
+              : "opacity 220ms ease 200ms, color 150ms ease",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 24 }}>left_panel_open</span>
+        </button>
+      )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
             background: "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)" }}>
         {/* Live interactive map — always mounted so physics keeps running.
@@ -3593,6 +3766,7 @@ export default function MediaMap() {
           onWheel={layoutMode === "linear" ? undefined : onWheel}
         >
           <svg
+            ref={mapSvgRef}
             width={
               layoutMode === "linear" && containerH > 0
                 ? Math.max(containerW, (linearStripSlideWidth / canvas.h) * containerH * zoom)
@@ -3660,27 +3834,35 @@ export default function MediaMap() {
               const ay = dragState?.name === a.name ? dragState.y : a.y;
               const bx = dragState?.name === b.name ? dragState.x : b.x;
               const by = dragState?.name === b.name ? dragState.y : b.y;
+              // Dim with the planets on sector-hover: a line stays lit if either
+              // endpoint is in the hovered sector (its relationships), else it dims.
+              const connDimmed =
+                hoveredSector !== null && a.sector !== hoveredSector && b.sector !== hoveredSector;
               return (
-                <ConnectionLine
+                <g
                   key={`conn-${idx}`}
-                  ax={ax}
-                  ay={ay}
-                  bx={bx}
-                  by={by}
-                  connectionStyle={conn.style}
-                  slideUnitsPerPx={slideUnitsPerPx}
-                  isSelected={isEditMode && selectedConnIdx === idx}
-                  isHovered={hoveredConn?.idx === idx}
-                  interactive={isEditMode}
-                  onMouseEnter={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
-                  onMouseMove={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
-                  onMouseLeave={() => setHoveredConn((prev) => (prev?.idx === idx ? null : prev))}
-                  onClick={(e) => {
-                    if (!isEditMode) return;
-                    e.stopPropagation();
-                    setSelectedConnIdx(idx);
-                  }}
-                />
+                  style={{ opacity: connDimmed ? 0.2 : 1, transition: "opacity 220ms ease" }}
+                >
+                  <ConnectionLine
+                    ax={ax}
+                    ay={ay}
+                    bx={bx}
+                    by={by}
+                    connectionStyle={conn.style}
+                    slideUnitsPerPx={slideUnitsPerPx}
+                    isSelected={isEditMode && selectedConnIdx === idx}
+                    isHovered={hoveredConn?.idx === idx}
+                    interactive={isEditMode}
+                    onMouseEnter={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                    onMouseMove={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                    onMouseLeave={() => setHoveredConn((prev) => (prev?.idx === idx ? null : prev))}
+                    onClick={(e) => {
+                      if (!isEditMode) return;
+                      e.stopPropagation();
+                      setSelectedConnIdx(idx);
+                    }}
+                  />
+                </g>
               );
             })}
 
@@ -3777,7 +3959,9 @@ export default function MediaMap() {
                     }
                   }}
                   dimmed={hoveredSector !== null && n.sector !== hoveredSector}
-                  labelSizePx={labelSizePx}
+                  labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
+                  labelMinBoxWPx={130 * labelScaleForZoom(zoom)}
+                  labelMinBoxHPx={52 * labelScaleForZoom(zoom)}
                   isEditMode={isEditMode}
                   isSelected={
                     isEditMode &&
@@ -3946,6 +4130,7 @@ export default function MediaMap() {
                   key={mode}
                   onClick={() => selectView(mode)}
                   aria-pressed={active}
+                  className="mm-hover"
                   style={{
                     background: active ? "rgba(255,255,255,0.18)" : "transparent",
                     color: active ? "white" : "rgba(255,255,255,0.65)",
@@ -3957,7 +4142,7 @@ export default function MediaMap() {
                     fontWeight: active ? 700 : 500,
                     letterSpacing: 1.2,
                     cursor: "pointer",
-                    transition: "background 160ms, color 160ms",
+                    transition: "background 160ms, color 160ms, box-shadow 160ms",
                   }}
                 >
                   {mode.toUpperCase()}
@@ -4192,7 +4377,7 @@ export default function MediaMap() {
           );
         })()}
 
-        {/* Zoom UI — hidden in timeline mode (no map) and list mode (no zoom) */}
+        {/* Zoom + download UI — hidden in timeline mode (no map) and list mode */}
         {!timelineOpen && viewMode !== "list" && (
           <div
             style={{
@@ -4202,23 +4387,54 @@ export default function MediaMap() {
               display: "flex",
               flexDirection: "row",
               gap: 8,
-              background: "rgba(255,255,255,0.08)",
-              padding: 6,
-              borderRadius: 10,
-              backdropFilter: "blur(6px)",
-              border: "1px solid rgba(255,255,255,0.15)",
               zIndex: 10,
             }}
           >
-            <button aria-label="Zoom in" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
-            <button aria-label="Zoom out" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
-            <button
-              aria-label="Reset view"
-              onClick={() => (viewMode === "aggregate" ? setAggZoomTarget(1) : resetView())}
-              style={{ ...zoomBtnStyle, fontSize: 13 }}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 8,
+                background: "rgba(255,255,255,0.08)",
+                padding: 6,
+                borderRadius: 10,
+                backdropFilter: "blur(6px)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
             >
-              ⟳
-            </button>
+              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
+              <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
+              <button
+                aria-label="Reset view"
+                className="mm-hover"
+                onClick={() => (viewMode === "aggregate" ? setAggZoomTarget(1) : resetView())}
+                style={{ ...zoomBtnStyle, fontSize: 13 }}
+              >
+                ⟳
+              </button>
+            </div>
+            {viewMode === "map" && (
+              <div
+                style={{
+                  display: "flex",
+                  background: "rgba(255,255,255,0.08)",
+                  padding: 6,
+                  borderRadius: 10,
+                  backdropFilter: "blur(6px)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                }}
+              >
+                <button
+                  aria-label="Download map (3840×2160 PNG)"
+                  title="Download map (3840×2160)"
+                  className="mm-hover"
+                  onClick={downloadMapImage}
+                  style={zoomBtnStyle}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>download</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
