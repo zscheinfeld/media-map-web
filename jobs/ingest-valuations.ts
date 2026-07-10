@@ -271,7 +271,9 @@ async function main() {
     const ticker = c.ticker ?? ''
     const method =
       methodColIdx !== undefined ? (preserveRaw.get(c.slug ?? '')?.[methodColIdx] ?? '').trim().toLowerCase() : ''
-    const manual = method === 'manual entry'
+    // Manual = the Sanity data source is a manual one (primary signal), or the
+    // sheet's "data entry method" says so (kept as a fallback during migration).
+    const manual = c.dataSourceType === 'manual' || method === 'manual entry'
     let exchange = ''
     let fmpCompany = ''
     let lastUpdated = ''

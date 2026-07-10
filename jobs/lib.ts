@@ -30,12 +30,15 @@ export type Company = {
   is_public?: boolean
   valuation_type?: ValuationType
   sector?: string
+  /** "api" | "manual" — the referenced data source's type. "manual" means the
+   *  client fills this company by hand, so the ingest skips FMP for it. */
+  dataSourceType?: string
 }
 
 /** Every company in Sanity, with the fields the jobs care about. */
 export async function fetchRoster(client: SanityClient): Promise<Company[]> {
   return client.fetch<Company[]>(
-    `*[_type == "company"]{_id, name, "slug": slug.current, ticker, is_public, valuation_type, "sector": sector->name} | order(name asc)`,
+    `*[_type == "company"]{_id, name, "slug": slug.current, ticker, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type} | order(name asc)`,
   )
 }
 
