@@ -257,6 +257,10 @@ async function main() {
   const leadLower = leadHeader.map((h) => h.trim().toLowerCase())
   const existingColIdx = new Map<string, number>()
   preserveHeader.forEach((h, i) => existingColIdx.set(h.trim().toLowerCase(), i))
+  // "data entry method" = "Manual entry" marks market-cap rows the client fills
+  // by hand (e.g. non-US companies FMP can't reach). We skip FMP for those so
+  // their manual values + FMP-derived columns are left untouched.
+  const methodColIdx = existingColIdx.get('data entry method') ?? existingColIdx.get('data_entry_method')
 
   const rows: (string | number)[][] = []
   let filled = 0
@@ -265,11 +269,16 @@ async function main() {
   for (const c of roster) {
     const type = c.valuation_type ?? 'market_cap'
     const ticker = c.ticker ?? ''
+    const method =
+      methodColIdx !== undefined ? (preserveRaw.get(c.slug ?? '')?.[methodColIdx] ?? '').trim().toLowerCase() : ''
+    const manual = method === 'manual entry'
     let exchange = ''
     let fmpCompany = ''
     let lastUpdated = ''
     let valueCells: (string | number)[]
-    if (type === 'market_cap' && ticker) {
+    let fetched = false
+    if (type === 'market_cap' && ticker && !manual) {
+      fetched = true
       const prof = await fetchProfile(ticker)
       exchange = prof.exchange
       fmpCompany = prof.name
@@ -310,7 +319,8 @@ async function main() {
       if (++done % 20 === 0) console.log(`  …${done}/${fetchable.length} processed`)
       await sleep(150)
     } else {
-      // private / PSM / no ticker → keep any manual value already in the sheet
+      // Manual entry, private/PSM, or no ticker → keep the existing month values
+      // (and the FMP-derived columns) exactly as-is; the action doesn't touch them.
       const ex = preserve.get(c.slug ?? '')
       valueCells = cols.map((m) => ex?.get(m) ?? '')
     }
@@ -321,11 +331,16 @@ async function main() {
       ['name', c.name],
       ['sector', c.sector ?? ''],
       ['type', type],
+      ['data type', type], // alias, in case the "type" column was renamed "data type"
       ['ticker', ticker],
-      ['exchange', exchange],
-      ['fmp_company', fmpCompany],
-      ['last_updated', lastUpdated],
     ])
+    // exchange / fmp_company / last_updated are FMP-derived, so only write them
+    // when we actually fetched — otherwise (manual entry / no ticker) preserve them.
+    if (fetched) {
+      managed.set('exchange', exchange)
+      managed.set('fmp_company', fmpCompany)
+      managed.set('last_updated', lastUpdated)
+    }
     const raw = preserveRaw.get(c.slug ?? '')
     const leadCells = leadLower.map((colLower) => {
       if (managed.has(colLower)) return managed.get(colLower) as string | number
