@@ -105,8 +105,8 @@ type RawConnection = {
   to?: string | null
   fromId?: string | null
   toId?: string | null
-  start_date?: string
-  end_date?: string
+  start_year?: number
+  end_year?: number
 }
 // One time-scoped knob-value entry on the mapSettings singleton (snake_case as
 // stored in Sanity). Resolved/forward-propagated in pendingChanges.
@@ -175,10 +175,10 @@ export type EditorConnection = {
   toId: string
   style: 'solid' | 'dotted'
   description?: string
-  /** `'YYYY-MM-DD'` from Sanity; absent → undated (always active from the start). */
-  start_date?: string
-  /** `'YYYY-MM-DD'` from Sanity; absent → still active (no end). */
-  end_date?: string
+  /** First year active (from Sanity); absent → undated (active from the start). */
+  start_year?: number
+  /** Last year active (from Sanity); absent → still active (no end). */
+  end_year?: number
 }
 
 export type MapData = {
@@ -282,8 +282,8 @@ function buildMapData(
       toId: c.toId,
       style: c.style,
       description: c.description,
-      start_date: c.start_date,
-      end_date: c.end_date,
+      start_year: c.start_year,
+      end_year: c.end_year,
     }))
 
   const editorSectors: EditorSector[] = sectors
@@ -318,7 +318,7 @@ const COMPANIES_Q = `*[_type == "company"]{
   external_articles[]{_key, title, url, source, published_date}
 }`
 const CONNECTIONS_Q = `*[_type == "connection"]{
-  _id, style, description, start_date, end_date,
+  _id, style, description, start_year, end_year,
   "from": from->name, "to": to->name,
   "fromId": from->_id, "toId": to->_id
 }`

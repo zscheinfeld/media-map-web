@@ -1,5 +1,5 @@
 import {Box, Button, Card, Flex, Select, Stack, Text, TextArea} from '@sanity/ui'
-import {formatMomentYear, momentToSanityDate, sanityDateToMoment, type Moment} from './moment'
+import {yearOfMoment, type Moment} from './moment'
 import type {ConnectionStyle, ResolvedConnection} from './pendingChanges'
 
 export type ConnectionInspectorProps = {
@@ -8,9 +8,9 @@ export type ConnectionInspectorProps = {
   currentMoment: Moment
   onStyleChange: (next: ConnectionStyle) => void
   onDescriptionChange: (next: string) => void
-  /** Set the connection's end_date to `currentMoment`. Connection stops appearing after that. */
+  /** Set the connection's end_year to the current year. It stops appearing after that year. */
   onEndAtCurrentMoment: () => void
-  /** Clear end_date (reopen). */
+  /** Clear end_year (reopen). */
   onReopen: () => void
   onDelete: () => void
   onClose: () => void
@@ -19,8 +19,8 @@ export type ConnectionInspectorProps = {
 /**
  * Right-side inspector shown when a connection line is selected. Mirrors the
  * app's connection editor (style toggle + description + delete) and adds the
- * time-scoping action: "End at {moment}" sets end_date so the connection stops
- * appearing on maps after the current moment; "Reopen" clears end_date.
+ * time-scoping action: "End at {year}" sets end_year so the connection stops
+ * appearing on maps after that year; "Reopen" clears end_year.
  *
  * Replaces the PlanetInspector while a connection is selected (only one
  * inspector visible at a time).
@@ -36,10 +36,9 @@ export function ConnectionInspector({
   onClose,
 }: ConnectionInspectorProps) {
   if (!connection) return null
-  const endMoment = sanityDateToMoment(connection.endDate)
-  const startMoment = sanityDateToMoment(connection.startDate)
-  const startLabel = startMoment ? formatMomentYear(startMoment) : 'Always'
-  const endLabel = endMoment ? formatMomentYear(endMoment) : 'Still active'
+  const currentYear = yearOfMoment(currentMoment)
+  const startLabel = connection.startYear != null ? String(connection.startYear) : 'Always'
+  const endLabel = connection.endYear != null ? String(connection.endYear) : 'Still active'
 
   return (
     <Card
@@ -106,9 +105,9 @@ export function ConnectionInspector({
               {startLabel} → {endLabel}
             </Text>
           </Box>
-          {endMoment ? (
+          {connection.endYear != null ? (
             <Button
-              text={`Reopen (clear end ${formatMomentYear(endMoment)})`}
+              text={`Reopen (clear end ${connection.endYear})`}
               mode="ghost"
               tone="primary"
               fontSize={1}
@@ -117,7 +116,7 @@ export function ConnectionInspector({
             />
           ) : (
             <Button
-              text={`End at ${formatMomentYear(currentMoment)}`}
+              text={`End at ${currentYear}`}
               mode="ghost"
               tone="caution"
               fontSize={1}
@@ -125,7 +124,7 @@ export function ConnectionInspector({
               onClick={onEndAtCurrentMoment}
               disabled={
                 // Can't end before the start.
-                startMoment !== null && currentMoment < startMoment
+                connection.startYear != null && currentYear < connection.startYear
               }
             />
           )}
@@ -146,7 +145,3 @@ export function ConnectionInspector({
     </Card>
   )
 }
-
-// Re-export for callers that build a no-op endDate set (so the inspector can
-// emit `'YYYY-MM-DD'` strings without importing moment.ts directly).
-export {momentToSanityDate}

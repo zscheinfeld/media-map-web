@@ -26,7 +26,7 @@ import {ConnectModePanel} from './ConnectModePanel'
 import {LAYOUT_KNOBS_DEFAULTS, LayoutKnobs, type LayoutKnobsValues} from './LayoutKnobs'
 import {TimeSelector} from './TimeSelector'
 import {SaveBar} from './SaveBar'
-import {DEFAULT_MOMENT, momentToSanityDate, type Moment} from './moment'
+import {DEFAULT_MOMENT, yearOfMoment, type Moment} from './moment'
 import {
   EMPTY_PENDING,
   activeOverrideAt,
@@ -372,7 +372,7 @@ export function MapEditorTool() {
               to: toNode.name,
               fromId: fromNode.id,
               toId: toNode.id,
-              startMoment: moment,
+              startYear: yearOfMoment(moment),
             }),
           )
         }
@@ -595,14 +595,14 @@ export function MapEditorTool() {
     if (!selectedConnection) return
     setPending((prev) =>
       editConnection(prev, connTarget(selectedConnection), {
-        endDate: momentToSanityDate(moment),
+        endYear: yearOfMoment(moment),
       }),
     )
   }, [selectedConnection, moment, connTarget])
 
   const onConnectionReopen = useCallback(() => {
     if (!selectedConnection) return
-    setPending((prev) => editConnection(prev, connTarget(selectedConnection), {endDate: null}))
+    setPending((prev) => editConnection(prev, connTarget(selectedConnection), {endYear: null}))
   }, [selectedConnection, connTarget])
 
   const onConnectionDelete = useCallback(() => {

@@ -83,7 +83,7 @@ type RawEntity = {
   position_overrides?: RawPositionOverride[]
   appearance_windows?: YearWindow[]
 }
-type RawConnection = {style: "solid" | "dotted"; description?: string; start_date?: string; end_date?: string; from?: string | null; to?: string | null}
+type RawConnection = {style: "solid" | "dotted"; description?: string; start_year?: number; end_year?: number; from?: string | null; to?: string | null}
 type RawSettingsOverride = {
   start_date?: string
   packing_density?: number
@@ -256,7 +256,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 
   const connections: ResolvedConnection[] = raw.connections
     .filter((c): c is RawConnection & {from: string; to: string} => !!c.from && !!c.to)
-    .filter((c) => windowActiveAt(c.start_date, c.end_date, at))
+    .filter((c) => yearWindowsActiveAt([{start_year: c.start_year, end_year: c.end_year}], at))
     .map((c) => ({from: c.from, to: c.to, style: c.style, description: c.description ?? ""}))
 
   const activeSettings = activeAt(raw.settings?.overrides ?? [], at, overrideMoment)
@@ -302,7 +302,7 @@ const COMPANIES_Q = `*[_type == "company"]{
   external_articles[]{_key, title, url, source, published_date},
   valuation_type, manual_valuations[]{value_billions_usd, as_of_date}, "data_source": data_source->name
 }`
-const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_date, end_date, "from": from->name, "to": to->name }`
+const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_year, end_year, "from": from->name, "to": to->name }`
 const ENTITIES_Q = `*[_type == "entity"]{
   name,
   sector->{ name, desktop_center, desktop_center_overrides[]{x, y, start_date} },

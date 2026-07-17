@@ -161,7 +161,7 @@ export async function commitPending(
         from: {_type: 'reference', _ref: op.fromId},
         to: {_type: 'reference', _ref: op.toId},
         style: op.style,
-        start_date: momentToSanityDate(op.startMoment),
+        start_year: op.startYear,
       }
       if (op.description) doc.description = op.description
       tx.create(doc)
@@ -171,8 +171,8 @@ export async function commitPending(
       const unsets: string[] = []
       if (op.style !== undefined) sets.style = op.style
       if (op.description !== undefined) sets.description = op.description
-      if (op.endDate === null) unsets.push('end_date')
-      else if (op.endDate !== undefined) sets.end_date = op.endDate
+      if (op.endYear === null) unsets.push('end_year')
+      else if (op.endYear !== undefined) sets.end_year = op.endYear
       if (Object.keys(sets).length > 0) patch = patch.set(sets)
       if (unsets.length > 0) patch = patch.unset(unsets)
       tx.patch(patch)

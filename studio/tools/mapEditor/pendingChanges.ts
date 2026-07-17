@@ -7,7 +7,7 @@
 // a planet renders at the override with the LARGEST `startDate ≤ T`. See
 // ARCHITECTURE.md → Time-scoping for the full spec.
 
-import {type Moment, activeAt, formatMomentYear, sanityDateToMoment, UNDATED, windowActiveAt} from './moment'
+import {type Moment, activeAt, formatMomentYear, sanityDateToMoment, UNDATED, yearWindowsActiveAt} from './moment'
 import type {EditorCompany, EditorConnection, RawSettingsOverride} from './sanityMapData'
 import {LAYOUT_KNOBS_DEFAULTS, type LayoutKnobsValues} from './LayoutKnobs'
 
@@ -51,7 +51,7 @@ export type PendingPositionOp =
  * Connection authoring. `createConnection` carries the from/to company IDs
  * (resolved at click-time from `data.companiesByName`) plus a tempKey used as
  * the doc's stable identity until Save assigns a real `_id`. Updates carry
- * partial fields; `endDate: null` is the sentinel for "unset / reopen."
+ * partial fields; `endYear: null` is the sentinel for "unset / reopen."
  */
 export type PendingConnectionOp =
   | {
@@ -63,15 +63,15 @@ export type PendingConnectionOp =
       toId: string
       style: ConnectionStyle
       description: string
-      startMoment: Moment
+      startYear: number
     }
   | {
       kind: 'updateConnection'
       connectionId: string
       style?: ConnectionStyle
       description?: string
-      /** string = set, null = unset (reopen), undefined = leave alone. */
-      endDate?: string | null
+      /** number = set, null = unset (reopen), undefined = leave alone. */
+      endYear?: number | null
     }
   | {
       kind: 'deleteConnection'
@@ -374,8 +374,8 @@ export type ResolvedConnection = {
   toId: string
   style: ConnectionStyle
   description: string
-  startDate: string | undefined // 'YYYY-MM-DD' or undefined
-  endDate: string | undefined
+  startYear: number | undefined
+  endYear: number | undefined
 }
 
 export function resolveConnections(
@@ -385,7 +385,7 @@ export function resolveConnections(
   const deleted = new Set<string>()
   const edits = new Map<
     string,
-    {style?: ConnectionStyle; description?: string; endDate?: string | null}
+    {style?: ConnectionStyle; description?: string; endYear?: number | null}
   >()
   for (const op of pending.connections) {
     if (op.kind === 'deleteConnection') deleted.add(op.connectionId)
@@ -394,8 +394,8 @@ export function resolveConnections(
       edits.set(op.connectionId, {
         style: op.style ?? prior.style,
         description: op.description ?? prior.description,
-        // For endDate: undefined = inherit prior; null/string = override.
-        endDate: op.endDate === undefined ? prior.endDate : op.endDate,
+        // For endYear: undefined = inherit prior; null/number = override.
+        endYear: op.endYear === undefined ? prior.endYear : op.endYear,
       })
     }
   }
@@ -403,7 +403,7 @@ export function resolveConnections(
   for (const c of sanityConnections) {
     if (deleted.has(c.id)) continue
     const edit = edits.get(c.id)
-    const endOverride = edit?.endDate
+    const endOverride = edit?.endYear
     resolved.push({
       key: c.id,
       isPendingNew: false,
@@ -413,8 +413,8 @@ export function resolveConnections(
       toId: c.toId,
       style: edit?.style ?? c.style,
       description: edit?.description ?? c.description ?? '',
-      startDate: c.start_date,
-      endDate: endOverride === null ? undefined : (endOverride ?? c.end_date),
+      startYear: c.start_year,
+      endYear: endOverride === null ? undefined : (endOverride ?? c.end_year),
     })
   }
   for (const op of pending.connections) {
@@ -428,8 +428,8 @@ export function resolveConnections(
         toId: op.toId,
         style: op.style,
         description: op.description,
-        startDate: `${op.startMoment}-01`,
-        endDate: undefined,
+        startYear: op.startYear,
+        endYear: undefined,
       })
     }
   }
@@ -437,13 +437,12 @@ export function resolveConnections(
 }
 
 /**
- * A connection is active at moment T if its [start, end] window covers T.
- * Undated start = "from the beginning"; undated end = "still active." This is
- * the consumer-side time filter for the canvas (and matches the transitional
- * always-active behavior for legacy undated entries).
+ * A connection is active at moment T if T's YEAR falls in its [start_year,
+ * end_year] range. Absent start = "from the beginning"; absent end = "still
+ * active" (also the transitional always-active behavior for undated entries).
  */
 export function connectionActiveAt(c: ResolvedConnection, at: Moment): boolean {
-  return windowActiveAt(c.startDate, c.endDate, at)
+  return yearWindowsActiveAt([{start_year: c.startYear, end_year: c.endYear}], at)
 }
 
 const newConnectionTempKey = (): string =>
@@ -463,7 +462,7 @@ export function createConnection(
     toId: string
     style?: ConnectionStyle
     description?: string
-    startMoment: Moment
+    startYear: number
   },
 ): PendingState {
   return {
@@ -479,7 +478,7 @@ export function createConnection(
         toId: args.toId,
         style: args.style ?? 'solid',
         description: args.description ?? '',
-        startMoment: args.startMoment,
+        startYear: args.startYear,
       },
     ],
   }
@@ -487,13 +486,13 @@ export function createConnection(
 
 /**
  * Stage an edit on a connection (Sanity-existing or pending-new). Partial
- * fields; pass `endDate: null` to clear it (reopen). Coalesces with any prior
+ * fields; pass `endYear: null` to clear it (reopen). Coalesces with any prior
  * pending edit on the same target.
  */
 export function editConnection(
   state: PendingState,
   target: {key: string; isPendingNew: boolean},
-  patch: {style?: ConnectionStyle; description?: string; endDate?: string | null},
+  patch: {style?: ConnectionStyle; description?: string; endYear?: number | null},
 ): PendingState {
   if (target.isPendingNew) {
     return {
@@ -522,7 +521,7 @@ export function editConnection(
       ...existing,
       style: patch.style ?? existing.style,
       description: patch.description ?? existing.description,
-      endDate: patch.endDate === undefined ? existing.endDate : patch.endDate,
+      endYear: patch.endYear === undefined ? existing.endYear : patch.endYear,
     }
     return {...state, connections: next}
   }
@@ -959,8 +958,8 @@ export function describePending(state: PendingState, ctx: DescribePendingCtx): s
     else if (op.kind === 'deleteConnection') out.push(`Removed ${ctx.connectionLabel(op.connectionId)}`)
     else {
       const label = ctx.connectionLabel(op.connectionId)
-      if (op.endDate === null) out.push(`Reopened ${label}`)
-      else if (op.endDate) out.push(`Ended ${label}`)
+      if (op.endYear === null) out.push(`Reopened ${label}`)
+      else if (op.endYear) out.push(`Ended ${label} at ${op.endYear}`)
       else if (op.style) out.push(`Set ${label} to ${op.style}`)
       else out.push(`Edited ${label}`)
     }
