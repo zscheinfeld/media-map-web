@@ -138,7 +138,8 @@ Move the timeline from **monthly** to **yearly**. Each *past* year's map = that 
 **Progress:**
 - ✅ **Ingest** (`jobs/ingest-valuations.ts`): `buildYears` + `yearlyBillions` (Oct-1 past / latest current), daily refresh of the current-year column only, year-rollover full re-pull, one-time legacy-month sweep (`clearTabValues`, preserves client Notes/vetting). `enforceNumberFormat`.
 - ✅ **App read-path**: `loadValuations` keyed by year + `latestYear`/`latestUpdated`; `historical.buildYearRange` + present-aware `formatDate`; MediaMap `currentDate`/`valAt`/liveness by year; timeline strip labels every year; aggregate X-axis = years. Build green.
-- ⏳ **Sheet regeneration** — one-time write-mode run to replace the monthly columns with 12 yearly ones (the live app shows blanks until this runs, since it now matches only `YYYY` headers).
+- ✅ **Sheet regeneration** — done (2026-07-17). Write-mode run swept the monthly columns → 12 yearly ones (`2015…2026`), full FMP backfill for the 101 `api` rows, 72 `manual` rows (companiesmarketcap.com + Manual entry) left blank for client entry. Oct-1 snapshots validated against real history (e.g. NVIDIA 2022=301, 2023=1073, 2024=2870). Also repaired a pre-existing duplicate-`slug`/missing-`name` header. Client Notes / vetting_status / data-source columns preserved.
+- ✅ **Deployed** — app read-path + yearly ingest pushed to `main` (Netlify + the daily cron now both run the yearly code).
 - ⏳ **Studio TimeSelector → year picker** (public renderer already resolves past years at `YYYY-10`; authoring UI still monthly — non-blocking).
 - ⏳ **Docs** — ARCHITECTURE.md time-scoping spec + retire the monthly mock note.
 
