@@ -3,17 +3,31 @@ import type {LayoutInput} from '@media-map/map-core'
 // Offscreen canvas to measure label text width (same approach as the app), so
 // the collision force can space planets whose labels overflow their circle.
 const LABEL_FONT_FAMILY = 'Calibri, "Helvetica Neue", Arial, sans-serif'
-const ctx: CanvasRenderingContext2D | null =
-  typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d')
 const cache = new Map<string, number>()
 
+// Created LAZILY on first measurement (not at module load) and wrapped in
+// try/catch, so headless environments without a real canvas — e.g. jsdom during
+// `sanity deploy`'s manifest extraction — fall back to an estimate instead of
+// throwing. `undefined` = not tried yet; `null` = unavailable.
+let ctx: CanvasRenderingContext2D | null | undefined
+function getCtx(): CanvasRenderingContext2D | null {
+  if (ctx !== undefined) return ctx
+  try {
+    ctx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d')
+  } catch {
+    ctx = null
+  }
+  return ctx
+}
+
 function measureWidth(text: string, fontPx: number): number {
-  if (!ctx) return text.length * fontPx * 0.55
+  const c = getCtx()
+  if (!c) return text.length * fontPx * 0.55
   const key = `${fontPx}|${text}`
   const cached = cache.get(key)
   if (cached !== undefined) return cached
-  ctx.font = `700 ${fontPx}px ${LABEL_FONT_FAMILY}`
-  const w = ctx.measureText(text).width
+  c.font = `700 ${fontPx}px ${LABEL_FONT_FAMILY}`
+  const w = c.measureText(text).width
   cache.set(key, w)
   return w
 }
