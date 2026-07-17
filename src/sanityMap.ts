@@ -154,6 +154,10 @@ export type CompanyDetail = {
   manualValue?: number
   /** Data-source name (e.g. "Market Data API"), shown in the panel. */
   dataSource?: string
+  /** Year ranges this company appears on maps. Empty = always. Kept on every
+   *  company (not filtered out) so the aggregate can window bars per-year while
+   *  the map filters visibility at the viewed year. */
+  appearanceWindows: YearWindow[]
 }
 
 export type ResolvedSanityMap = {
@@ -202,9 +206,10 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 
   for (const c of raw.companies) {
     if (!c.name) continue
-    // Appearance windows (Phase 5): a company shows only on yearly maps its
-    // window years cover. No windows = always visible.
-    if (!yearWindowsActiveAt(c.appearance_windows ?? [], at)) continue
+    // NOTE: companies are NOT dropped by appearance window here — every company
+    // stays in the resolved set so the aggregate can window bars per-year. The
+    // MAP applies the window filter at the viewed year (see MediaMap), using the
+    // appearanceWindows carried on each company's detail below.
     const sectorName = c.sector?.name ?? "Uncategorized"
     noteSector(c.sector, sectorName)
     companies.push({name: c.name, sector: sectorName, slug: c.slug})
@@ -227,6 +232,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
       valuationType: c.valuation_type ?? "market_cap",
       manualValue: activeManual?.value_billions_usd,
       dataSource: c.data_source,
+      appearanceWindows: c.appearance_windows ?? [],
     }
   }
 

@@ -18,7 +18,6 @@ export const entity = defineType({
 
   groups: [
     {name: 'basics', title: 'Basics', default: true},
-    {name: 'appearance', title: 'Appearance windows'},
     {name: 'position', title: 'Position'},
   ],
 
@@ -53,7 +52,7 @@ export const entity = defineType({
       name: 'appearance_windows',
       title: 'Appearance windows',
       type: 'array',
-      group: 'appearance',
+      group: 'basics',
       of: [{type: 'appearanceWindow'}],
       description:
         'Which maps (moments in the timeline) this entity appears on. Add one window per ' +

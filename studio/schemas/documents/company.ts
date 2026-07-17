@@ -45,7 +45,6 @@ export const company = defineType({
     {name: 'valuation', title: 'Valuation & Data Source'},
     {name: 'styling', title: 'Styling'},
     {name: 'position', title: 'Position'},
-    {name: 'appearance', title: 'Appearance windows'},
     {name: 'vitals', title: 'Vitals'},
     {name: 'content', title: 'Related Content'},
   ],
@@ -254,7 +253,7 @@ export const company = defineType({
       name: 'appearance_windows',
       title: 'Appearance windows',
       type: 'array',
-      group: 'appearance',
+      group: 'basics',
       of: [{type: 'appearanceWindow'}],
       description:
         'Which yearly maps this company appears on. Add one window per stretch of years it should be ' +

@@ -6,6 +6,7 @@ import {
   ConnectionLine,
   computeAnchorDiam,
   makeMoment,
+  yearWindowsActiveAt,
   type PlanetNode,
   type ViewMode,
   type LayoutInput,
@@ -2652,6 +2653,9 @@ export default function MediaMap() {
   // Valuation at a date: the new sheet (by slug + year) wins; else the legacy mock.
   const valAt = (c: SheetCompany, d: MapDate): number =>
     valuationAt(valData, c.slug, String(d.year)) ?? valuationForDate(c, d);
+  // A company's appearance windows (Sanity). Empty = always visible. Used to
+  // filter the map at the viewed year and to window the aggregate per-year.
+  const windowsFor = (name: string) => sanity?.detailByName[name]?.appearanceWindows ?? [];
   // Base company set: Sanity names/sectors + sheet valuations when configured,
   // else the raw sheet companies. Feeds the timeline mock + ATH/ATL stats.
   const baseCompanies = useMemo<SheetCompany[]>(() => {
@@ -2749,11 +2753,18 @@ export default function MediaMap() {
 
   const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
   const displayedCompanies = useMemo(
-    () => sameDate(activeDate, currentDate)
-      ? baseCompanies
-      : baseCompanies.map((c) => ({ ...c, valuation_b: valAt(c, activeDate) })),
+    () => {
+      // Hide companies whose appearance windows don't cover the viewed year (the
+      // map, list + linear views all read this; the aggregate keeps every company
+      // and windows per-year instead).
+      const activeMoment = makeMoment(activeDate.year, activeDate.month);
+      const visible = baseCompanies.filter((c) => yearWindowsActiveAt(windowsFor(c.name), activeMoment));
+      return sameDate(activeDate, currentDate)
+        ? visible
+        : visible.map((c) => ({ ...c, valuation_b: valAt(c, activeDate) }));
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseCompanies, activeDate, currentDate, valData],
+    [baseCompanies, activeDate, currentDate, valData, sanity],
   );
 
   // Aggregate view: every company's valuation across the whole timeline, ordered
@@ -2766,7 +2777,12 @@ export default function MediaMap() {
         ? style.stripes
         : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
       const color = AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()] ?? mostSaturatedColor(palette);
-      const values = dateRange.map((d) => Math.max(0, valAt(c, d)));
+      // A company contributes a bar only in years its appearance windows cover
+      // (empty = all years); outside the window its value is 0 (no bar).
+      const windows = windowsFor(c.name);
+      const values = dateRange.map((d) =>
+        yearWindowsActiveAt(windows, makeMoment(d.year, d.month)) ? Math.max(0, valAt(c, d)) : 0,
+      );
       return { name: c.name, sector: c.sector, color, values };
     });
     // Stacking order is decided PER MONTH in AggregateView (largest on top for
@@ -2788,13 +2804,17 @@ export default function MediaMap() {
   const valuationStats = useMemo(() => {
     const m = new Map<string, { ath: number; athDate: MapDate; atl: number; atlDate: MapDate }>();
     for (const c of baseCompanies) {
+      const windows = windowsFor(c.name);
       let ath = -Infinity, atl = Infinity;
       let athDate = dateRange[0], atlDate = dateRange[0];
       for (const d of dateRange) {
+        if (!yearWindowsActiveAt(windows, makeMoment(d.year, d.month))) continue; // outside its window
         const v = valAt(c, d);
         if (v > ath) { ath = v; athDate = d; }
         if (v < atl) { atl = v; atlDate = d; }
       }
+      // A company whose window covers no year in range has no stats — fall back to 0.
+      if (!Number.isFinite(ath)) { ath = 0; atl = 0; }
       m.set(c.name, { ath, athDate, atl, atlDate });
     }
     return m;
