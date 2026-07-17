@@ -140,7 +140,7 @@ Move the timeline from **monthly** to **yearly**. Each *past* year's map = that 
 - ✅ **App read-path**: `loadValuations` keyed by year + `latestYear`/`latestUpdated`; `historical.buildYearRange` + present-aware `formatDate`; MediaMap `currentDate`/`valAt`/liveness by year; timeline strip labels every year; aggregate X-axis = years. Build green.
 - ✅ **Sheet regeneration** — done (2026-07-17). Write-mode run swept the monthly columns → 12 yearly ones (`2015…2026`), full FMP backfill for the 101 `api` rows, 72 `manual` rows (companiesmarketcap.com + Manual entry) left blank for client entry. Oct-1 snapshots validated against real history (e.g. NVIDIA 2022=301, 2023=1073, 2024=2870). Also repaired a pre-existing duplicate-`slug`/missing-`name` header. Client Notes / vetting_status / data-source columns preserved.
 - ✅ **Deployed** — app read-path + yearly ingest pushed to `main` (Netlify + the daily cron now both run the yearly code).
-- ⏳ **Studio TimeSelector → year picker** (public renderer already resolves past years at `YYYY-10`; authoring UI still monthly — non-blocking).
+- ✅ **Studio TimeSelector → year picker** — `momentForYear` maps each year to its snapshot moment (past = `Y-10`, current = now), matching the public app's `buildYearRange`. Position/pin/sector/connection edits stamp `start_date` at that moment (no schema change); inspectors + connection windows + save-bar labels now read as years. **Needs a Studio redeploy** (`cd studio && npm run deploy`) to go live at eshap-media-map.sanity.studio.
 - ⏳ **Docs** — ARCHITECTURE.md time-scoping spec + retire the monthly mock note.
 
 ### The model
