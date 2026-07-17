@@ -132,4 +132,27 @@ The editor + content model are done; the public app now reads CMS **content** fr
   - **TODO — Studio Map Editor must size planets from the valuation sheet (parity, incl. history).** The editor still sizes planets from Sanity (`manual_valuations`/fallback in `studio/tools/mapEditor/sanityMapData.ts`), so the **scale there doesn't match the public map**, which sizes from the valuation **sheet** by `(slug, month)`. Wire the editor to also load the valuation CSV (reuse the app's `loadValuations` logic — `VITE_VALUATIONS_CSV_URL`) and resolve each planet's `valuation_b` from the sheet at the editor's **current moment, including historical months**, so sizes are correct as the TimeSelector scrubs. **Needed so positions can be adjusted accurately when planet scale changes month-to-month** (the whole point of placing planets per-moment). Note the Studio is a standalone workspace — it'll need its own env var for the CSV URL.
 - **4d — dynamic feeds.** Auto-pull external articles + Eshap content (schema is already feed-shaped).
 
+## Phase 5 — yearly historical maps (Oct-1 snapshots) — 📋 PLANNED
+Move the timeline from **monthly** to **yearly**. Each *past* year's map = that year's **Oct 1 (Q4-start) snapshot**; the *current* year's map = the most recent data, labeled with its actual month (e.g. "JUL 2026"). Cross-cutting: touches the data pipeline, the sheet, the app read-path + timeline UI, Sanity/Studio time-scoping, and the aggregate view.
+
+### The model
+- **Snapshot rule:** year Y (< current) → market cap on the last trading day **≤ Oct 1, Y**. Current year → the latest available value (still refreshed daily).
+- **Year rollover:** when the calendar year turns over, the just-ended year *freezes* to its Oct-1 snapshot (re-sampled once) and a fresh current-year column opens.
+
+### Decisions (locked)
+1. **Sheet columns = one per year** (`2015 … 2026`, newest-first; cell = that year's snapshot). ~138 monthly columns → ~12.
+2. **Past-year label = the year itself** (`2025`). The present map keeps its month (`JUL 2026`).
+3. **Present-month = derived from the run date** (the newest `last_updated`) — no extra metadata cell.
+
+### Work by area
+- **Ingest (`jobs/ingest-valuations.ts`) — biggest change.** `buildMonths` → `buildYears`; sample FMP daily history at the last trading day ≤ Oct 1 for each past year, latest value for the current year. Daily run refreshes only the current-year column; past years frozen. Year-rollover backfills the newly-past year's Oct-1 value + opens a new current-year column. Manual companies (companiesmarketcap.com) now fill ~12 yearly cells. `enforceMonthFormat` → year columns.
+- **Sheet.** Columns become yearly (decision #1). One-time re-generation via a full FMP backfill that re-samples Oct-1 per year.
+- **App read-path.** `historical.ts`: `buildDateRange` → list of years, each carrying its snapshot moment (Oct-1 / latest). `loadValuations.valuationAt(slug, year)`. Timeline/carousel/thumbnails → per-year (labels: past = year, present = month). `currentDate`/`activeDate` → year-based; present-month label from the run date.
+- **Sanity / Studio time-scoping.** No schema change (`start_date` stays a date). The Studio TimeSelector → **year picker**; edits stamp `start_date` = the year's snapshot date (Oct 1, or "now" for the current year). The public renderer resolves positions/connections at each year's snapshot moment (forward-prop unchanged).
+- **Aggregate view (`MediaMap.tsx`).** X axis = years (~12 bars instead of ~138); each bar = the year's snapshot stack. Stacking / ordering / intro / zoom logic unchanged — just fewer, cleaner data points.
+- **Docs.** ARCHITECTURE.md time-scoping spec + the manual-vs-dynamic matrix; retire the monthly `historical.ts` mock.
+
+### Build order
+① lock the 3 decisions → ② ingest refactor + one-time sheet re-generation → ③ app read-path + timeline UI → ④ aggregate view → ⑤ Studio TimeSelector + time-scoping moments → ⑥ docs. Data + read-path first so the maps render; Studio + aggregate follow.
+
 See the **manual-vs-dynamic matrix** in ARCHITECTURE.md.
