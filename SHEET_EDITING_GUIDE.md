@@ -19,15 +19,14 @@ Edit structure in **Sanity**. Edit numbers in **the sheet**.
   **every past-year value** (2015 → last year) for **any** company — plus **all**
   year values for manual-source companies.
 - 🔒 **Automation-managed — don't hand-edit here**: `slug`, `name`, `sector`,
-  `data type`, `ticker` (edit these in Sanity), `exchange`, `fmp_company`,
-  `last_updated`, and the **current-year** value for FMP companies.
+  `data type`, `data source`, `ticker` (edit these in Sanity), `exchange`,
+  `fmp_company`, `last_updated`, and the **current-year** value for FMP companies.
 
 ## Column-by-column
 
 | Column | Who owns it | Where to edit |
 |---|---|---|
-| `slug`, `name`, `sector`, `data type`, `ticker` | Sanity (rewritten nightly) | **In Sanity** — sheet edits get overwritten |
-| `data source` | Reference only | Shows the source set in Sanity. To *change* a company's source, do it in **Sanity** (the app reads Sanity, not this cell) |
+| `slug`, `name`, `sector`, `data type`, `data source`, `ticker` | Sanity (rewritten nightly) | **In Sanity** — sheet edits get overwritten |
 | `exchange`, `fmp_company`, `last_updated` | Automation (FMP) | Leave alone |
 | `vetting_status` | **You** | ✅ Edit freely in the sheet |
 | `Notes` | **You** | ✅ Edit freely in the sheet |

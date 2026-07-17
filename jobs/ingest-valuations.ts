@@ -350,18 +350,20 @@ async function main() {
       const ex = preserve.get(c.slug ?? '')
       valueCells = cols.map((y) => ex?.get(y) ?? '')
     }
-    // vetting_status AND the "data source" column are CLIENT-OWNED — the action
-    // never writes them. Both are preserved per row by the unknown-column
-    // carry-over below (blank on brand-new rows). NOTE: whether a company is
-    // FMP-regenerated is decided from SANITY's data source TYPE (api vs manual),
-    // not from this sheet column — so leaving the column untouched here doesn't
-    // change which rows get new data (only Financial Modeling Prep = api rows do).
+    // vetting_status is CLIENT-OWNED — the action never writes it (preserved by
+    // the unknown-column carry-over below). Everything in `managed` MIRRORS SANITY
+    // and is rewritten every run — including the "data source" column (the source
+    // NAME from Sanity) — so the sheet always reflects Sanity. Edit data sources in
+    // Sanity, not here. (Whether a company is FMP-regenerated is decided from
+    // Sanity's data source TYPE = api vs manual, independent of this display column.)
     const managed = new Map<string, string | number>([
       ['slug', c.slug ?? ''],
       ['name', c.name],
       ['sector', c.sector ?? ''],
       ['type', type],
       ['data type', type], // alias, in case the "type" column was renamed "data type"
+      ['data source', c.dataSourceName ?? ''],
+      ['data_source', c.dataSourceName ?? ''], // snake_case alias
       ['ticker', ticker],
     ])
     // exchange / fmp_company / last_updated are FMP-derived, so only write them

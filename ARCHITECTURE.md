@@ -135,6 +135,7 @@ Which data is hand-authored vs machine-pulled. Valuations move to a time-series 
 | Data | Source |
 |---|---|
 | Public-company valuations (current + history) | **Dynamic** — finance API → Supabase, keyed by `ticker` |
+| Company **data source** (which provider supplies a company's valuation) | **Manual — Sanity** `data_source` reference. Type `api` → the FMP ingest fills it; `manual` (e.g. companiesmarketcap.com, Manual entry) → hand-entered. Mirrored into the sheet's "data source" column every ingest run — edit it in Sanity, not the sheet. |
 | Private-company valuations | **Manual** — Sanity `manual_valuations` (no API can supply these) |
 | Any valuation correction / override | **Manual** — Sanity `manual_valuations` (wins over the API for matching dates) |
 | Positions, sector centers, connections, styles, entities, layout knobs | **Manual** — Sanity, via the Map Editor |
@@ -147,6 +148,7 @@ Which data is hand-authored vs machine-pulled. Valuations move to a time-series 
 > The public app does **not yet** read any of this — it's still Google-Sheet-driven. Wiring its read side to Sanity + Supabase is Phase 4.
 
 ## Cross-cutting notes
+- **Sheet-cell ownership:** which market-cap-sheet cells the nightly ingest writes vs. which are hand-editable (past-year values, `vetting_status`, `Notes`) is documented for non-engineers in [SHEET_EDITING_GUIDE.md](SHEET_EDITING_GUIDE.md). Structure columns (`slug`/`name`/`sector`/`data type`/`data source`/`ticker`) mirror Sanity; for FMP companies the ingest only ever rewrites the current-year value.
 - **Current data source:** a Google Sheet (columns: company name, valuation, sector). This is the piece a CMS would replace.
 - **Two layouts:** desktop (landscape) and mobile (portrait) have independent canvas sizes and sector positions.
 - **Style inheritance is one level:** company style overrides sector style, field by field.
