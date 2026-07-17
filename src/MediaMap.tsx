@@ -33,14 +33,14 @@ import {
 } from "./sectors";
 import {
   CURRENT_DATE,
-  buildDateRange,
+  buildYearRange,
   dateIndex,
   formatDate,
   sameDate,
   valuationForDate,
   type MapDate,
 } from "./historical";
-import { useValuations, valuationAt, latestMonth, type ValuationData } from "./loadValuations";
+import { useValuations, valuationAt, latestYear, latestUpdated, type ValuationData } from "./loadValuations";
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -617,6 +617,7 @@ const CHART_MONTHS_MIN = 12;
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtMonthLabel(m: string): string {
   const [y, mo] = m.split("-");
+  if (!mo) return y; // yearly key "YYYY"
   return `${MONTHS_SHORT[Number(mo) - 1] ?? mo} ${y}`;
 }
 
@@ -1577,9 +1578,9 @@ function MapThumbnail({
 }) {
   const valByName = useMemo(() => {
     const m = new Map<string, number>();
-    // Real value from the sheet at this month (by slug); else the legacy mock.
+    // Real value from the sheet for this year (by slug); else the legacy mock.
     for (const c of baseCompanies)
-      m.set(c.name, valuationAt(valData, c.slug, makeMoment(date.year, date.month)) ?? valuationForDate(c, date));
+      m.set(c.name, valuationAt(valData, c.slug, String(date.year)) ?? valuationForDate(c, date));
     return m;
   }, [baseCompanies, valData, date]);
 
@@ -1901,7 +1902,6 @@ function TimelineStrip({
       {dates.map(d => {
         const active = sameDate(d, activeDate);
         const isHovered = hoveredDate !== null && sameDate(d, hoveredDate);
-        const isJan = d.month === 1;
         return (
           <button
             key={`${d.year}-${d.month}`}
@@ -1911,7 +1911,7 @@ function TimelineStrip({
             title={formatDate(d)}
             style={{
               flex: "0 0 auto",
-              width: 14,
+              width: 44,
               height: 60,
               display: "flex",
               flexDirection: "column",
@@ -1931,34 +1931,30 @@ function TimelineStrip({
           >
             <span
               style={{
-                width: isHovered ? 3 : active ? 3 : isJan ? 2 : 1,
-                height: isHovered ? 36 : active ? 22 : isJan ? 18 : 12,
+                width: isHovered ? 3 : active ? 3 : 2,
+                height: isHovered ? 36 : active ? 24 : 16,
                 background: isHovered
                   ? "white"
                   : active
                     ? "rgba(180,200,255,0.95)"
-                    : isJan
-                      ? "rgba(255,255,255,0.5)"
-                      : "rgba(255,255,255,0.22)",
+                    : "rgba(255,255,255,0.4)",
                 borderRadius: 1,
                 transition: "height 140ms ease, width 140ms ease, background 140ms ease",
               }}
             />
-            {/* Date label — by default only Jan shows the year. When this tick
-                is hovered, reveal the full formatted date (e.g. "May 2026") so
-                the user can read the map's date without clicking. */}
+            {/* Every tick is a year now. Show the year always; on hover reveal the
+                full label (the present year adds its month, e.g. "JUL 2026"). */}
             <span
               style={{
                 height: 12,
                 lineHeight: "12px",
-                opacity: isHovered || isJan ? 1 : 0,
                 whiteSpace: "nowrap",
-                fontWeight: isHovered ? 700 : 500,
+                fontWeight: isHovered || active ? 700 : 500,
                 color: isHovered ? "white" : undefined,
                 transition: "opacity 140ms ease",
               }}
             >
-              {isHovered ? formatDate(d) : isJan ? d.year : ""}
+              {isHovered ? formatDate(d) : d.year}
             </span>
           </button>
         );
@@ -2167,11 +2163,10 @@ function CompanyListView({
 
 // ---- Aggregate view (stacked market-cap-over-time chart) ----
 // A fourth view alongside map/linear/list. Every company is a vertical run of
-// monthly bars whose height = its valuation; bands are ordered by the CURRENT
-// map's valuation (largest on top) and held in that order across all of time so
-// you can track a company rising/falling. The stack is normalized so the single
-// highest-total month fills the plot height. Multi-color planets collapse to
-// their single most-saturated swatch. The +/- buttons zoom the time axis.
+// yearly bars whose height = its valuation; bands are ordered PER YEAR (largest
+// on top) so you can track a company rising/falling. The stack is normalized so
+// the single highest-total year fills the plot height. Multi-color planets
+// collapse to their single most-saturated swatch. The +/- buttons zoom the time axis.
 
 type AppViewMode = ViewMode | "aggregate";
 type AggBand = { name: string; sector: string; color: string; values: number[] };
@@ -2349,8 +2344,8 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
     return { upper, lower };
   }, [bands, totals, scale, plotBottom, M]);
 
-  // One single-color path per company (discrete monthly bars). A dark stroke +
-  // the 2px month gap separate bars horizontally and companies vertically.
+  // One single-color path per company (discrete yearly bars). A dark stroke +
+  // the 2px year gap separate bars horizontally and companies vertically.
   const shapes = useMemo(() => {
     if (!plotW || !plotH || !scale) return [] as { fill: string; sector: string; d: string }[];
     // Intro transform (driven by the tuning controls): each bar slides up from
@@ -2434,12 +2429,12 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
           onMouseLeave={() => setHover(null)}
           style={{ display: "block", cursor: "crosshair" }}
         >
-          {dims.w > 0 && dates.map((d, i) => (d.month === 1 || i === 0) ? (
+          {dims.w > 0 && dates.map((d, i) => (
             <g key={i}>
               <line x1={xCenter(i)} y1={padT} x2={xCenter(i)} y2={plotBottom} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
               <text x={xCenter(i)} y={plotBottom + 16} fill="rgba(255,255,255,0.45)" fontSize={10} textAnchor="middle">{d.year}</text>
             </g>
-          ) : null)}
+          ))}
           {shapes.map((s, idx) => (
             <path
               key={idx}
@@ -2627,18 +2622,19 @@ export default function MediaMap() {
   // Real market caps from the valuation Google Sheet (Phase 4c), indexed by
   // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
   const { data: valData, lastUpdated: lastUpdatedBySlug } = useValuations();
-  // The map's "current" month = the newest month in the valuation sheet (so the
-  // view advances automatically when the daily ingest adds a column), falling
-  // back to the calendar month until the sheet loads.
+  // The map's "current" view = the newest YEAR column in the valuation sheet (so
+  // the view advances when a year rolls over), with its MONTH derived from the
+  // newest ingest "last_updated" (decision #3). Falls back to the calendar date
+  // until the sheet loads.
   const currentDate = useMemo<MapDate>(() => {
-    const latest = latestMonth(valData);
-    if (latest) {
-      const [y, m] = latest.split("-").map(Number);
-      return { year: y, month: m };
-    }
-    return CURRENT_DATE;
-  }, [valData]);
-  const CURRENT_MOMENT = makeMoment(currentDate.year, currentDate.month);
+    const year = latestYear(valData);
+    if (!year) return CURRENT_DATE;
+    const updated = latestUpdated(lastUpdatedBySlug);
+    // Month from the run date when it lands in the newest year; else calendar month.
+    const month = updated && String(updated.year) === year ? updated.month : CURRENT_DATE.month;
+    return { year: Number(year), month };
+  }, [valData, lastUpdatedBySlug]);
+  const currentYearKey = String(currentDate.year);
   // Once the sheet loads, advance the default view to its latest month — unless
   // the user has already scrubbed away from the initial (calendar) month.
   useEffect(() => {
@@ -2653,9 +2649,9 @@ export default function MediaMap() {
     for (const c of companies) m.set(c.name.toLowerCase(), c.valuation_b);
     return m;
   }, [companies]);
-  // Valuation at a date: the new sheet (by slug + month) wins; else the legacy mock.
+  // Valuation at a date: the new sheet (by slug + year) wins; else the legacy mock.
   const valAt = (c: SheetCompany, d: MapDate): number =>
-    valuationAt(valData, c.slug, makeMoment(d.year, d.month)) ?? valuationForDate(c, d);
+    valuationAt(valData, c.slug, String(d.year)) ?? valuationForDate(c, d);
   // Base company set: Sanity names/sectors + sheet valuations when configured,
   // else the raw sheet companies. Feeds the timeline mock + ATH/ATL stats.
   const baseCompanies = useMemo<SheetCompany[]>(() => {
@@ -2670,14 +2666,14 @@ export default function MediaMap() {
     return sanity.companies.map((c) => {
       const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
       const detail = sanity.detailByName[c.name];
-      // Precedence: the valuation sheet's market cap at the current month (by
+      // Precedence: the valuation sheet's market cap for the current year (by
       // slug) → the manually-entered Sanity value (private/PSM) → the legacy
       // sheet (so non-US "NA" / uncovered companies still render).
       const valuation_b =
-        valuationAt(valData, c.slug, CURRENT_MOMENT) ?? detail?.manualValue ?? sheetVal;
+        valuationAt(valData, c.slug, currentYearKey) ?? detail?.manualValue ?? sheetVal;
       return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
     });
-  }, [sanity, sanityLoading, companies, sheetValByName, valData, CURRENT_MOMENT]);
+  }, [sanity, sanityLoading, companies, sheetValByName, valData, currentYearKey]);
   // "Last updated" date per company name (join slug → date from the sheet).
   const lastUpdatedByName = useMemo(() => {
     const m = new Map<string, string>();
@@ -2687,13 +2683,14 @@ export default function MediaMap() {
     }
     return m;
   }, [baseCompanies, lastUpdatedBySlug]);
-  // Monthly market-cap series (oldest → newest) for the inspected company's chart.
+  // Yearly market-cap series (oldest → newest) for the inspected company's chart.
+  // The `month` field carries a year key ("YYYY"); HistoryChart labels it as a year.
   const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
     if (!inspectedPlanet) return [];
     const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
-    const months = slug ? valData.get(slug) : undefined;
-    if (!months) return [];
-    return [...months.entries()]
+    const years = slug ? valData.get(slug) : undefined;
+    if (!years) return [];
+    return [...years.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, value]) => ({ month, value }));
   }, [inspectedPlanet, baseCompanies, valData]);
@@ -2750,7 +2747,7 @@ export default function MediaMap() {
   const [aggZoomTarget, setAggZoomTarget] = useState(1);
   const aggZoomBy = (f: number) => setAggZoomTarget((t) => Math.min(AGG_MAX_ZOOM, Math.max(1, t * f)));
 
-  const dateRange = useMemo(() => buildDateRange(), []);
+  const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
   const displayedCompanies = useMemo(
     () => sameDate(activeDate, currentDate)
       ? baseCompanies
@@ -2988,7 +2985,7 @@ export default function MediaMap() {
   const inputs = useMemo<LayoutInput[]>(() => {
     const allSectors = Array.from(new Set(displayedCompanies.map((c) => c.sector))).sort();
     const unknownSectors = allSectors.filter((s) => !isKnownSector(s));
-    const activeMoment = makeMoment(activeDate.year, activeDate.month);
+    const activeYearKey = String(activeDate.year);
     const companyInputs = displayedCompanies
       .filter((c) => enabled.has(c.sector))
       .map((c) => {
@@ -3001,7 +2998,7 @@ export default function MediaMap() {
           sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
         // Red label when the value isn't live-sourced from the valuation sheet
         // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
-        const live = valuationAt(valData, c.slug, activeMoment) !== undefined;
+        const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
         return {
           name: c.name,
           sector: c.sector,
@@ -3548,7 +3545,10 @@ export default function MediaMap() {
     const svg = mapSvgRef.current;
     if (!svg) return;
     const W = 3840, H = 2160;
-    const dateStr = `${activeDate.year}-${String(activeDate.month).padStart(2, "0")}`;
+    // Present map → "YYYY-MM"; past years → just "YYYY" (matches the on-map label).
+    const dateStr = activeDate.year === currentDate.year
+      ? `${activeDate.year}-${String(activeDate.month).padStart(2, "0")}`
+      : `${activeDate.year}`;
     const clone = svg.cloneNode(true) as SVGSVGElement;
     // 16:9 viewBox centered on the current view so the export fills the frame.
     const targetAspect = W / H;

@@ -11,21 +11,21 @@ export const CURRENT_DATE: MapDate = (() => {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 })();
 
-/** Years × 12 months of historical maps to mock — going back from CURRENT_DATE. */
-const HISTORY_YEARS = 10;
+/** First year the timeline covers (matches the ingest's START_YEAR). */
+export const START_YEAR = 2015;
 
-/** Build the list of all map dates (oldest → newest). */
-export function buildDateRange(): MapDate[] {
+// The month a past year's snapshot represents: Oct 1 (Q4 start). Stored on the
+// MapDate so the Sanity time-scoping moment resolves at "YYYY-10" (Oct) for past
+// years; it is never displayed (past labels show the year only — decision #2).
+const SNAPSHOT_MONTH = 10;
+
+/** Build the yearly map dates (oldest → newest): one entry per year from
+ *  START_YEAR through `current.year`. Past years carry the Oct-1 snapshot month;
+ *  the current year carries `current.month` (the present month, for its label). */
+export function buildYearRange(current: MapDate = CURRENT_DATE, startYear: number = START_YEAR): MapDate[] {
   const out: MapDate[] = [];
-  const startYear = CURRENT_DATE.year - HISTORY_YEARS;
-  const startMonth = CURRENT_DATE.month;
-  let y = startYear;
-  let m = startMonth;
-  while (y < CURRENT_DATE.year || (y === CURRENT_DATE.year && m <= CURRENT_DATE.month)) {
-    out.push({ year: y, month: m });
-    m += 1;
-    if (m > 12) { m = 1; y += 1; }
-  }
+  for (let y = startYear; y < current.year; y++) out.push({ year: y, month: SNAPSHOT_MONTH });
+  out.push({ year: current.year, month: current.month });
   return out;
 }
 
@@ -34,11 +34,11 @@ const MONTH_LABELS = [
   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
 ];
 
-export function formatDate(d: MapDate, mode: "short" | "long" = "short"): string {
-  if (mode === "long") {
-    return `${MONTH_LABELS[d.month - 1]} ${d.year}`;
-  }
-  return `${MONTH_LABELS[d.month - 1]} ${d.year}`;
+/** Label for a map date. The present map (same year as `current`) shows its
+ *  month + year (e.g. "JUL 2026"); every past year shows just the year ("2025"). */
+export function formatDate(d: MapDate, current: MapDate = CURRENT_DATE): string {
+  if (d.year === current.year) return `${MONTH_LABELS[d.month - 1]} ${d.year}`;
+  return `${d.year}`;
 }
 
 export function sameDate(a: MapDate, b: MapDate): boolean {

@@ -1,10 +1,12 @@
 // Build the `market_cap` valuation sheet from Sanity + FMP.
 //
 // For every market-cap company with a ticker, pull FMP's daily historical market
-// cap (2015→now, in ≤4-year windows to stay under the per-call history cap),
-// sample the latest value in each month, and emit one row per company with a
-// column per month. Non-US tickers (402 on the US-only Starter plan), tickerless,
-// and private/PSM companies come out as "NA" / blank for manual entry.
+// cap (2015→now, in ≤4-year windows to stay under the per-call history cap) and
+// sample ONE snapshot per YEAR: each PAST year → the last trading day ≤ Oct 1
+// (the Q4-start snapshot, frozen); the CURRENT year → the latest value (refreshed
+// daily), labeled in-app with its actual month. One column per year. Non-US tickers
+// (402 on the US-only Starter plan), tickerless, and private/PSM companies come out
+// as "NA" / blank for manual entry. See PHASES.md Phase 5.
 //
 // Output: jobs/market_cap.csv → import into the `market_cap` tab of the valuation
 // Google Sheet (File → Import → Replace current sheet). The app reads that sheet.
@@ -18,16 +20,11 @@ import {FMP_API_KEY, fetchRoster, sanityClient, sleep, toCsv} from './lib.ts'
 
 const START_YEAR = 2015
 
-const pad2 = (n: number) => String(n).padStart(2, '0')
-
-/** "YYYY-MM" from 2015-01 through the current month. */
-function buildMonths(endYear: number, endMonth: number): string[] {
-  const months: string[] = []
-  for (let y = START_YEAR; y <= endYear; y++) {
-    const last = y === endYear ? endMonth : 12
-    for (let m = 1; m <= last; m++) months.push(`${y}-${pad2(m)}`)
-  }
-  return months
+/** Year strings "2015" … endYear (one column per year). */
+function buildYears(endYear: number): string[] {
+  const years: string[] = []
+  for (let y = START_YEAR; y <= endYear; y++) years.push(String(y))
+  return years
 }
 
 /** ≤4-year [from,to] windows so each history call stays under FMP's range cap. */
@@ -60,16 +57,30 @@ async function fetchHistory(ticker: string, windows: [string, string][]): Promis
   return {covered: true, daily}
 }
 
-/** month "YYYY-MM" → latest market cap that month, in billions (rounded to 2dp). */
-function monthlyBillions(daily: HistPoint[]): Record<string, number> {
-  const byMonth: Record<string, {date: string; cap: number}> = {}
-  for (const p of daily) {
-    if (!p?.date || typeof p.marketCap !== 'number') continue
-    const m = p.date.slice(0, 7)
-    if (!byMonth[m] || p.date > byMonth[m].date) byMonth[m] = {date: p.date, cap: p.marketCap}
-  }
+/** Year "YYYY" → snapshot market cap in billions (2dp).
+ *  Past years: the last daily point in [Jan 1 … Oct 1] of that year (the Q4-start
+ *  snapshot; blank if the company wasn't trading yet). Current year: latest point. */
+function yearlyBillions(daily: HistPoint[], currentYear: number): Record<string, number> {
+  const toB = (cap: number) => Math.round((cap / 1e9) * 100) / 100
+  const pts = daily
+    .filter((p) => p?.date && typeof p.marketCap === 'number')
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const out: Record<string, number> = {}
-  for (const m of Object.keys(byMonth)) out[m] = Math.round((byMonth[m].cap / 1e9) * 100) / 100
+  if (pts.length === 0) return out
+  for (let y = START_YEAR; y <= currentYear; y++) {
+    if (y === currentYear) {
+      out[String(y)] = toB(pts[pts.length - 1].marketCap) // latest overall
+      continue
+    }
+    const lo = `${y}-01-01`
+    const hi = `${y}-10-01`
+    let best: HistPoint | undefined
+    for (const p of pts) {
+      if (p.date > hi) break // sorted ascending → nothing later can qualify
+      if (p.date >= lo) best = p
+    }
+    if (best) out[String(y)] = toB(best.marketCap)
+  }
   return out
 }
 
@@ -129,18 +140,18 @@ async function openSheet(): Promise<SheetTarget> {
   return {sheets, spreadsheetId, tabName, sheetId}
 }
 
-/** Force the month columns to a plain number format. A freshly created month
+/** Force the year value columns to a plain number format. A freshly created year
  *  column can otherwise inherit a neighbour's date format, which renders market
  *  caps as dates (e.g. 151.61 → "1900-05-30") and breaks the published-CSV parse.
- *  Only the month block is touched — vetting_status validation etc. is untouched. */
-async function enforceMonthFormat(t: SheetTarget, firstMonthCol: number, monthCount: number): Promise<void> {
+ *  Only the value block is touched — vetting_status validation etc. is untouched. */
+async function enforceNumberFormat(t: SheetTarget, firstValCol: number, valCount: number): Promise<void> {
   await t.sheets.spreadsheets.batchUpdate({
     spreadsheetId: t.spreadsheetId,
     requestBody: {
       requests: [
         {
           repeatCell: {
-            range: {sheetId: t.sheetId, startRowIndex: 1, startColumnIndex: firstMonthCol, endColumnIndex: firstMonthCol + monthCount},
+            range: {sheetId: t.sheetId, startRowIndex: 1, startColumnIndex: firstValCol, endColumnIndex: firstValCol + valCount},
             cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0.##'}}},
             fields: 'userEnteredFormat.numberFormat',
           },
@@ -153,7 +164,8 @@ async function enforceMonthFormat(t: SheetTarget, firstMonthCol: number, monthCo
 /** Existing sheet state preserved across runs: per-slug month values, vetting
  *  status, the ticker each row was built from (to detect Sanity ticker changes),
  *  the raw header (so we keep the sheet's column ORDER + any extra columns like a
- *  manual "Notes"), and each row's raw cells (to carry those extra columns over). */
+ *  manual "Notes"), and each row's raw cells (to carry those extra columns over).
+ *  Value columns are keyed by year ("YYYY"). */
 async function readExisting(
   t: SheetTarget,
 ): Promise<{
@@ -176,19 +188,19 @@ async function readExisting(
   if (slugIdx < 0) return {values, status, tickers, header, rawBySlug}
   const statusIdx = headerLower.indexOf('vetting_status')
   const tickerIdx = headerLower.indexOf('ticker')
-  const monthCols = headerLower.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}-\d{2}$/.test(h))
+  const yearCols = headerLower.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}$/.test(h))
   for (let r = 1; r < rows.length; r++) {
     const row = (rows[r] ?? []).map((c) => String(c ?? ''))
     const slug = (row[slugIdx] ?? '').trim()
     if (!slug) continue
-    const months = new Map<string, number>()
-    for (const {i, h} of monthCols) {
+    const yearsVals = new Map<string, number>()
+    for (const {i, h} of yearCols) {
       const cell = (row[i] ?? '').trim()
       if (!cell || cell.toUpperCase() === 'NA') continue
       const n = Number(cell.replace(/[$,\s]/g, ''))
-      if (Number.isFinite(n)) months.set(h, n)
+      if (Number.isFinite(n)) yearsVals.set(h, n)
     }
-    values.set(slug, months)
+    values.set(slug, yearsVals)
     const st = statusIdx >= 0 ? (row[statusIdx] ?? '').trim() : ''
     if (st) status.set(slug, st)
     const tk = tickerIdx >= 0 ? (row[tickerIdx] ?? '').trim() : ''
@@ -201,7 +213,7 @@ async function readExisting(
 async function writeGrid(t: SheetTarget, grid: (string | number)[][]): Promise<void> {
   // In-place value update (NO clear): the Sheets values API overwrites only cell
   // VALUES — it leaves formatting, column widths, and data validation untouched.
-  // The grid only grows (new month columns / companies), so nothing is orphaned;
+  // The grid only grows (new year columns / companies), so nothing is orphaned;
   // a removed company just leaves a stale row the app ignores (not in the roster).
   await t.sheets.spreadsheets.values.update({
     spreadsheetId: t.spreadsheetId,
@@ -211,12 +223,20 @@ async function writeGrid(t: SheetTarget, grid: (string | number)[][]): Promise<v
   })
 }
 
+/** One-time sweep for the monthly→yearly migration: clears ONLY cell VALUES over
+ *  the whole tab (formatting + data validation survive a values.clear), so the
+ *  ~138 stale monthly columns don't linger to the right of the new 12 year
+ *  columns. Everything worth keeping (client Notes/vetting, the lead columns) was
+ *  already captured by readExisting and is rewritten by the following writeGrid. */
+async function clearTabValues(t: SheetTarget): Promise<void> {
+  await t.sheets.spreadsheets.values.clear({spreadsheetId: t.spreadsheetId, range: t.tabName})
+}
+
 async function main() {
   if (!FMP_API_KEY) throw new Error('Set FMP_API_KEY in jobs/.env first.')
   const now = new Date()
   const endYear = now.getFullYear()
-  const endMonth = now.getMonth() + 1
-  const months = buildMonths(endYear, endMonth)
+  const years = buildYears(endYear)
   const windows = buildWindows(endYear)
   const today = now.toISOString().slice(0, 10) // YYYY-MM-DD — the "last updated" stamp
 
@@ -240,23 +260,39 @@ async function main() {
     preserveRaw = ex.rawBySlug
     console.log(`Write mode → tab "${target.tabName}". Preserving values, vetting_status + manual columns from ${preserve.size} existing rows.`)
   }
-  console.log(`${roster.length} companies; ${fetchable.length} market-cap with a ticker. Columns: ${months.length} months.`)
+  console.log(`${roster.length} companies; ${fetchable.length} market-cap with a ticker. Columns: ${years.length} years.`)
 
-  // Emit columns newest-month-first, so the current month sits just right of
-  // `type` (easy to edit, no scrolling) and each new month lands at the left.
-  const cols = [...months].reverse()
-  const currentMonth = months[months.length - 1] // the only month a daily run refreshes
+  // Emit columns newest-year-first, so the current year sits just right of
+  // `type` (easy to edit, no scrolling) and each new year lands at the left.
+  const cols = [...years].reverse()
+  const currentCol = String(endYear) // the only year column a daily run refreshes
 
-  // Column layout: keep the sheet's existing non-month columns (their ORDER +
-  // any extra columns like a manual "Notes"), then append the canonical month
+  // Column layout: keep the sheet's existing non-year columns (their ORDER +
+  // any extra columns like a manual "Notes"), then append the canonical year
   // columns. Managed fields are refreshed each run; unknown columns are carried
   // over per row. On a brand-new sheet, fall back to the default layout.
-  const isMonth = (h: string) => /^\d{4}-\d{2}$/.test(h.trim())
+  const isYearCol = (h: string) => /^\d{4}$/.test(h.trim())
+  // Legacy monthly columns ("YYYY-MM") from before the yearly migration. Dropped
+  // from the lead so they aren't re-propagated, and swept once (below).
+  const isLegacyMonthCol = (h: string) => /^\d{4}-\d{2}$/.test(h.trim())
   const DEFAULT_LEAD = ['slug', 'name', 'sector', 'type', 'ticker', 'vetting_status', 'exchange', 'fmp_company', 'last_updated']
-  const leadHeader = preserveHeader.length ? preserveHeader.filter((h) => !isMonth(h)) : DEFAULT_LEAD
+  const leadHeader = preserveHeader.length
+    ? preserveHeader.filter((h) => !isYearCol(h) && !isLegacyMonthCol(h))
+    : DEFAULT_LEAD
+  // First yearly run over a still-monthly sheet → clear stale month columns once.
+  const sweepLegacy = writeMode && preserveHeader.some(isLegacyMonthCol)
+  if (sweepLegacy) console.log(`Monthly→yearly migration: sweeping legacy month columns (client Notes/vetting preserved).`)
   const leadLower = leadHeader.map((h) => h.trim().toLowerCase())
   const existingColIdx = new Map<string, number>()
   preserveHeader.forEach((h, i) => existingColIdx.set(h.trim().toLowerCase(), i))
+
+  // Year rollover: the sheet has year columns but not yet one for the current
+  // year → the just-ended year must be re-frozen to its Oct-1 snapshot (it was
+  // holding "latest" while current). Force a full history re-pull that day so
+  // every year's snapshot is re-derived correctly. Once/year, all companies.
+  const preserveYearCols = preserveHeader.map((h) => h.trim()).filter((h) => isYearCol(h))
+  const rollover = preserveYearCols.length > 0 && !preserveYearCols.includes(currentCol)
+  if (rollover) console.log(`Year rollover → new ${currentCol} column; re-pulling full history to freeze ${endYear - 1} at its Oct-1 snapshot.`)
 
   const rows: (string | number)[][] = []
   let filled = 0
@@ -286,26 +322,29 @@ async function main() {
         // A changed ticker (edited in Sanity) invalidates the stored history —
         // it belonged to the OLD symbol. Force a full re-pull for the new one.
         const tickerChanged = !!prevTicker && prevTicker.toUpperCase() !== ticker.toUpperCase()
-        const hasHistory = !!existing && !tickerChanged && [...existing.keys()].some((m) => m !== currentMonth)
+        // Rollover forces a full re-pull too (re-freeze the just-ended year at Oct-1).
+        const hasHistory = !!existing && !tickerChanged && !rollover && [...existing.keys()].some((y) => y !== currentCol)
         if (hasHistory) {
-          // DAILY: history is frozen — preserve every past month from the sheet,
-          // refresh ONLY the current month from the live profile.
-          valueCells = cols.map((m) =>
-            m === currentMonth ? prof.marketCapB ?? existing.get(m) ?? '' : existing.get(m) ?? '',
+          // DAILY: past years are frozen — preserve every past-year snapshot from
+          // the sheet, refresh ONLY the current-year column from the live profile.
+          valueCells = cols.map((y) =>
+            y === currentCol ? prof.marketCapB ?? existing.get(y) ?? '' : existing.get(y) ?? '',
           )
           lastUpdated = today
           filled++
         } else {
-          // BACKFILL: first time we've seen this company, OR its ticker changed →
-          // re-pull the entire history for the (new) symbol.
+          // BACKFILL: first time we've seen this company, its ticker changed, or a
+          // year rollover → re-pull the entire history and re-derive every year's
+          // snapshot (Oct-1 for past years, latest for the current year).
           if (tickerChanged) console.log(`  ticker changed for "${c.slug}": ${prevTicker} → ${ticker} — re-pulling full history`)
           const {covered, daily} = await fetchHistory(ticker, windows)
           if (!covered || daily.length === 0) {
             valueCells = cols.map(() => 'NA')
             na++
           } else {
-            const mb = monthlyBillions(daily)
-            valueCells = cols.map((m) => (m in mb ? mb[m] : ''))
+            const yb = yearlyBillions(daily, endYear)
+            if (prof.marketCapB != null) yb[currentCol] = prof.marketCapB // freshest present value
+            valueCells = cols.map((y) => (y in yb ? yb[y] : ''))
             lastUpdated = today
             filled++
           }
@@ -314,10 +353,10 @@ async function main() {
       if (++done % 20 === 0) console.log(`  …${done}/${fetchable.length} processed`)
       await sleep(150)
     } else {
-      // Manual entry, private/PSM, or no ticker → keep the existing month values
+      // Manual entry, private/PSM, or no ticker → keep the existing year values
       // (and the FMP-derived columns) exactly as-is; the action doesn't touch them.
       const ex = preserve.get(c.slug ?? '')
-      valueCells = cols.map((m) => ex?.get(m) ?? '')
+      valueCells = cols.map((y) => ex?.get(y) ?? '')
     }
     // vetting_status is CLIENT-OWNED — the action never writes it. It's preserved
     // per row by the unknown-column carry-over below (blank on brand-new rows).
@@ -358,8 +397,9 @@ async function main() {
     ...rows,
   ]
   if (writeMode && target) {
+    if (sweepLegacy) await clearTabValues(target)
     await writeGrid(target, grid)
-    await enforceMonthFormat(target, grid[0].length - cols.length, cols.length)
+    await enforceNumberFormat(target, grid[0].length - cols.length, cols.length)
     console.log(`\nWrote ${rows.length} rows directly to the sheet — ${filled} with FMP data, ${na} "NA", manual values preserved.`)
   } else {
     writeFileSync('market_cap.csv', toCsv(grid))

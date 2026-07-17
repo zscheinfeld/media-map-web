@@ -132,8 +132,15 @@ The editor + content model are done; the public app now reads CMS **content** fr
   - **TODO — Studio Map Editor must size planets from the valuation sheet (parity, incl. history).** The editor still sizes planets from Sanity (`manual_valuations`/fallback in `studio/tools/mapEditor/sanityMapData.ts`), so the **scale there doesn't match the public map**, which sizes from the valuation **sheet** by `(slug, month)`. Wire the editor to also load the valuation CSV (reuse the app's `loadValuations` logic — `VITE_VALUATIONS_CSV_URL`) and resolve each planet's `valuation_b` from the sheet at the editor's **current moment, including historical months**, so sizes are correct as the TimeSelector scrubs. **Needed so positions can be adjusted accurately when planet scale changes month-to-month** (the whole point of placing planets per-moment). Note the Studio is a standalone workspace — it'll need its own env var for the CSV URL.
 - **4d — dynamic feeds.** Auto-pull external articles + Eshap content (schema is already feed-shaped).
 
-## Phase 5 — yearly historical maps (Oct-1 snapshots) — 📋 PLANNED
+## Phase 5 — yearly historical maps (Oct-1 snapshots) — 🚧 IN PROGRESS
 Move the timeline from **monthly** to **yearly**. Each *past* year's map = that year's **Oct 1 (Q4-start) snapshot**; the *current* year's map = the most recent data, labeled with its actual month (e.g. "JUL 2026"). Cross-cutting: touches the data pipeline, the sheet, the app read-path + timeline UI, Sanity/Studio time-scoping, and the aggregate view.
+
+**Progress:**
+- ✅ **Ingest** (`jobs/ingest-valuations.ts`): `buildYears` + `yearlyBillions` (Oct-1 past / latest current), daily refresh of the current-year column only, year-rollover full re-pull, one-time legacy-month sweep (`clearTabValues`, preserves client Notes/vetting). `enforceNumberFormat`.
+- ✅ **App read-path**: `loadValuations` keyed by year + `latestYear`/`latestUpdated`; `historical.buildYearRange` + present-aware `formatDate`; MediaMap `currentDate`/`valAt`/liveness by year; timeline strip labels every year; aggregate X-axis = years. Build green.
+- ⏳ **Sheet regeneration** — one-time write-mode run to replace the monthly columns with 12 yearly ones (the live app shows blanks until this runs, since it now matches only `YYYY` headers).
+- ⏳ **Studio TimeSelector → year picker** (public renderer already resolves past years at `YYYY-10`; authoring UI still monthly — non-blocking).
+- ⏳ **Docs** — ARCHITECTURE.md time-scoping spec + retire the monthly mock note.
 
 ### The model
 - **Snapshot rule:** year Y (< current) → market cap on the last trading day **≤ Oct 1, Y**. Current year → the latest available value (still refreshed daily).

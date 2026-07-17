@@ -1,17 +1,19 @@
 // Reads the published valuation Google Sheet (CSV) and indexes market caps by
-// (slug, month "YYYY-MM"). This is the Phase 4c data source that replaces the
-// legacy name-matched sheet (loadCompanies) + the historical.ts mock.
+// (slug, year "YYYY"). One column per year (Phase 5): each PAST year is that
+// year's Oct-1 snapshot; the CURRENT year is the latest value. This is the
+// Phase 4c data source that replaces the legacy name-matched sheet
+// (loadCompanies) + the historical.ts mock.
 //
 // Configure with VITE_VALUATIONS_CSV_URL (the sheet's "Publish to web → CSV"
 // link). Unset → the app keeps using the legacy sheet/mock, so this is safe to
 // ship before the sheet exists. The sheet is read live, so client edits + the
 // daily ingest appear without a redeploy. Columns are matched by NAME, so the
-// newest-first month ordering and the extra vetting columns don't matter here.
+// newest-first year ordering and the extra vetting columns don't matter here.
 import {useEffect, useState} from "react"
 
 const CSV_URL = import.meta.env.VITE_VALUATIONS_CSV_URL as string | undefined
 
-/** slug → (month "YYYY-MM" → value in billions USD). */
+/** slug → (year "YYYY" → value in billions USD). */
 export type ValuationData = Map<string, Map<string, number>>
 
 export function isValuationsConfigured(): boolean {
@@ -80,41 +82,52 @@ export async function loadValuations(): Promise<ValuationLoad> {
   const slugIdx = header.indexOf("slug")
   if (slugIdx < 0) return {values, lastUpdated}
   const updatedIdx = header.indexOf("last_updated")
-  // Month columns are any header shaped "YYYY-MM".
-  const monthCols = header
+  // Year columns are any header shaped "YYYY".
+  const yearCols = header
     .map((h, i) => ({i, h}))
-    .filter(({h}) => /^\d{4}-\d{2}$/.test(h))
+    .filter(({h}) => /^\d{4}$/.test(h))
 
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r]
     const slug = (row[slugIdx] ?? "").trim()
     if (!slug) continue
-    const months = new Map<string, number>()
-    for (const {i, h} of monthCols) {
+    const years = new Map<string, number>()
+    for (const {i, h} of yearCols) {
       const cell = (row[i] ?? "").trim()
       if (!cell || cell.toUpperCase() === "NA") continue // blank = manual TBD, NA = not on plan
       const n = Number(cell.replace(/[$,\s]/g, ""))
-      if (Number.isFinite(n) && n > 0) months.set(h, n)
+      if (Number.isFinite(n) && n > 0) years.set(h, n)
     }
-    values.set(slug, months)
+    values.set(slug, years)
     const lu = updatedIdx >= 0 ? (row[updatedIdx] ?? "").trim() : ""
     if (lu) lastUpdated.set(slug, lu)
   }
   return {values, lastUpdated}
 }
 
-/** Value (billions) for a company at a month, or undefined if missing/NA/blank. */
-export function valuationAt(data: ValuationData, slug: string | undefined, month: string): number | undefined {
+/** Value (billions) for a company in a year ("YYYY"), or undefined if missing/NA/blank. */
+export function valuationAt(data: ValuationData, slug: string | undefined, year: string): number | undefined {
   if (!slug) return undefined
-  return data.get(slug)?.get(month)
+  return data.get(slug)?.get(year)
 }
 
-/** Newest month ("YYYY-MM") with any data, used to advance the map's "current". */
-export function latestMonth(data: ValuationData): string | undefined {
+/** Newest year ("YYYY") with any data, used to advance the map's "current". */
+export function latestYear(data: ValuationData): string | undefined {
   let latest: string | undefined
-  for (const months of data.values())
-    for (const m of months.keys()) if (!latest || m > latest) latest = m
+  for (const years of data.values())
+    for (const y of years.keys()) if (!latest || y > latest) latest = y
   return latest
+}
+
+/** The newest ingest "last_updated" date ("YYYY-MM-DD") across all rows → the
+ *  present {year, month}. Decision #3: the current map's month is derived from
+ *  when the ingest last ran. Undefined until the sheet loads. */
+export function latestUpdated(lastUpdated: Map<string, string>): {year: number; month: number} | undefined {
+  let newest: string | undefined
+  for (const d of lastUpdated.values()) if (d && (!newest || d > newest)) newest = d
+  if (!newest || newest.length < 7) return undefined
+  const [y, m] = newest.split("-").map(Number)
+  return {year: y, month: m}
 }
 
 /** Load the valuation sheet once on mount. Empty maps until loaded / if unconfigured. */
