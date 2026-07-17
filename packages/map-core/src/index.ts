@@ -43,4 +43,6 @@ export {
   momentToSanityDate,
   activeAt,
   windowActiveAt,
+  yearWindowsActiveAt,
+  type YearWindow,
 } from "./timeScope.js"

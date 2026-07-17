@@ -67,6 +67,25 @@ export function activeAt<T>(
   return best
 }
 
+export type YearWindow = {start_year?: number | null; end_year?: number | null}
+
+/**
+ * Appearance-window lookup (Phase 5, yearly): whether the YEAR of moment `at`
+ * falls inside any `[start_year, end_year]` range (inclusive). An empty list is
+ * "always active." Absent start = from the beginning of the timeline; absent
+ * end = ongoing. Used for company + entity appearance windows.
+ */
+export function yearWindowsActiveAt(windows: ReadonlyArray<YearWindow>, at: Moment): boolean {
+  if (windows.length === 0) return true
+  const year = parseInt(at.slice(0, 4), 10)
+  if (!Number.isFinite(year)) return true
+  return windows.some((w) => {
+    const from = w.start_year ?? -Infinity
+    const to = w.end_year ?? Infinity
+    return year >= from && year <= to
+  })
+}
+
 /**
  * Windowed lookup: whether moment `at` falls inside `[startDate, endDate]`.
  * Undated start = from the beginning of the timeline; undated end = ongoing.

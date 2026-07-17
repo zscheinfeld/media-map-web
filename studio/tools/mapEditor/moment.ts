@@ -17,6 +17,8 @@ export {
   momentToSanityDate,
   activeAt,
   windowActiveAt,
+  yearWindowsActiveAt,
+  type YearWindow,
 } from '@media-map/map-core'
 
 import {MONTH_NAMES, makeMoment, parseMoment, type Moment} from '@media-map/map-core'

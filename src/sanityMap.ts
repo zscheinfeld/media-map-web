@@ -20,9 +20,11 @@ import {
   UNDATED,
   activeAt,
   windowActiveAt,
+  yearWindowsActiveAt,
   type LayoutInput,
   type Moment,
   type PlanetStyle,
+  type YearWindow,
 } from "@media-map/map-core"
 import {sanityQuery, isSanityConfigured} from "./sanityClient"
 
@@ -47,7 +49,6 @@ type SanityPlanetStyle =
 type Coord = {x: number; y: number}
 type RawPositionOverride = {x: number; y: number; pin?: boolean; start_date?: string}
 type RawCenterOverride = {x: number; y: number; start_date?: string}
-type RawWindow = {start_date?: string; end_date?: string}
 
 export type RawVital = {_key: string; name: string; statistic?: string; start_date?: string; end_date?: string}
 export type RawEshapContent = {_key: string; kind: "linkedin" | "podcast" | "substack"; title: string; url: string; published_date?: string}
@@ -68,6 +69,7 @@ type RawCompany = {
   sector?: RawSector | null
   planet_style?: SanityPlanetStyle
   position_overrides?: RawPositionOverride[]
+  appearance_windows?: YearWindow[]
   vitals?: RawVital[]
   eshap_content?: RawEshapContent[]
   external_articles?: RawExternalArticle[]
@@ -79,7 +81,7 @@ type RawEntity = {
   name: string
   sector?: RawSector | null
   position_overrides?: RawPositionOverride[]
-  appearance_windows?: RawWindow[]
+  appearance_windows?: YearWindow[]
 }
 type RawConnection = {style: "solid" | "dotted"; description?: string; start_date?: string; end_date?: string; from?: string | null; to?: string | null}
 type RawSettingsOverride = {
@@ -200,6 +202,9 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 
   for (const c of raw.companies) {
     if (!c.name) continue
+    // Appearance windows (Phase 5): a company shows only on yearly maps its
+    // window years cover. No windows = always visible.
+    if (!yearWindowsActiveAt(c.appearance_windows ?? [], at)) continue
     const sectorName = c.sector?.name ?? "Uncategorized"
     noteSector(c.sector, sectorName)
     companies.push({name: c.name, sector: sectorName, slug: c.slug})
@@ -227,9 +232,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 
   for (const e of raw.entities) {
     if (!e.name) continue
-    const windows = e.appearance_windows ?? []
-    const visible = windows.length === 0 || windows.some((w) => windowActiveAt(w.start_date, w.end_date, at))
-    if (!visible) continue
+    if (!yearWindowsActiveAt(e.appearance_windows ?? [], at)) continue
     const sectorName = e.sector?.name ?? "Uncategorized"
     noteSector(e.sector, sectorName)
     entities.push({
@@ -287,6 +290,7 @@ const COMPANIES_Q = `*[_type == "company"]{
   name, "slug": slug.current, description,
   sector->{ name, desktop_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
   "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date},
+  appearance_windows[]{start_year, end_year},
   vitals[]{_key, name, statistic, start_date, end_date},
   eshap_content[]{_key, kind, title, url, published_date},
   external_articles[]{_key, title, url, source, published_date},
@@ -296,7 +300,7 @@ const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_date,
 const ENTITIES_Q = `*[_type == "entity"]{
   name,
   sector->{ name, desktop_center, desktop_center_overrides[]{x, y, start_date} },
-  position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_date, end_date}
+  position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
 }`
 const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion} }`
 

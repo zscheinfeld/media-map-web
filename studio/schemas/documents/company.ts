@@ -45,6 +45,7 @@ export const company = defineType({
     {name: 'valuation', title: 'Valuation & Data Source'},
     {name: 'styling', title: 'Styling'},
     {name: 'position', title: 'Position'},
+    {name: 'appearance', title: 'Appearance windows'},
     {name: 'vitals', title: 'Vitals'},
     {name: 'content', title: 'Related Content'},
   ],
@@ -246,6 +247,18 @@ export const company = defineType({
         'Optional fixed positions for this planet. Modeled as a list so a planet can be placed differently across ' +
         'the timeline — each entry has its own date range. With no entries, the planet floats within its sector.',
       of: [{type: 'positionOverride'}],
+    }),
+
+    // --- Appearance windows ---
+    defineField({
+      name: 'appearance_windows',
+      title: 'Appearance windows',
+      type: 'array',
+      group: 'appearance',
+      of: [{type: 'appearanceWindow'}],
+      description:
+        'Which yearly maps this company appears on. Add one window per stretch of years it should be ' +
+        'visible (e.g. 2018 → 2023). Leave empty to show on every map.',
     }),
 
     // --- Vitals ---

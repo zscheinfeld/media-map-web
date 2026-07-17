@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react'
 import {useClient} from 'sanity'
 import {hashHue, mergeStyle, type LayoutInput, type PlanetStyle} from '@media-map/map-core'
-import {windowActiveAt, type Moment} from './moment'
+import {windowActiveAt, yearWindowsActiveAt, type Moment} from './moment'
 
 // The map renders in slide-coordinate space. Mirrors CANVAS_DESKTOP in the
 // Vite app's src/sectors.ts (kept in sync by hand for now — both surfaces draw
@@ -82,6 +82,7 @@ type RawCompany = {
   sector?: {_id: string; name: string; desktop_center?: Coord; default_style?: SanityPlanetStyle} | null
   planet_style?: SanityPlanetStyle
   position_overrides?: RawPositionOverride[]
+  appearance_windows?: RawAppearanceWindow[]
   manual_valuations?: {value_billions_usd?: number; as_of_date?: string}[]
   vitals?: RawVital[]
   description?: string
@@ -122,7 +123,7 @@ export type RawSettingsOverride = {
   repulsion?: number
 }
 type RawMapSettings = {overrides?: RawSettingsOverride[]} | null
-type RawAppearanceWindow = {_key: string; start_date?: string; end_date?: string}
+type RawAppearanceWindow = {_key: string; start_year?: number; end_year?: number}
 type RawEntity = {
   _id: string
   name: string
@@ -145,6 +146,7 @@ export type EditorCompany = {
   id: string
   name: string
   positionOverrides: RawPositionOverride[]
+  appearanceWindows: RawAppearanceWindow[]
   // Optional so the entity placeable (which has none of these) stays structurally
   // assignable where a company/entity union is used (e.g. the inspector).
   vitals?: RawVital[]
@@ -197,14 +199,13 @@ export type MapData = {
 }
 
 /**
- * Whether an entity is visible at moment T: true if any appearance window's
- * [start, end] covers T. An entity with NO windows is always visible (mirrors
- * the undated-connection convention). Undated start = "from the beginning";
- * undated end = "still active."
+ * Whether a company or entity is visible at moment T: true if T's YEAR falls in
+ * any appearance window's [start_year, end_year] range. NO windows = always
+ * visible (mirrors the undated-connection convention). Absent start = "from the
+ * beginning"; absent end = "through the present."
  */
 export function appearanceActiveAt(windows: ReadonlyArray<RawAppearanceWindow>, at: Moment): boolean {
-  if (windows.length === 0) return true
-  return windows.some((w) => windowActiveAt(w.start_date, w.end_date, at))
+  return yearWindowsActiveAt(windows, at)
 }
 
 /**
@@ -260,6 +261,7 @@ function buildMapData(
       id: c._id,
       name: c.name,
       positionOverrides: overrides,
+      appearanceWindows: c.appearance_windows ?? [],
       vitals: c.vitals ?? [],
       description: c.description,
       eshapContent: c.eshap_content ?? [],
@@ -310,7 +312,7 @@ const SECTORS_Q = `*[_type == "sector"]{
 const COMPANIES_Q = `*[_type == "company"]{
   _id, name, description,
   sector->{_id, name, desktop_center, default_style},
-  planet_style, position_overrides, manual_valuations,
+  planet_style, position_overrides, appearance_windows, manual_valuations,
   vitals[]{_key, name, statistic, start_date, end_date},
   eshap_content[]{_key, kind, title, url, published_date},
   external_articles[]{_key, title, url, source, published_date}

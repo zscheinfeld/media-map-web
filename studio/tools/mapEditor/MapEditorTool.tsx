@@ -256,11 +256,15 @@ export function MapEditorTool() {
   // the sector marker is at right now.
   const inputs = useMemo(() => {
     if (!data || !valuationsLoaded || containerW === 0) return []
-    const companyInputs = data.inputs.map((i) => {
-      const v = sheetValuations[i.name.toLowerCase()]
-      const center = resolvedSectorCenters[i.sector] ?? i.center
-      return v === undefined ? {...i, center} : {...i, valuation_b: v, center}
-    })
+    // Only companies whose appearance windows cover the current moment are laid
+    // out (no windows = always visible), mirroring the entity rule below.
+    const companyInputs = data.inputs
+      .filter((i) => appearanceActiveAt(data.companiesByName[i.name]?.appearanceWindows ?? [], moment))
+      .map((i) => {
+        const v = sheetValuations[i.name.toLowerCase()]
+        const center = resolvedSectorCenters[i.sector] ?? i.center
+        return v === undefined ? {...i, center} : {...i, valuation_b: v, center}
+      })
     // Entities are text-only nodes; only those whose appearance windows cover the
     // current moment are laid out. Their gravity center tracks the live sector.
     const entityInputs: LayoutInput[] = Object.values(data.entitiesByName)
