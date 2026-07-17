@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **[PHASES.md](PHASES.md)** — engineering build log + the forward roadmap. Current status and what's next (Phase 4 = wire the public app to Sanity + Supabase). Update it as work lands.
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — content model (companies, entities, sectors, connections, vitals, content), time-scoping spec, and the manual-vs-dynamic data-ownership matrix.
 - **[LAUNCH_PLAN.md](LAUNCH_PLAN.md)** — the dated launch schedule + parallel client data-entry track + check-in cadence.
+- **[SHEET_EDITING_GUIDE.md](SHEET_EDITING_GUIDE.md)** — client-facing "who can edit what" for the market-cap sheet: which cells the nightly ingest manages vs. which are hand-editable (past-year values, `vetting_status`, `Notes`), and the manual-vs-FMP rule.
 
 The agent memory store only *points* at these; it does not duplicate them. Keep the docs current rather than re-explaining status in memory.
 
