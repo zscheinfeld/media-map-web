@@ -10,7 +10,7 @@
 //
 // NOTE: the Sanity→map-core mapping (`toCoreStyle`, the GROQ + Raw types) mirrors
 // the Studio's `sanityMapData.ts` for now; only the high-stakes *time* logic is
-// shared. Extract to a shared package if these drift (see PHASES.md Phase 4).
+// shared. Extract to a shared package if these drift (see docs/PROJECT.md).
 
 import {useEffect, useMemo, useState} from "react"
 import {

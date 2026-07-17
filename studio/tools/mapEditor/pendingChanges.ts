@@ -5,7 +5,7 @@
 //
 // Forward-propagation semantics live in `activeOverrideAt`: at viewed moment T,
 // a planet renders at the override with the LARGEST `startDate ≤ T`. See
-// ARCHITECTURE.md → Time-scoping for the full spec.
+// docs/PROJECT.md → Time-scoping for the full spec.
 
 import {type Moment, activeAt, formatMomentYear, sanityDateToMoment, UNDATED, yearWindowsActiveAt} from './moment'
 import type {EditorCompany, EditorConnection, RawSettingsOverride} from './sanityMapData'

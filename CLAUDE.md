@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project docs (read these — they're the source of truth)
 
-- **[PHASES.md](PHASES.md)** — engineering build log + the forward roadmap. Current status and what's next (Phase 4 = wire the public app to Sanity + Supabase). Update it as work lands.
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — content model (companies, entities, sectors, connections, vitals, content), time-scoping spec, and the manual-vs-dynamic data-ownership matrix.
-- **[LAUNCH_PLAN.md](LAUNCH_PLAN.md)** — the dated launch schedule + parallel client data-entry track + check-in cadence.
-- **[SHEET_EDITING_GUIDE.md](SHEET_EDITING_GUIDE.md)** — client-facing "who can edit what" for the market-cap sheet: which cells the nightly ingest manages vs. which are hand-editable (past-year values, `vetting_status`, `Notes`), and the manual-vs-FMP rule.
+All in [docs/](docs/):
+
+- **[docs/PROJECT.md](docs/PROJECT.md)** — the main reference: content model (companies, entities, sectors, connections), the yearly time-scoping spec, the manual-vs-dynamic data-ownership matrix, **and the build status/roadmap**. (Merges the former ARCHITECTURE.md + PHASES.md.) Update it as the model or status changes.
+- **[docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md)** — the dated launch schedule + parallel client data-entry track + check-in cadence.
+- **[docs/SHEET_EDITING_GUIDE.md](docs/SHEET_EDITING_GUIDE.md)** — client-facing "who can edit what" for the market-cap sheet: which cells the nightly ingest manages vs. which are hand-editable (past-year values, `vetting_status`, `Notes`), and the manual-vs-FMP rule.
 
 The agent memory store only *points* at these; it does not duplicate them. Keep the docs current rather than re-explaining status in memory.
 
@@ -24,7 +25,7 @@ Deployment: Netlify, configured via [netlify.toml](netlify.toml). It builds `npm
 
 This is a single-page Vite + React + TypeScript app that renders a "media map" — a starfield of company "planets" sized by valuation, organized into sectors via a d3-force physics simulation. There's no router, no backend, no state manager; everything is hooks + an SVG scene.
 
-For a content-model / requirements view of the map (the authored item types — companies, sectors, connections — and their attributes, written for non-engineers and intended to seed a future CMS), see [ARCHITECTURE.md](ARCHITECTURE.md). Keep it in sync when the data model changes.
+For a content-model / requirements view of the map (the authored item types — companies, entities, sectors, connections — and their attributes, written for non-engineers), see [docs/PROJECT.md](docs/PROJECT.md). Keep it in sync when the data model changes.
 
 ### The slide-coordinate space
 
@@ -97,7 +98,7 @@ The schema is intentionally CMS-shaped: future Sanity/Contentful migration just 
 
 Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet A then B creates a line, with a rubber-band preview), a scrollable list of existing connections, a per-connection style toggle + description field + delete, and the same copy/download/reset workflow as positions (paste back into [src/connections.ts](src/connections.ts)).
 
-> **Planned (not yet implemented): time-scoping.** Positions use **forward propagation** — each override has a single `start_date` and at viewed moment T the planet renders at the override with the largest `start_date ≤ T`. A company's earliest override is its first appearance; before that date it does not render. Connections use a windowed model — `start_date` (required) + optional `end_date`; a connection renders only when T is inside that window. The Studio editor uses a global year+month selector that stamps `start_date = T` on every edit. See [ARCHITECTURE.md](ARCHITECTURE.md#time-scoping-effective-dates) for the full spec, including the *dotted → solid* convention (two adjacent connection entries). The public renderer ([src/MediaMap.tsx](src/MediaMap.tsx)) currently uses `position_overrides[0]` regardless of date and shows all connections — update both files together when honoring the time selector lands.
+> **Time-scoping is implemented via Sanity; these local `src/` files are the un-scoped fallback.** The live map time-scopes through Sanity + `map-core`'s `timeScope`: positions **forward-propagate** (each override has a `start_date`; at the viewed year's snapshot moment T the planet renders at the largest `start_date ≤ T`), and connections + appearance windows are **year-range windowed** (`start_year`/`end_year`). The timeline is **yearly** — past years = that year's Oct-1 snapshot, the current year = latest. The Studio Map Editor uses a **year picker** that stamps each year's snapshot moment on edits. Full spec: [docs/PROJECT.md → Time-scoping](docs/PROJECT.md#time-scoping-yearly), incl. the *dotted → solid* convention (two adjacent connection entries). The local [src/connections.ts](src/connections.ts) + [src/layout.ts](src/layout.ts) carry **no dates** — they're the static fallback used only when Sanity isn't configured.
 
 ### Data flow
 

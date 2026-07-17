@@ -1,7 +1,7 @@
 # Data jobs
 
 Standalone scripts (not part of the app build) that bootstrap and ingest valuation
-data. Run with [`tsx`](https://github.com/privatenumber/tsx). See PHASES.md §4c.
+data. Run with [`tsx`](https://github.com/privatenumber/tsx). See docs/PROJECT.md.
 
 ## Setup (once)
 

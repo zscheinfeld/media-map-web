@@ -139,7 +139,7 @@ export type EditorSector = {
   name: string
   /** Baseline scalar — always-active fallback when no override applies. */
   center: Coord
-  /** Optional time-scoped overrides (forward-propagation; see ARCHITECTURE.md). */
+  /** Optional time-scoped overrides (forward-propagation; see docs/PROJECT.md). */
   desktopCenterOverrides: RawSectorCenterOverride[]
 }
 export type EditorCompany = {

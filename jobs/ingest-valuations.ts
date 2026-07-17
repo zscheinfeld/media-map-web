@@ -6,14 +6,14 @@
 // (the Q4-start snapshot, frozen); the CURRENT year → the latest value (refreshed
 // daily), labeled in-app with its actual month. One column per year. Non-US tickers
 // (402 on the US-only Starter plan), tickerless, and private/PSM companies come out
-// as "NA" / blank for manual entry. See PHASES.md Phase 5.
+// as "NA" / blank for manual entry. See docs/PROJECT.md.
 //
 // Output: jobs/market_cap.csv → import into the `market_cap` tab of the valuation
 // Google Sheet (File → Import → Replace current sheet). The app reads that sheet.
 //
 // NOTE (MVP): re-importing replaces the whole tab, so manual private/PSM values
 // entered in the Sheet would be overwritten. The production job (service account,
-// writes individual cells) preserves them — see PHASES.md §4c step ⑤.
+// writes individual cells) preserves them — see docs/PROJECT.md (Data & ownership).
 import {writeFileSync} from 'node:fs'
 import {google} from 'googleapis'
 import {FMP_API_KEY, fetchRoster, sanityClient, sleep, toCsv} from './lib.ts'

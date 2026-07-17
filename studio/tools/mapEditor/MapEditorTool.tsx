@@ -301,7 +301,7 @@ export function MapEditorTool() {
   // applied across Sanity overrides + pending ops. Planets with no qualifying
   // override fall back to the sector center via `usePhysicsLayout`'s default
   // (transitional behavior; once the public renderer enforces strict forward
-  // prop, planets without overrides won't render at all — see ARCHITECTURE.md).
+  // prop, planets without overrides won't render at all — see docs/PROJECT.md).
   const positions = useMemo(() => {
     if (!data) return {}
     const out: Record<string, {x: number; y: number; pin?: boolean}> = {}
