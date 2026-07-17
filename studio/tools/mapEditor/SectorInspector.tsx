@@ -1,5 +1,5 @@
 import {Box, Button, Card, Flex, Stack, Text} from '@sanity/ui'
-import {formatMomentShort, type Moment} from './moment'
+import {formatMomentYear, type Moment} from './moment'
 import type {ResolvedSectorOverride} from './pendingChanges'
 import type {EditorSector} from './sanityMapData'
 
@@ -43,7 +43,7 @@ export function SectorInspector({
   onClose,
 }: SectorInspectorProps) {
   if (!selectedSector) return null
-  const momentLabel = formatMomentShort(currentMoment)
+  const momentLabel = formatMomentYear(currentMoment)
   const baseline = selectedSector.center
   const effective = activeOverride
     ? {x: activeOverride.x, y: activeOverride.y}
@@ -82,7 +82,7 @@ export function SectorInspector({
           </Text>
           {activeOverride && !isActiveAtCurrentMoment && (
             <Text size={0} muted>
-              Inherited from {formatMomentShort(activeOverride.moment)} (forward-propagated).
+              Inherited from {formatMomentYear(activeOverride.moment)} (forward-propagated).
             </Text>
           )}
           {!activeOverride && (
@@ -152,7 +152,7 @@ export function SectorInspector({
                   }}
                 >
                   <Text size={0} style={{color: isActive ? '#ffe066' : 'rgba(255,255,255,0.85)'}}>
-                    {formatMomentShort(o.moment)}
+                    {formatMomentYear(o.moment)}
                     {ORIGIN_LABEL[o.origin]}
                   </Text>
                   <Text

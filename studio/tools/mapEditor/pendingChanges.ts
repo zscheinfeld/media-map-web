@@ -7,7 +7,7 @@
 // a planet renders at the override with the LARGEST `startDate ≤ T`. See
 // ARCHITECTURE.md → Time-scoping for the full spec.
 
-import {type Moment, activeAt, formatMomentShort, sanityDateToMoment, UNDATED, windowActiveAt} from './moment'
+import {type Moment, activeAt, formatMomentYear, sanityDateToMoment, UNDATED, windowActiveAt} from './moment'
 import type {EditorCompany, EditorConnection, RawSettingsOverride} from './sanityMapData'
 import {LAYOUT_KNOBS_DEFAULTS, type LayoutKnobsValues} from './LayoutKnobs'
 
@@ -936,7 +936,7 @@ function formatKnobValue(key: keyof LayoutKnobsValues, val: number): string {
   return `${Math.round(val)}`
 }
 
-const momentSuffix = (m: Moment): string => (m === UNDATED ? '' : ` · ${formatMomentShort(m)}`)
+const momentSuffix = (m: Moment): string => (m === UNDATED ? '' : ` · ${formatMomentYear(m)}`)
 
 export type DescribePendingCtx = {
   settingsOverrides: ReadonlyArray<RawSettingsOverride>

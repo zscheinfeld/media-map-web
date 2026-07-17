@@ -1,5 +1,5 @@
 import {Box, Button, Card, Flex, Select, Stack, Text, TextArea} from '@sanity/ui'
-import {formatMomentShort, momentToSanityDate, sanityDateToMoment, type Moment} from './moment'
+import {formatMomentYear, momentToSanityDate, sanityDateToMoment, type Moment} from './moment'
 import type {ConnectionStyle, ResolvedConnection} from './pendingChanges'
 
 export type ConnectionInspectorProps = {
@@ -38,8 +38,8 @@ export function ConnectionInspector({
   if (!connection) return null
   const endMoment = sanityDateToMoment(connection.endDate)
   const startMoment = sanityDateToMoment(connection.startDate)
-  const startLabel = startMoment ? formatMomentShort(startMoment) : 'Always'
-  const endLabel = endMoment ? formatMomentShort(endMoment) : 'Still active'
+  const startLabel = startMoment ? formatMomentYear(startMoment) : 'Always'
+  const endLabel = endMoment ? formatMomentYear(endMoment) : 'Still active'
 
   return (
     <Card
@@ -108,7 +108,7 @@ export function ConnectionInspector({
           </Box>
           {endMoment ? (
             <Button
-              text={`Reopen (clear end ${formatMomentShort(endMoment)})`}
+              text={`Reopen (clear end ${formatMomentYear(endMoment)})`}
               mode="ghost"
               tone="primary"
               fontSize={1}
@@ -117,7 +117,7 @@ export function ConnectionInspector({
             />
           ) : (
             <Button
-              text={`End at ${formatMomentShort(currentMoment)}`}
+              text={`End at ${formatMomentYear(currentMoment)}`}
               mode="ghost"
               tone="caution"
               fontSize={1}

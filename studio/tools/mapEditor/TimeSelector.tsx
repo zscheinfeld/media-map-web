@@ -1,5 +1,5 @@
 import {Card, Flex, Select, Stack, Switch, Text} from '@sanity/ui'
-import {makeMoment, MONTHS_BY_NUMBER, parseMoment, type Moment} from './moment'
+import {EDITOR_CURRENT_YEAR, EDITOR_YEAR_RANGE, momentForYear, yearOfMoment, type Moment} from './moment'
 
 export type TimeSelectorProps = {
   moment: Moment
@@ -11,22 +11,24 @@ export type TimeSelectorProps = {
 }
 
 /**
- * Global year+month picker. Choosing a moment T scopes the canvas to "the map
- * as of T" — positions forward-propagate (largest start_date ≤ T wins);
- * connections render only if their [start, end] window covers T. Drags and
- * pin toggles at moment T stamp `start_date = T` on the resulting override.
+ * Global YEAR picker (Phase 5). Choosing a year scopes the canvas to that year's
+ * snapshot — past years to their Oct-1 (Q4-start) moment, the current year to
+ * "now" — mirroring the public app's yearly maps. Positions forward-propagate
+ * (largest start_date ≤ the snapshot moment wins); connections render only if
+ * their [start, end] window covers it. Drags and pin toggles stamp
+ * `start_date = the selected year's snapshot moment` on the resulting override.
  */
 export function TimeSelector({
   moment,
   onChange,
-  yearRange = [2010, 2035],
+  yearRange = EDITOR_YEAR_RANGE,
   showSectorLabels,
   onToggleSectorLabels,
 }: TimeSelectorProps) {
-  const {year, month} = parseMoment(moment)
+  const year = yearOfMoment(moment)
   const [yMin, yMax] = yearRange
   const years: number[] = []
-  for (let y = yMin; y <= yMax; y++) years.push(y)
+  for (let y = yMax; y >= yMin; y--) years.push(y) // newest-first
 
   return (
     <Card
@@ -48,32 +50,17 @@ export function TimeSelector({
             Map at
           </Text>
         </Flex>
-        <Flex gap={2}>
-          <Select
-            fontSize={1}
-            value={String(month)}
-            onChange={(e) => onChange(makeMoment(year, parseInt(e.currentTarget.value, 10)))}
-            style={{flex: 1}}
-          >
-            {MONTHS_BY_NUMBER.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-          <Select
-            fontSize={1}
-            value={String(year)}
-            onChange={(e) => onChange(makeMoment(parseInt(e.currentTarget.value, 10), month))}
-            style={{flex: 1}}
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
-        </Flex>
+        <Select
+          fontSize={1}
+          value={String(year)}
+          onChange={(e) => onChange(momentForYear(parseInt(e.currentTarget.value, 10)))}
+        >
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y === EDITOR_CURRENT_YEAR ? `${y} (now)` : y}
+            </option>
+          ))}
+        </Select>
         {/* Toggle the yellow sector marker pills on/off — handy when they're
             distracting (also hides their drag handles while off). Outlined so the
             row reads as its own control rather than blending into the card. */}

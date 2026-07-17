@@ -1,5 +1,5 @@
 import {Box, Button, Card, Flex, Stack, Switch, Text} from '@sanity/ui'
-import {formatMomentShort, type Moment} from './moment'
+import {formatMomentYear, type Moment} from './moment'
 import type {ResolvedOverride} from './pendingChanges'
 import {vitalActiveAt, type EditorCompany} from './sanityMapData'
 
@@ -52,7 +52,7 @@ export function PlanetInspector({
   onClose,
 }: PlanetInspectorProps) {
   if (!selectedCompany) return null
-  const momentLabel = formatMomentShort(currentMoment)
+  const momentLabel = formatMomentYear(currentMoment)
   // Vitals visible on the current map (inside their date window).
   const vitals = (selectedCompany.vitals ?? []).filter((v) => vitalActiveAt(v, currentMoment))
   // Related content — not time-bound; shown newest-first.
@@ -177,7 +177,7 @@ export function PlanetInspector({
           )}
           {activeOverride && !isActiveAtCurrentMoment && (
             <Text size={0} muted>
-              Inherited from {formatMomentShort(activeOverride.moment)} (forward-propagated).
+              Inherited from {formatMomentYear(activeOverride.moment)} (forward-propagated).
             </Text>
           )}
         </Stack>
@@ -240,7 +240,7 @@ export function PlanetInspector({
                     }}
                   >
                     <Text size={0} style={{color: isActive ? '#ffe066' : 'rgba(255,255,255,0.85)'}}>
-                      {formatMomentShort(o.moment)}
+                      {formatMomentYear(o.moment)}
                       {ORIGIN_LABEL[o.origin]}
                     </Text>
                     <Text
