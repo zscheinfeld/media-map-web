@@ -248,14 +248,12 @@ async function main() {
   const writeMode = isWriteMode()
   let target: SheetTarget | null = null
   let preserve = new Map<string, Map<string, number>>()
-  let preserveTicker = new Map<string, string>()
   let preserveHeader: string[] = []
   let preserveRaw = new Map<string, string[]>()
   if (writeMode) {
     target = await openSheet()
     const ex = await readExisting(target)
     preserve = ex.values
-    preserveTicker = ex.tickers
     preserveHeader = ex.header
     preserveRaw = ex.rawBySlug
     console.log(`Write mode → tab "${target.tabName}". Preserving values, vetting_status + manual columns from ${preserve.size} existing rows.`)
@@ -286,14 +284,6 @@ async function main() {
   const existingColIdx = new Map<string, number>()
   preserveHeader.forEach((h, i) => existingColIdx.set(h.trim().toLowerCase(), i))
 
-  // Year rollover: the sheet has year columns but not yet one for the current
-  // year → the just-ended year must be re-frozen to its Oct-1 snapshot (it was
-  // holding "latest" while current). Force a full history re-pull that day so
-  // every year's snapshot is re-derived correctly. Once/year, all companies.
-  const preserveYearCols = preserveHeader.map((h) => h.trim()).filter((h) => isYearCol(h))
-  const rollover = preserveYearCols.length > 0 && !preserveYearCols.includes(currentCol)
-  if (rollover) console.log(`Year rollover → new ${currentCol} column; re-pulling full history to freeze ${endYear - 1} at its Oct-1 snapshot.`)
-
   const rows: (string | number)[][] = []
   let filled = 0
   let na = 0
@@ -318,25 +308,27 @@ async function main() {
         na++
       } else {
         const existing = preserve.get(c.slug ?? '')
-        const prevTicker = preserveTicker.get(c.slug ?? '')
-        // A changed ticker (edited in Sanity) invalidates the stored history —
-        // it belonged to the OLD symbol. Force a full re-pull for the new one.
-        const tickerChanged = !!prevTicker && prevTicker.toUpperCase() !== ticker.toUpperCase()
-        // Rollover forces a full re-pull too (re-freeze the just-ended year at Oct-1).
-        const hasHistory = !!existing && !tickerChanged && !rollover && [...existing.keys()].some((y) => y !== currentCol)
+        // Once a company has ANY value on the sheet, the action ONLY touches the
+        // current-year column — every past year is preserved verbatim, so the
+        // client can correct historical figures (or the action just leaves them)
+        // and the edit is never overwritten. History is not re-pulled on ticker
+        // changes or year rollovers; the current year simply keeps updating and
+        // the just-ended year freezes at whatever it last held.
+        const hasHistory = !!existing && existing.size > 0
         if (hasHistory) {
-          // DAILY: past years are frozen — preserve every past-year snapshot from
-          // the sheet, refresh ONLY the current-year column from the live profile.
+          // DAILY: refresh ONLY the current-year column from the live profile;
+          // preserve every other year exactly as it sits on the sheet.
           valueCells = cols.map((y) =>
             y === currentCol ? prof.marketCapB ?? existing.get(y) ?? '' : existing.get(y) ?? '',
           )
           lastUpdated = today
           filled++
         } else {
-          // BACKFILL: first time we've seen this company, its ticker changed, or a
-          // year rollover → re-pull the entire history and re-derive every year's
-          // snapshot (Oct-1 for past years, latest for the current year).
-          if (tickerChanged) console.log(`  ticker changed for "${c.slug}": ${prevTicker} → ${ticker} — re-pulling full history`)
+          // FIRST FILL: a brand-new company (or one whose value cells are empty)
+          // → pull the full history once to seed every year. After this it has
+          // values on the sheet, so subsequent runs only touch the current year.
+          // (Clearing an FMP company's year cells re-triggers this — the manual
+          // "refresh full history" escape hatch, e.g. after a ticker fix.)
           const {covered, daily} = await fetchHistory(ticker, windows)
           if (!covered || daily.length === 0) {
             valueCells = cols.map(() => 'NA')
