@@ -1701,8 +1701,7 @@ function Carousel({
   nodes,
   canvas,
   onSelect,
-  onAddView,
-  canAddView,
+  onExplore,
 }: {
   dates: MapDate[];
   selectedIdx: number;
@@ -1712,8 +1711,7 @@ function Carousel({
   nodes: PlanetNode[];
   canvas: { x: number; y: number; w: number; h: number };
   onSelect: (d: MapDate) => void;
-  onAddView: () => void;
-  canAddView: boolean;
+  onExplore: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
@@ -1824,11 +1822,11 @@ function Carousel({
         })}
       </div>
 
-      {/* "Add view" button — sits below the selected thumbnail's date label. */}
+      {/* "Explore map" — loads the map at the selected view and closes the
+          timeline. Sits below the selected thumbnail's date label. */}
       <button
-        aria-label={canAddView ? "Add this view to the saved list" : "View already saved"}
-        onClick={() => canAddView && onAddView()}
-        disabled={!canAddView}
+        aria-label="Explore the map at this view"
+        onClick={onExplore}
         style={{
           position: "absolute",
           left: "50%",
@@ -1840,21 +1838,21 @@ function Carousel({
           gap: 6,
           padding: "6px 12px",
           borderRadius: 8,
-          background: canAddView ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.03)",
-          border: `1px solid ${canAddView ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"}`,
-          color: canAddView ? "white" : "rgba(255,255,255,0.4)",
+          background: "rgba(120,160,255,0.18)",
+          border: "1px solid rgba(150,180,255,0.5)",
+          color: "white",
           fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: 600,
-          letterSpacing: 1.2,
-          cursor: canAddView ? "pointer" : "default",
+          letterSpacing: 1,
+          cursor: "pointer",
           backdropFilter: "blur(6px)",
           zIndex: 3,
           transition: "background 160ms, color 160ms, border-color 160ms",
         }}
       >
-        <span style={{ opacity: 0.7, fontSize: 13 }}>+</span>
-        {canAddView ? "ADD VIEW" : "ALREADY SAVED"}
+        EXPLORE MAP
+        <span style={{ opacity: 0.7, fontSize: 13 }}>→</span>
       </button>
     </div>
   );
@@ -1893,6 +1891,9 @@ function TimelineStrip({
         flex: "0 0 76px",
         display: "flex",
         alignItems: "flex-end",
+        // Center the ticks in the strip; `safe` falls back to left-aligned +
+        // scrollable if they ever get wider than the container.
+        justifyContent: "safe center",
         gap: 0,
         padding: "0 16px 8px",
         overflowX: "auto",
@@ -2698,26 +2699,39 @@ export default function MediaMap() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, value]) => ({ month, value }));
   }, [inspectedPlanet, baseCompanies, valData]);
-  // Bookmarks the user explicitly saved via the "Add view" button.
-  // Seeded with the latest map so it always appears as a pill by default.
+  // The saved-view pills shown lower-left. The current year is always one of
+  // them and can't be removed; exploring a past year (via the timeline) adds
+  // its pill here. Seeded with the present; kept in sync with `currentDate`.
   const [savedViews, setSavedViews] = useState<MapDate[]>([CURRENT_DATE]);
 
   const selectDate = (d: MapDate) => setActiveDate(d);
 
-  const addActiveToSavedViews = () => {
-    setSavedViews(prev => {
-      if (prev.some(p => sameDate(p, activeDate))) return prev;
-      return [...prev, activeDate];
-    });
-  };
   const removeSavedView = (d: MapDate) => {
+    if (d.year === currentDate.year) return; // the current year is never removable
     setSavedViews(prev => prev.filter(p => !sameDate(p, d)));
+    if (sameDate(d, activeDate)) setActiveDate(currentDate); // closed the active view → back to the present
   };
 
-  // Chronologically-sorted list of saved-view pills. The stack only ever
-  // contains explicitly-saved views (added via the "+ Add view" button);
-  // clicking a timeline tick does NOT add to this list, it only changes the
-  // active date. The pill matching the active date gets a highlight, in place.
+  // Keep exactly one current-year pill, equal to `currentDate` (so its month
+  // label stays fresh as the ingest advances), and always present.
+  useEffect(() => {
+    setSavedViews(prev => {
+      const next = prev.some(v => v.year === currentDate.year)
+        ? prev.map(v => (v.year === currentDate.year ? currentDate : v))
+        : [currentDate, ...prev];
+      const seen = new Set<string>();
+      return next.filter(v => {
+        const k = `${v.year}-${v.month}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    });
+  }, [currentDate]);
+
+  // Chronologically-sorted list of saved-view pills. Clicking a timeline tick
+  // only changes the active date; pills are added via "Explore map". The pill
+  // matching the active date gets a highlight, in place.
   const displayedViewDates = useMemo(() => {
     return savedViews
       .slice()
@@ -2730,6 +2744,47 @@ export default function MediaMap() {
 
   const [hoveredDate, setHoveredDate] = useState<MapDate | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+
+  // Timeline picker: the carousel + strip FOCUS a candidate year without moving
+  // the live map — only "Explore map" commits it. Opening the timeline defaults
+  // the focus to the PREVIOUS year (you're already looking at the present).
+  const [carouselFocus, setCarouselFocus] = useState<MapDate | null>(null);
+  const timelineFocus = carouselFocus ?? activeDate;
+  const defaultTimelineFocus = (): MapDate =>
+    dateRange.find(d => d.year === currentDate.year - 1) ?? currentDate;
+  const openTimeline = () => {
+    setCarouselFocus(defaultTimelineFocus());
+    setTimelineOpen(true);
+  };
+  const onExploreMap = () => {
+    const target = carouselFocus ?? activeDate;
+    setActiveDate(target);
+    setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
+    setTimelineOpen(false);
+  };
+  // Wheel (up/down or trackpad) steps the picker focus along the timeline. An
+  // accumulator + cooldown makes one gesture = one year (and tames momentum),
+  // so a flick doesn't rocket across the whole range. Down/right → newer.
+  const wheelAccumRef = useRef(0);
+  const wheelCooldownRef = useRef(0);
+  const onTimelineWheel = (e: React.WheelEvent) => {
+    const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (!raw) return;
+    const now = performance.now();
+    if (now - wheelCooldownRef.current < 140) return; // one step per gesture; drop momentum
+    wheelAccumRef.current += raw;
+    if (Math.abs(wheelAccumRef.current) < 24) return;
+    const dir = wheelAccumRef.current > 0 ? 1 : -1;
+    wheelAccumRef.current = 0;
+    wheelCooldownRef.current = now;
+    setHoveredDate(null);
+    setCarouselFocus(prev => {
+      const idx = dateRange.findIndex(d => sameDate(d, prev ?? activeDate));
+      const nextIdx = Math.max(0, Math.min(dateRange.length - 1, (idx < 0 ? 0 : idx) + dir));
+      return dateRange[nextIdx];
+    });
+  };
+
   const [viewMode, setViewMode] = useState<AppViewMode>("map");
   // The spatial layout shown beneath everything: map | linear. "list" is an
   // overlay that fades over whatever layout was last active, so the layout is
@@ -4228,6 +4283,7 @@ export default function MediaMap() {
         {/* Timeline overlay — carousel of thumbnails + timeline strip at the bottom */}
         {timelineOpen && (
           <div
+            onWheel={onTimelineWheel}
             style={{
               position: "absolute",
               inset: 0,
@@ -4238,21 +4294,20 @@ export default function MediaMap() {
           >
             <Carousel
               dates={dateRange}
-              selectedIdx={dateRange.findIndex(d => sameDate(d, activeDate))}
-              activeIdx={dateRange.findIndex(d => sameDate(d, activeDate))}
+              selectedIdx={dateRange.findIndex(d => sameDate(d, timelineFocus))}
+              activeIdx={dateRange.findIndex(d => sameDate(d, timelineFocus))}
               baseCompanies={baseCompanies}
               valData={valData}
               nodes={nodes}
               canvas={canvas}
-              onSelect={selectDate}
-              onAddView={addActiveToSavedViews}
-              canAddView={!savedViews.some(v => sameDate(v, activeDate))}
+              onSelect={setCarouselFocus}
+              onExplore={onExploreMap}
             />
             <TimelineStrip
               dates={dateRange}
-              activeDate={activeDate}
+              activeDate={timelineFocus}
               hoveredDate={hoveredDate}
-              onSelect={(d) => { setHoveredDate(null); selectDate(d); }}
+              onSelect={(d) => { setHoveredDate(null); setCarouselFocus(d); }}
               onHover={setHoveredDate}
             />
           </div>
@@ -4279,6 +4334,9 @@ export default function MediaMap() {
             const key = `${d.year}-${d.month}`;
             const isActive = sameDate(d, activeDate);
             const isHovered = hoveredViewKey === key;
+            // The current year is permanent (no ✕); every past-year view can be
+            // removed, and shows its ✕ persistently so that's discoverable.
+            const isCurrentYear = d.year === currentDate.year;
             return (
               <button
                 key={key}
@@ -4316,14 +4374,14 @@ export default function MediaMap() {
               >
                 <span style={{ opacity: 0.5, fontSize: 11 }}>{isActive ? "●" : "◎"}</span>
                 {formatDate(d)}
-                {!isActive && (
+                {!isCurrentYear && (
                   <span
                     role="button"
                     aria-label={`Remove ${formatDate(d)}`}
                     onClick={(e) => { e.stopPropagation(); removeSavedView(d); }}
                     style={{
                       marginLeft: 4,
-                      opacity: isHovered ? 0.7 : 0.35,
+                      opacity: isHovered ? 1 : 0.6,
                       fontSize: 12,
                       lineHeight: 1,
                       padding: "0 2px",
@@ -4339,8 +4397,8 @@ export default function MediaMap() {
 
           {/* Explicit Timeline trigger — always the bottom pill */}
           <button
-            aria-label={timelineOpen ? "Timeline open (use close button to close)" : "Open timeline"}
-            onClick={() => setTimelineOpen(v => !v)}
+            aria-label={timelineOpen ? "Time machine open (use close button to close)" : "Open time machine"}
+            onClick={() => (timelineOpen ? setTimelineOpen(false) : openTimeline())}
             onMouseEnter={() => setTimelineButtonHovered(true)}
             onMouseLeave={() => setTimelineButtonHovered(false)}
             style={{
@@ -4371,12 +4429,13 @@ export default function MediaMap() {
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ opacity: 0.6, fontSize: 12 }}>◷</span>
-            TIMELINE
+            <span className="material-symbols-outlined" style={{ opacity: 0.6, fontSize: 16 }}>history</span>
+            TIME MACHINE
           </button>
         </div>
 
-        {/* Close-timeline button — bottom-right, only when timeline is open. */}
+        {/* Close-timeline button — upper-right, only when timeline is open
+            (the view-mode toggle that normally sits here is hidden while open). */}
         {timelineOpen && (
           <button
             aria-label="Close timeline"
@@ -4384,7 +4443,7 @@ export default function MediaMap() {
             style={{
               position: "absolute",
               right: 16,
-              bottom: 72,
+              top: 16,
               zIndex: 11,
               display: "flex",
               alignItems: "center",
@@ -4407,15 +4466,15 @@ export default function MediaMap() {
           </button>
         )}
 
-        {/* Incremental month arrows — centered above the timeline strip,
-            on the same horizontal line as the close button. */}
+        {/* Incremental step arrows — centered horizontally above the timeline strip.
+            Step the picker FOCUS (not the live map — that commits via Explore map). */}
         {timelineOpen && (() => {
-          const idx = dateRange.findIndex(d => sameDate(d, activeDate));
+          const idx = dateRange.findIndex(d => sameDate(d, timelineFocus));
           const canPrev = idx > 0;
           const canNext = idx >= 0 && idx < dateRange.length - 1;
           const step = (delta: number) => {
             setHoveredDate(null);
-            selectDate(dateRange[idx + delta]);
+            setCarouselFocus(dateRange[idx + delta]);
           };
           return (
             <div
@@ -4478,12 +4537,24 @@ export default function MediaMap() {
               <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
               <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
               <button
-                aria-label="Reset view"
+                aria-label="Refresh view"
                 className="mm-hover"
                 onClick={() => (viewMode === "aggregate" ? setAggZoomTarget(1) : resetView())}
-                style={{ ...zoomBtnStyle, fontSize: 13 }}
+                style={{
+                  ...zoomBtnStyle,
+                  width: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0 12px",
+                  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                  fontSize: 13,
+                  fontWeight: 400,
+                  letterSpacing: 0,
+                }}
               >
-                ⟳
+                Refresh
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
               </button>
             </div>
             {viewMode === "map" && (
