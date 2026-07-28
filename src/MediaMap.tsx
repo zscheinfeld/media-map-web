@@ -73,6 +73,115 @@ function useIsEditMode(): boolean {
   }, []);
 }
 
+// EXPERIMENT toggle (read once on mount): `?softpin=1` opens the soft-pin layout
+// playground — pinned planets become gravitational attractors instead of
+// hard-locked coordinates, so collisions can nudge them apart on historical
+// transitions. A floating panel then exposes live sliders for the pin pull and
+// sector pull; `?pinpull=` / `?sectorpull=` seed their initial values. Default
+// off → current absolute pinning, no panel.
+const SOFTPIN_DEFAULT_PIN_PULL = 0.5; // clearly stronger than the sector pull
+const SOFTPIN_DEFAULT_SECTOR_PULL = 0.035; // matches the physics default
+function useSoftPin(): { softPin: boolean; initPinPull: number; initSectorPull: number } {
+  return useMemo(() => {
+    if (typeof window === "undefined")
+      return { softPin: false, initPinPull: SOFTPIN_DEFAULT_PIN_PULL, initSectorPull: SOFTPIN_DEFAULT_SECTOR_PULL };
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("softpin");
+    const softPin = v === "1" || v === "true";
+    const num = (key: string, fallback: number) => {
+      const raw = params.get(key);
+      const parsed = raw != null ? Number(raw) : NaN;
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    };
+    return {
+      softPin,
+      initPinPull: num("pinpull", SOFTPIN_DEFAULT_PIN_PULL),
+      initSectorPull: num("sectorpull", SOFTPIN_DEFAULT_SECTOR_PULL),
+    };
+  }, []);
+}
+
+// Floating slider panel for the soft-pin layout playground (`?softpin=1`).
+function SoftPinPanel({
+  pinPull,
+  setPinPull,
+  sectorPull,
+  setSectorPull,
+  onReset,
+}: {
+  pinPull: number;
+  setPinPull: (v: number) => void;
+  sectorPull: number;
+  setSectorPull: (v: number) => void;
+  onReset: () => void;
+}) {
+  const row = (
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    step: number,
+    onChange: (v: number) => void,
+  ) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>
+        <span>{label}</span>
+        <span style={{ fontVariantNumeric: "tabular-nums", color: "#fff" }}>{value.toFixed(3)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.currentTarget.value))}
+        style={{ width: "100%", accentColor: "#7aa2ff" }}
+      />
+    </div>
+  );
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 12,
+        left: 12,
+        zIndex: 40,
+        width: 230,
+        background: "rgba(7,14,32,0.92)",
+        border: "1px solid rgba(255,255,255,0.15)",
+        borderRadius: 10,
+        padding: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "rgba(255,255,255,0.6)" }}>
+        Layout playground · soft-pin
+      </div>
+      {row("Pin pull (fixed planets)", pinPull, 0, 1, 0.01, setPinPull)}
+      {row("Sector pull", sectorPull, 0, 0.2, 0.005, setSectorPull)}
+      <button
+        onClick={onReset}
+        style={{
+          alignSelf: "flex-start",
+          fontSize: 11,
+          color: "rgba(255,255,255,0.75)",
+          background: "transparent",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: 6,
+          padding: "4px 10px",
+          cursor: "pointer",
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
 const MIN_ZOOM = 1; // = the on-load / reset view; users can't zoom out past it
 const MAX_ZOOM = 8;
 const ZOOM_STEP = 1.4;
@@ -3107,6 +3216,10 @@ export default function MediaMap() {
   // (selection/draw/export) still operates on the local `connections` state.
   const effectiveConnections = sanity ? sanity.connections : connections;
 
+  const { softPin, initPinPull, initSectorPull } = useSoftPin();
+  // Live playground values (only used when softPin is on).
+  const [softPinPull, setSoftPinPull] = useState(initPinPull);
+  const [softSectorPull, setSoftSectorPull] = useState(initSectorPull);
   const nodes = usePhysicsLayout({
     inputs,
     bounds: physicsBounds,
@@ -3117,8 +3230,12 @@ export default function MediaMap() {
     collidePadding: eff.collidePadding,
     entityRadius: eff.entityRadius,
     sizeSpacing: eff.sizeSpacing,
-    sectorPull: eff.sectorPull,
+    // In the soft-pin playground the sliders drive sector + pin pull; otherwise
+    // sector pull comes from Sanity settings and pin pull is unused.
+    sectorPull: softPin ? softSectorPull : eff.sectorPull,
     repulsion: eff.repulsion,
+    softPin,
+    pinPull: softPinPull,
     labelRadii,
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
@@ -4196,6 +4313,20 @@ export default function MediaMap() {
           zoomTarget={aggZoomTarget}
           highlightSector={hoveredSector}
         />
+
+        {/* Soft-pin layout playground — only when ?softpin=1 is in the URL. */}
+        {softPin && (
+          <SoftPinPanel
+            pinPull={softPinPull}
+            setPinPull={setSoftPinPull}
+            sectorPull={softSectorPull}
+            setSectorPull={setSoftSectorPull}
+            onReset={() => {
+              setSoftPinPull(SOFTPIN_DEFAULT_PIN_PULL);
+              setSoftSectorPull(SOFTPIN_DEFAULT_SECTOR_PULL);
+            }}
+          />
+        )}
 
         {/* Editor toolbar — only rendered when ?edit=1 is in the URL. */}
         {isEditMode && (

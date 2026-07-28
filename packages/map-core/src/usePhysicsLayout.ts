@@ -298,6 +298,17 @@ export type PhysicsOptions = {
    * center. Applied as a negative charge (`strength(-repulsion)`).
    */
   repulsion?: number
+  /**
+   * EXPERIMENT (soft-pin layout): when true, hard-pinned planets are NOT locked
+   * to `fx/fy` — instead they become strong gravitational attractors at their
+   * authored spot (a `pinPull`-strength forceX/Y), so collision + de-overlap can
+   * still nudge them apart. Makes placements less rigid, especially when
+   * transitioning between yearly maps. Default false = current absolute pinning.
+   */
+  softPin?: boolean
+  /** forceX/Y strength for pinned planets when `softPin` is on (vs `sectorPull`
+   *  for free planets). Higher = holds its spot more firmly. */
+  pinPull?: number
   /** Per-company label half-extent (slide units) → collision spacing. */
   labelRadii?: Record<string, number>
   /** Connection endpoints (names) → attraction force. */
@@ -331,6 +342,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     sizeSpacing = 0,
     sectorPull = 0.035,
     repulsion = 0,
+    softPin = false,
+    pinPull = 0.25,
     labelRadii = {},
     connections = [],
     connectionStrength = CONNECTION_PULL,
@@ -390,6 +403,12 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     const active = inputs
     const centerByName = new Map(active.map((c) => [c.name, c.center]))
 
+    // forceX/Y pull toward each node's target. In soft-pin mode, pinned planets
+    // are free (no fx/fy) but pull hard toward their authored spot; everyone else
+    // uses the looser sector pull. Off (default) → uniform sector pull, and
+    // pinned nodes are hard-locked via fx/fy in the build step below.
+    const pullStrength = (d: PlanetNode) => (softPin && d.pinned ? pinPull : sectorPull)
+
     // Reuse existing node objects so physics state survives re-runs.
     const map = nodeMapRef.current
     const built: PlanetNode[] = active.map((c) => {
@@ -417,7 +436,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         existing.pinned = pinned
         existing.labelRadius = labelR
         existing.labelColor = c.labelColor
-        if (pinned && pos) {
+        if (pinned && pos && !softPin) {
           existing.fx = pos.x
           existing.fy = pos.y
         } else {
@@ -450,8 +469,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         targetX,
         targetY,
         pinned,
-        fx: pinned && pos ? pos.x : null,
-        fy: pinned && pos ? pos.y : null,
+        fx: pinned && pos && !softPin ? pos.x : null,
+        fy: pinned && pos && !softPin ? pos.y : null,
         labelRadius: labelR,
         labelColor: c.labelColor,
       }
@@ -590,8 +609,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       hasFirstAnimRef.current = true
 
       const sim = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
+        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(pullStrength))
+        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(pullStrength))
         .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
         .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
         .force("link", connectionForce(linkPairs, connectionStrength))
@@ -706,8 +725,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       }
 
       const sim = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
+        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(pullStrength))
+        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(pullStrength))
         .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
         .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
         .force("link", connectionForce(linkPairs, connectionStrength))
@@ -768,8 +787,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // cooling to a full stop. Mirrors the edit-mode prewarm + cool sim.
     {
       const prewarm = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
+        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(pullStrength))
+        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(pullStrength))
         .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
         .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
         .force("link", connectionForce(linkPairs, connectionStrength))
@@ -819,7 +838,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       sim.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey])
+  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, softPin, pinPull, labelRadiiKey, connectionsKey, connectionStrength, boundsKey])
 
   // Wake/cool the sim on drag enter/leave. The tick callback already nudges
   // alphaTarget on every tick, but the sim can be fully cooled (alpha=0) when
