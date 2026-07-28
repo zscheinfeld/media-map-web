@@ -287,7 +287,8 @@ function SectorPanelContent({
                 overflow: "hidden",
                 opacity: on ? 1 : 0.45,
                 fontSize: 16,
-                marginBottom: 4,
+                lineHeight: 1.1,
+                marginBottom: 8,
                 background: isHovered ? "rgba(255,255,255,0.10)" : "transparent",
                 border: isHovered
                   ? "1px solid rgba(255,255,255,0.25)"
