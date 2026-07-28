@@ -96,6 +96,10 @@ export function Planet({
             wordBreak: "keep-all",
             overflowWrap: "normal",
             hyphens: "none",
+            // iOS Safari auto-inflates foreignObject text based on the SVG's
+            // (huge) user-space size — set directly here since the html-level
+            // rule doesn't reach into the SVG. Keeps labels at their real size.
+            WebkitTextSizeAdjust: "100%",
           }}
         >
           {/* In edit mode the visible text itself is a grab/select target, so

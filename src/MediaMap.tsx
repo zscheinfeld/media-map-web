@@ -3907,8 +3907,8 @@ export default function MediaMap() {
       style={{
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        height: "100%", // fill .app (100dvh) so bottom controls aren't clipped on mobile
         overflow: "hidden",
       }}
     >
