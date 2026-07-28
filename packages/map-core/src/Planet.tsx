@@ -21,9 +21,6 @@ export type PlanetProps = {
   labelSuppressed?: boolean
   /** Below this on-screen diameter the label is hidden (unless hovered). 0 = always show. */
   labelMinScreenDiameter?: number
-  /** Minimum label-box size in screen px, so small planets' text isn't crushed. */
-  labelMinBoxWPx?: number
-  labelMinBoxHPx?: number
 }
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
@@ -43,8 +40,6 @@ export function Planet({
   showValuation = false,
   labelSuppressed = false,
   labelMinScreenDiameter = 0,
-  labelMinBoxWPx = 130,
-  labelMinBoxHPx = 52,
 }: PlanetProps) {
   const safeName = node.name.replace(/[^a-z0-9]/gi, "_")
   const gradId = `planet-${safeName}`
@@ -61,70 +56,41 @@ export function Planet({
   const screenDiameter = (node.r * 2) / slideUnitsPerPx
   const showLabel = isHovered || (!labelSuppressed && screenDiameter >= labelMinScreenDiameter)
 
-  // Reusable name label (word-stacked, white fill + black stroke). Shared by the
-  // planet body below and the entity branch (which has no circle to label).
+  // Reusable name label as native SVG <text> (word-stacked, coloured fill + black
+  // outline). SVG text scales correctly with the viewBox on every browser —
+  // HTML-in-foreignObject labels mis-scale AND get text-inflated on iOS Safari
+  // (giant ghost labels). Shared by the planet body + the entity branch.
   const renderNameLabel = (withValuation: boolean) => {
-    const minBoxW = labelMinBoxWPx * slideUnitsPerPx
-    const minBoxH = labelMinBoxHPx * slideUnitsPerPx
-    const boxW = Math.max(node.r * 2, minBoxW)
-    const boxH = Math.max(node.r * 2, minBoxH)
+    const words = node.name.trim().split(/\s+/)
+    const valText = withValuation ? formatValuation(node.valuation_b) : null
+    const lineH = labelFontPx
+    const gap = valText ? labelFontPx * 0.15 : 0
+    const totalH = words.length * lineH + (valText ? gap + lineH : 0)
+    const top = node.y - totalH / 2
+    const rows = words.map((w, i) => ({text: w, y: top + lineH / 2 + i * lineH, opacity: 1}))
+    if (valText) rows.push({text: valText, y: top + words.length * lineH + gap + lineH / 2, opacity: 0.85})
     return (
-      <foreignObject
-        x={node.x - boxW / 2}
-        y={node.y - boxH / 2}
-        width={boxW}
-        height={boxH}
-        style={{pointerEvents: "none", overflow: "visible"}}
+      <text
+        x={node.x}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontFamily='Calibri, "Helvetica Neue", Arial, sans-serif'
+        fontWeight={700}
+        fontSize={labelFontPx}
+        fill={node.labelColor ?? "#fff"}
+        stroke="#000"
+        strokeWidth={1.2 * slideUnitsPerPx}
+        paintOrder="stroke"
+        // In edit mode the visible text is a grab/select target (entities have no
+        // circle); otherwise it's click-through.
+        style={{pointerEvents: isEditMode ? "auto" : "none", cursor: isEditMode ? "grab" : undefined}}
       >
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            textAlign: "center",
-            fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-            color: node.labelColor ?? "#fff",
-            fontSize: `${labelFontPx}px`,
-            lineHeight: 1.0,
-            boxSizing: "border-box",
-            textShadow: "0 0 4px rgba(0,0,0,0.7)",
-            WebkitTextStroke: `${1.2 * slideUnitsPerPx}px #000`,
-            paintOrder: "stroke fill",
-            wordBreak: "keep-all",
-            overflowWrap: "normal",
-            hyphens: "none",
-            // iOS Safari auto-inflates foreignObject text based on the SVG's
-            // (huge) user-space size — set directly here since the html-level
-            // rule doesn't reach into the SVG. Keeps labels at their real size.
-            WebkitTextSizeAdjust: "100%",
-          }}
-        >
-          {/* In edit mode the visible text itself is a grab/select target, so
-              entities (no circle) and tiny planets can be picked up by their
-              label. A descendant can re-enable pointer events even though the
-              foreignObject above is `none`; events bubble to the <g>'s handlers.
-              Outside edit mode the label stays click-through as before. */}
-          <div
-            style={{
-              fontWeight: 700,
-              pointerEvents: isEditMode ? "auto" : "none",
-              cursor: isEditMode ? "grab" : undefined,
-            }}
-          >
-            {node.name.trim().split(/\s+/).map((word, i) => (
-              <div key={i}>{word}</div>
-            ))}
-          </div>
-          {withValuation && (
-            <div style={{fontWeight: 700, opacity: 0.85, marginTop: labelFontPx * 0.15}}>
-              {formatValuation(node.valuation_b)}
-            </div>
-          )}
-        </div>
-      </foreignObject>
+        {rows.map((r, i) => (
+          <tspan key={i} x={node.x} y={r.y} opacity={r.opacity}>
+            {r.text}
+          </tspan>
+        ))}
+      </text>
     )
   }
 

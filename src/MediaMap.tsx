@@ -4186,8 +4186,6 @@ export default function MediaMap() {
                   }}
                   dimmed={hoveredSector !== null && n.sector !== hoveredSector}
                   labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
-                  labelMinBoxWPx={130 * labelScaleForZoom(zoom)}
-                  labelMinBoxHPx={52 * labelScaleForZoom(zoom)}
                   isEditMode={isEditMode}
                   isSelected={
                     isEditMode &&
