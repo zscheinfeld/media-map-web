@@ -1694,8 +1694,8 @@ function MapThumbnail({
 
 function Carousel({
   dates,
-  selectedIdx,
-  activeIdx,
+  position,
+  animate,
   baseCompanies,
   valData,
   nodes,
@@ -1704,8 +1704,10 @@ function Carousel({
   onExplore,
 }: {
   dates: MapDate[];
-  selectedIdx: number;
-  activeIdx: number;
+  /** Fractional index into `dates` — the carousel's horizontal position. */
+  position: number;
+  /** Ease the transform (clicks/snap) vs. track the scroll 1:1 (wheel scrub). */
+  animate: boolean;
   baseCompanies: SheetCompany[];
   valData: ValuationData;
   nodes: PlanetNode[];
@@ -1713,6 +1715,9 @@ function Carousel({
   onSelect: (d: MapDate) => void;
   onExplore: () => void;
 }) {
+  // Nearest whole year — drives which thumb is enlarged + the render window.
+  const selectedIdx = Math.max(0, Math.min(dates.length - 1, Math.round(position)));
+  const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
 
@@ -1759,9 +1764,9 @@ function Carousel({
   const slots: number[] = [];
   for (let i = renderRange.minIdx; i <= renderRange.maxIdx; i++) slots.push(i);
 
-  // Translate the strip so the center of the selected slot lands at the center
-  // of the viewport. CSS transition on the transform handles the smooth slide.
-  const selectedCenter = selectedIdx * CAROUSEL_SLOT_W + CAROUSEL_SLOT_W / 2;
+  // Translate the strip so the (fractional) position lands at the viewport
+  // center — so wheel scrubbing tracks continuously, not just per whole year.
+  const selectedCenter = position * CAROUSEL_SLOT_W + CAROUSEL_SLOT_W / 2;
   const translateX = containerW > 0 ? containerW / 2 - selectedCenter : 0;
 
   return (
@@ -1784,8 +1789,9 @@ function Carousel({
           height: "100%",
           width: dates.length * CAROUSEL_SLOT_W,
           transform: `translateX(${translateX}px)`,
-          // easeInOutCubic — symmetric, smoother in/out
-          transition: "transform 900ms cubic-bezier(0.65, 0, 0.35, 1)",
+          // Ease for clicks + the snap-on-release; none while scrubbing so the
+          // strip tracks the wheel 1:1. easeInOutCubic — symmetric in/out.
+          transition: animate ? "transform 640ms cubic-bezier(0.65, 0, 0.35, 1)" : "none",
         }}
       >
         {slots.map(i => {
@@ -2745,44 +2751,52 @@ export default function MediaMap() {
   const [hoveredDate, setHoveredDate] = useState<MapDate | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
-  // Timeline picker: the carousel + strip FOCUS a candidate year without moving
-  // the live map — only "Explore map" commits it. Opening the timeline defaults
-  // the focus to the PREVIOUS year (you're already looking at the present).
-  const [carouselFocus, setCarouselFocus] = useState<MapDate | null>(null);
-  const timelineFocus = carouselFocus ?? activeDate;
-  const defaultTimelineFocus = (): MapDate =>
-    dateRange.find(d => d.year === currentDate.year - 1) ?? currentDate;
+  const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
+
+  // Timeline picker (smooth): the carousel + strip FOCUS a candidate year without
+  // moving the live map — only "Explore map" commits it. `scrollIdx` is a
+  // FRACTIONAL index into dateRange, so wheel motion tracks the scroll
+  // continuously and eases to the nearest year when you stop. Opening defaults to
+  // the PREVIOUS year (you're already looking at the present).
+  const clampIdx = (i: number) => Math.max(0, Math.min(dateRange.length - 1, i));
+  const [scrollIdx, setScrollIdx] = useState(0);
+  const [timelineAnimate, setTimelineAnimate] = useState(true);
+  const focusIdx = clampIdx(Math.round(scrollIdx));
+  const timelineFocus = dateRange[focusIdx] ?? activeDate;
   const openTimeline = () => {
-    setCarouselFocus(defaultTimelineFocus());
+    const i = dateRange.findIndex(d => d.year === currentDate.year - 1);
+    setTimelineAnimate(true);
+    setScrollIdx(i >= 0 ? i : Math.max(0, dateRange.length - 1));
     setTimelineOpen(true);
   };
+  // A click / arrow / strip pick eases to that exact year.
+  const focusOn = (d: MapDate) => {
+    const i = dateRange.findIndex(x => sameDate(x, d));
+    if (i < 0) return;
+    setTimelineAnimate(true);
+    setScrollIdx(i);
+  };
   const onExploreMap = () => {
-    const target = carouselFocus ?? activeDate;
+    const target = timelineFocus;
     setActiveDate(target);
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
     setTimelineOpen(false);
   };
-  // Wheel (up/down or trackpad) steps the picker focus along the timeline. An
-  // accumulator + cooldown makes one gesture = one year (and tames momentum),
-  // so a flick doesn't rocket across the whole range. Down/right → newer.
-  const wheelAccumRef = useRef(0);
-  const wheelCooldownRef = useRef(0);
+  // Wheel scrubs the carousel continuously (motion tied to the scroll, no per-year
+  // snapping mid-gesture), then eases to the nearest year ~130ms after you stop.
+  // Down / right → newer.
+  const wheelSnapRef = useRef<number | null>(null);
   const onTimelineWheel = (e: React.WheelEvent) => {
     const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     if (!raw) return;
-    const now = performance.now();
-    if (now - wheelCooldownRef.current < 140) return; // one step per gesture; drop momentum
-    wheelAccumRef.current += raw;
-    if (Math.abs(wheelAccumRef.current) < 24) return;
-    const dir = wheelAccumRef.current > 0 ? 1 : -1;
-    wheelAccumRef.current = 0;
-    wheelCooldownRef.current = now;
     setHoveredDate(null);
-    setCarouselFocus(prev => {
-      const idx = dateRange.findIndex(d => sameDate(d, prev ?? activeDate));
-      const nextIdx = Math.max(0, Math.min(dateRange.length - 1, (idx < 0 ? 0 : idx) + dir));
-      return dateRange[nextIdx];
-    });
+    setTimelineAnimate(false); // track the wheel 1:1 while scrubbing
+    setScrollIdx(prev => clampIdx(prev + raw * 0.01)); // ~one year per ~100px
+    if (wheelSnapRef.current !== null) window.clearTimeout(wheelSnapRef.current);
+    wheelSnapRef.current = window.setTimeout(() => {
+      setTimelineAnimate(true);
+      setScrollIdx(prev => clampIdx(Math.round(prev)));
+    }, 130);
   };
 
   const [viewMode, setViewMode] = useState<AppViewMode>("map");
@@ -2806,7 +2820,6 @@ export default function MediaMap() {
   const [aggZoomTarget, setAggZoomTarget] = useState(1);
   const aggZoomBy = (f: number) => setAggZoomTarget((t) => Math.min(AGG_MAX_ZOOM, Math.max(1, t * f)));
 
-  const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
   const displayedCompanies = useMemo(
     () => {
       // Hide companies whose appearance windows don't cover the viewed year (the
@@ -4294,20 +4307,20 @@ export default function MediaMap() {
           >
             <Carousel
               dates={dateRange}
-              selectedIdx={dateRange.findIndex(d => sameDate(d, timelineFocus))}
-              activeIdx={dateRange.findIndex(d => sameDate(d, timelineFocus))}
+              position={scrollIdx}
+              animate={timelineAnimate}
               baseCompanies={baseCompanies}
               valData={valData}
               nodes={nodes}
               canvas={canvas}
-              onSelect={setCarouselFocus}
+              onSelect={focusOn}
               onExplore={onExploreMap}
             />
             <TimelineStrip
               dates={dateRange}
               activeDate={timelineFocus}
               hoveredDate={hoveredDate}
-              onSelect={(d) => { setHoveredDate(null); setCarouselFocus(d); }}
+              onSelect={(d) => { setHoveredDate(null); focusOn(d); }}
               onHover={setHoveredDate}
             />
           </div>
@@ -4469,12 +4482,12 @@ export default function MediaMap() {
         {/* Incremental step arrows — centered horizontally above the timeline strip.
             Step the picker FOCUS (not the live map — that commits via Explore map). */}
         {timelineOpen && (() => {
-          const idx = dateRange.findIndex(d => sameDate(d, timelineFocus));
+          const idx = focusIdx;
           const canPrev = idx > 0;
           const canNext = idx >= 0 && idx < dateRange.length - 1;
           const step = (delta: number) => {
             setHoveredDate(null);
-            setCarouselFocus(dateRange[idx + delta]);
+            focusOn(dateRange[idx + delta]);
           };
           return (
             <div
@@ -4549,12 +4562,12 @@ export default function MediaMap() {
                   padding: "0 12px",
                   fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
                   fontSize: 13,
-                  fontWeight: 400,
-                  letterSpacing: 0,
+                  fontWeight: 600,
+                  letterSpacing: 1,
                 }}
               >
-                Refresh
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
+                REFRESH
+                <span className="material-symbols-outlined" style={{ opacity: 0.6, fontSize: 16 }}>refresh</span>
               </button>
             </div>
             {viewMode === "map" && (

@@ -126,6 +126,7 @@ The system is **live** — public app at `https://eshap-media-map.netlify.app`, 
 - **Front-end polish** — restyle toward the light mockup; loading-moment animation.
 - **Studio Map Editor planet sizing** — the editor still sizes planets from Sanity, not the valuation sheet, so its scale doesn't match the public map. Wire it to read the sheet at the editor's current year.
 - **Legacy cleanup** — retire `loadCompanies.ts` / `sheetValuations.ts` / the `historical.ts` mock once the sheet fully covers the roster; trim Sanity `manual_valuations` where the sheet now covers it.
+- **Paid access / gating** — gate the historical **timeline (Time Machine)** behind paid membership as a *freemium funnel*: the present-day map stays free (the hook), the historical maps become the paid perk. Recommended direction (to avoid a second paywall): keep it on **Substack** and unlock via a link / rotating code dropped in paid-only posts (zero backend) → optionally graduate to **email verification** against Evan's Substack paid-subscriber export (adds the app's first auth + a serverless gate + a periodic list sync). Substack has no real-time subscriber API, so it's an email-identity + list problem. A full options brief (incl. non-Substack routes: Memberful / Stripe / Ghost / etc.) was prepared for Evan. Not started.
 
 ## Open questions worth confirming with the client
 
