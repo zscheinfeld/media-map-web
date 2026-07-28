@@ -168,7 +168,10 @@ function SectorPanelContent({
   onClose,
 }: SectorPanelProps & { onClose?: () => void }) {
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {/* Fixed header — Sectors title, count, and All/None stay put while the
+          sector list below scrolls. */}
+      <div style={{ flex: "0 0 auto" }}>
       {/* Header: title + company count. In the mobile drawer (`onClose` set) the
           grab handle + ✕ share this row instead of a separate header. */}
       <div
@@ -230,11 +233,20 @@ function SectorPanelContent({
         <button onClick={() => onAll(true)} className="mm-hover" style={pillBtn}>All</button>
         <button onClick={() => onAll(false)} className="mm-hover" style={pillBtn}>None</button>
       </div>
-      {/* Clear the hover only when the cursor leaves the whole list — not when
-          it crosses between rows — so the map doesn't flicker un/re-highlighting
-          in the gaps between sector rows. */}
+      </div>
+      {/* Sector list — the ONLY scrolling region (header above stays fixed).
+          Clear the hover only when the cursor leaves the whole list — not when
+          it crosses between rows — so the map doesn't flicker. */}
       <div
-        style={{ marginTop: 14, display: "flex", flexDirection: "column" }}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          marginTop: 14,
+          paddingBottom: "calc(4px + env(safe-area-inset-bottom))",
+          display: "flex",
+          flexDirection: "column",
+        }}
         onMouseLeave={() => onHoverSector(null)}
       >
         {sectors.map(s => {
@@ -436,7 +448,7 @@ function SectorPanelContent({
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -509,8 +521,8 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
         />
       </div>
 
-      {/* Sector list — the only scrolling region. */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      {/* SectorPanelContent scrolls its own list internally (header pinned). */}
+      <div style={{ flex: 1, minHeight: 0 }}>
         <SectorPanelContent {...props} />
       </div>
 
@@ -611,7 +623,7 @@ function MobileSectorDrawer({
           boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
         }}
       >
-        <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px calc(20px + env(safe-area-inset-bottom))" }}>
+        <div style={{ flex: 1, minHeight: 0, padding: "14px 14px 0" }}>
           <SectorPanelContent {...sectorProps} onClose={onClose} />
         </div>
       </div>
