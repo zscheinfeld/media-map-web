@@ -242,6 +242,7 @@ function SectorPanelContent({
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
+          overscrollBehavior: "contain", // don't chain the scroll to the page/map
           marginTop: 14,
           paddingBottom: "calc(4px + env(safe-area-inset-bottom))",
           display: "flex",
@@ -607,7 +608,8 @@ function MobileSectorDrawer({
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight: "80dvh", // dynamic viewport so the header + close stay on-screen
+          height: "80dvh", // DEFINITE height (not max) so the inner height:100%
+          // + list overflow chain resolves — otherwise the list can't scroll.
           display: "flex",
           flexDirection: "column",
           background: "rgba(7,14,32,0.97)",
