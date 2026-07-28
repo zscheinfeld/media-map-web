@@ -3178,14 +3178,22 @@ export default function MediaMap() {
   // isn't treated as a background click (which closes the panel + zooms out).
   const bgClickSuppressRef = useRef(false);
   const DRAG_THRESHOLD_PX = 4;
+  // Timestamp of the last touch event. Browsers fire *emulated* mouse events
+  // after touches; the touch handlers own pan/pinch, so the mouse handlers
+  // ignore anything within ~600ms of a touch (the emulated CLICK still fires,
+  // so tap-to-focus keeps working). See onTouch* below.
+  const lastTouchRef = useRef(0);
+  const isSyntheticMouse = () => performance.now() - lastTouchRef.current < 600;
 
   const onMouseDown = (e: React.MouseEvent) => {
+    if (isSyntheticMouse()) return;
     cancelZoomAnim();
     dragRef.current = { startX: e.clientX, startY: e.clientY, pan0: { ...pan } };
     didDragRef.current = false;
     (e.currentTarget as HTMLElement).style.cursor = "grabbing";
   };
   const onMouseMove = (e: React.MouseEvent) => {
+    if (isSyntheticMouse()) return;
     // While drawing a connection, track the cursor in slide coords so the
     // rubber-band line can follow the pointer to the next planet.
     if (connectMode && connectFrom !== null && containerRef.current && containerW > 0) {
@@ -3232,6 +3240,7 @@ export default function MediaMap() {
     setPan({ x: dragRef.current.pan0.x - dx, y: dragRef.current.pan0.y - dy });
   };
   const onMouseUp = (e: React.MouseEvent) => {
+    if (isSyntheticMouse()) return;
     // Commit a sector drag (if active) to the sector-position overrides.
     if (sectorDragRef.current && sectorDragState && didDragRef.current) {
       const name = sectorDragRef.current.name;
@@ -3261,6 +3270,76 @@ export default function MediaMap() {
     setDragState(null);
     dragRef.current = null;
     (e.currentTarget as HTMLElement).style.cursor = "grab";
+  };
+
+  // ---- Touch (mobile): 1-finger pan, 2-finger pinch-zoom ------------------
+  // A tap (no move) falls through to the browser's emulated click, so the
+  // existing planet/background onClick handles tap-to-focus + tap-to-zoom-out.
+  // `touch-action: none` on the container disables native scroll/zoom so these
+  // gestures are ours. Edit-mode planet dragging stays mouse-only (desktop).
+  const TOUCH_DRAG_THRESHOLD_PX = 8;
+  const touchRef = useRef<
+    | { mode: "pan"; startX: number; startY: number; pan0: { x: number; y: number } }
+    | { mode: "pinch"; dist0: number; zoom0: number; midX: number; midY: number; slideX: number; slideY: number }
+    | null
+  >(null);
+  const touchDist = (t: React.TouchList) =>
+    Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const beginPan = (t: React.Touch) => {
+    touchRef.current = { mode: "pan", startX: t.clientX, startY: t.clientY, pan0: { ...pan } };
+  };
+  const beginPinch = (touches: React.TouchList) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const midX = (touches[0].clientX + touches[1].clientX) / 2 - rect.left;
+    const midY = (touches[0].clientY + touches[1].clientY) / 2 - rect.top;
+    touchRef.current = {
+      mode: "pinch",
+      dist0: touchDist(touches) || 1,
+      zoom0: zoom,
+      midX,
+      midY,
+      // The slide point under the pinch center, held fixed as we scale.
+      slideX: view.x + (midX / rect.width) * view.w,
+      slideY: view.y + (midY / rect.height) * view.h,
+    };
+    didDragRef.current = true; // a pinch is never a tap
+  };
+  const onTouchStart = (e: React.TouchEvent) => {
+    lastTouchRef.current = performance.now();
+    cancelZoomAnim();
+    didDragRef.current = false;
+    if (e.touches.length >= 2) beginPinch(e.touches);
+    else beginPan(e.touches[0]);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    lastTouchRef.current = performance.now();
+    const st = touchRef.current;
+    if (!st || containerW === 0 || !containerRef.current) return;
+    if (st.mode === "pinch" && e.touches.length >= 2) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, st.zoom0 * (touchDist(e.touches) / st.dist0)));
+      const newW = canvas.w / newZoom;
+      const newH = canvas.h / newZoom;
+      const newCx = st.slideX + (0.5 - st.midX / rect.width) * newW;
+      const newCy = st.slideY + (0.5 - st.midY / rect.height) * newH;
+      const cf = centerFactorForZoom(newZoom);
+      setZoom(newZoom);
+      setPan({ x: (newCx - (canvas.x + canvas.w / 2)) * cf, y: (newCy - (canvas.y + canvas.h / 2)) * cf });
+    } else if (st.mode === "pan" && e.touches.length === 1) {
+      const t = e.touches[0];
+      const screenDx = t.clientX - st.startX;
+      const screenDy = t.clientY - st.startY;
+      if (!didDragRef.current && Math.hypot(screenDx, screenDy) > TOUCH_DRAG_THRESHOLD_PX) didDragRef.current = true;
+      setPan({ x: st.pan0.x - screenDx * slideUnitsPerPx, y: st.pan0.y - screenDy * slideUnitsPerPx });
+    }
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    lastTouchRef.current = performance.now();
+    // Fingers remaining? Re-seat the gesture so lifting one of two doesn't jump.
+    if (e.touches.length >= 2) beginPinch(e.touches);
+    else if (e.touches.length === 1) beginPan(e.touches[0]);
+    else touchRef.current = null;
   };
 
   // Begin a planet drag in edit mode. Called from Planet's onMouseDown.
@@ -3887,12 +3966,18 @@ export default function MediaMap() {
             overflowY: "hidden",
             cursor: layoutMode === "linear" ? "default" : "grab",
             userSelect: "none",
+            // Map mode owns all touch gestures (pan/pinch in JS); linear keeps
+            // native horizontal scroll.
+            touchAction: layoutMode === "linear" ? "pan-x" : "none",
           }}
           onMouseDown={layoutMode === "linear" ? undefined : onMouseDown}
           onMouseMove={layoutMode === "linear" ? undefined : onMouseMove}
           onMouseUp={layoutMode === "linear" ? undefined : onMouseUp}
           onMouseLeave={layoutMode === "linear" ? undefined : onMouseUp}
           onWheel={layoutMode === "linear" ? undefined : onWheel}
+          onTouchStart={layoutMode === "linear" ? undefined : onTouchStart}
+          onTouchMove={layoutMode === "linear" ? undefined : onTouchMove}
+          onTouchEnd={layoutMode === "linear" ? undefined : onTouchEnd}
           onClick={() => {
             // Click on the map background while zoomed in (a focused planet, a
             // focused sector, or any pinch/zoom) → close the side panel and zoom
