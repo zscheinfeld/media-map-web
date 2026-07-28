@@ -4419,7 +4419,8 @@ export default function MediaMap() {
           style={{
             position: "absolute",
             left: 16,
-            bottom: timelineOpen ? 72 : 16,
+            // Clear the mobile browser's home indicator / toolbar safe area.
+            bottom: `calc(${timelineOpen ? 72 : 16}px + env(safe-area-inset-bottom))`,
             zIndex: 11,
             display: "flex",
             flexDirection: "column",
@@ -4613,7 +4614,7 @@ export default function MediaMap() {
             style={{
               position: "absolute",
               right: 16,
-              bottom: 16,
+              bottom: "calc(16px + env(safe-area-inset-bottom))",
               display: "flex",
               flexDirection: "row",
               gap: 8,

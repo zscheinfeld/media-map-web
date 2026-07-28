@@ -20,11 +20,16 @@ html, body, #root {
   background: #03060f;
   color: #e6edf7;
   font-family: Calibri, "Helvetica Neue", Arial, sans-serif;
+  /* iOS Safari auto-inflates ("boosts") some text — which blew up planet
+     valuation labels to giant sizes. Pin it so labels render at their set size. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .app {
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport → excludes the mobile browser toolbar */
   margin: 0;
   padding: 0;
   overflow: hidden;
