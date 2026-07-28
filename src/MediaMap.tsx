@@ -289,10 +289,11 @@ function SectorPanelContent({
                 fontSize: 16,
                 lineHeight: 1.1,
                 marginBottom: 8,
-                background: isHovered ? "rgba(255,255,255,0.10)" : "transparent",
+                // Visible card so the row's 8px padding actually reads.
+                background: isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
                 border: isHovered
                   ? "1px solid rgba(255,255,255,0.25)"
-                  : "1px solid transparent",
+                  : "1px solid rgba(255,255,255,0.08)",
                 transition: "background 120ms, border-color 120ms",
               }}
             >
@@ -304,7 +305,7 @@ function SectorPanelContent({
                   gap: 6,
                   padding: "8px 8px",
                   cursor: "pointer",
-                  background: !isHovered && on ? "rgba(255,255,255,0.02)" : "transparent",
+                  background: "transparent",
                   transition: "background 120ms",
                 }}
               >
@@ -439,7 +440,7 @@ function SectorPanelContent({
                   gap: 8,
                   padding: "8px 8px",
                   cursor: "pointer",
-                  background: !isHovered && on ? "rgba(255,255,255,0.04)" : "transparent",
+                  background: "transparent",
                   transition: "background 120ms",
                 }}
               >
