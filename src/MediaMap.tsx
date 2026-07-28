@@ -149,7 +149,7 @@ const pillBtn: React.CSSProperties = {
   borderRadius: 6,
   padding: "5px 0",
   fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-  fontSize: 12,
+  fontSize: 16,
   cursor: "pointer",
 };
 
@@ -194,7 +194,7 @@ function SectorPanelContent({
         )}
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>Sectors</div>
-          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
             {loading ? "Loading…" : error ? "Error" : `${total} companies`}
           </div>
         </div>
@@ -286,7 +286,7 @@ function SectorPanelContent({
                 borderRadius: 6,
                 overflow: "hidden",
                 opacity: on ? 1 : 0.45,
-                fontSize: 13,
+                fontSize: 16,
                 marginBottom: 4,
                 background: isHovered ? "rgba(255,255,255,0.10)" : "transparent",
                 border: isHovered
@@ -301,7 +301,7 @@ function SectorPanelContent({
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
-                  padding: "6px 8px",
+                  padding: "4px 8px",
                   cursor: "pointer",
                   background: !isHovered && on ? "rgba(255,255,255,0.02)" : "transparent",
                   transition: "background 120ms",
@@ -436,14 +436,14 @@ function SectorPanelContent({
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "6px 8px",
+                  padding: "4px 8px",
                   cursor: "pointer",
                   background: !isHovered && on ? "rgba(255,255,255,0.04)" : "transparent",
                   transition: "background 120ms",
                 }}
               >
                 <span style={{ flex: 1 }}>{s}</span>
-                <span style={{ opacity: 0.5, fontSize: 11 }}>{counts[s] ?? 0}</span>
+                <span style={{ opacity: 0.5, fontSize: 12 }}>{counts[s] ?? 0}</span>
               </div>
             </div>
           );
