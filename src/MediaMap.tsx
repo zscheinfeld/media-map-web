@@ -557,7 +557,7 @@ function MobileSectorDrawer({
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight: "82vh",
+          maxHeight: "80dvh", // dynamic viewport so the header + close stay on-screen
           display: "flex",
           flexDirection: "column",
           background: "rgba(7,14,32,0.97)",
@@ -573,40 +573,46 @@ function MobileSectorDrawer({
           boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "10px 14px 6px",
-          }}
-        >
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.18)", margin: "0 auto" }} />
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 14px 20px" }}>
-          <SectorPanelContent {...sectorProps} />
-        </div>
+        {/* Tappable header: the grab handle + a "Sectors" title + a ✕, so there
+            are three obvious ways to dismiss (tap header, tap ✕, tap backdrop). */}
         <button
           onClick={onClose}
           aria-label="Close sectors panel"
           style={{
-            position: "absolute",
-            top: 10,
-            right: 12,
-            background: "rgba(255,255,255,0.10)",
-            border: "1px solid rgba(255,255,255,0.18)",
-            borderRadius: 8,
-            color: "white",
-            width: 32,
-            height: 32,
-            display: "grid",
-            placeItems: "center",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 16px 8px",
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
             cursor: "pointer",
-            fontSize: 14,
+            width: "100%",
           }}
         >
-          ✕
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.22)", position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)" }} />
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#e6edf7", letterSpacing: 0.4 }}>Sectors</span>
+          <span
+            aria-hidden="true"
+            style={{
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 8,
+              color: "white",
+              width: 30,
+              height: 30,
+              display: "grid",
+              placeItems: "center",
+              fontSize: 14,
+            }}
+          >
+            ✕
+          </span>
         </button>
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 14px calc(20px + env(safe-area-inset-bottom))" }}>
+          <SectorPanelContent {...sectorProps} />
+        </div>
       </div>
     </>
   );
