@@ -148,6 +148,7 @@ const pillBtn: React.CSSProperties = {
   color: "#fff",
   borderRadius: 6,
   padding: "5px 0",
+  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
   fontSize: 12,
   cursor: "pointer",
 };
@@ -164,14 +165,51 @@ function SectorPanelContent({
   hoveredSector,
   onHoverSector,
   onFocusSector,
-}: SectorPanelProps) {
+  onClose,
+}: SectorPanelProps & { onClose?: () => void }) {
   return (
     <>
-      <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>
-        Sectors
-      </div>
-      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
-        {loading ? "Loading…" : error ? "Error" : `${total} companies`}
+      {/* Header: title + company count. In the mobile drawer (`onClose` set) the
+          grab handle + ✕ share this row instead of a separate header. */}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        {onClose && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute", top: -4, left: "50%", transform: "translateX(-50%)",
+              width: 40, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.22)",
+            }}
+          />
+        )}
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>Sectors</div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+            {loading ? "Loading…" : error ? "Error" : `${total} companies`}
+          </div>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close sectors panel"
+            style={{
+              flex: "0 0 auto",
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 8, color: "white", width: 30, height: 30,
+              display: "grid", placeItems: "center", cursor: "pointer", fontSize: 14,
+            }}
+          >
+            ✕
+          </button>
+        )}
       </div>
       {error && (
         <div
@@ -573,45 +611,8 @@ function MobileSectorDrawer({
           boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Tappable header: the grab handle + a "Sectors" title + a ✕, so there
-            are three obvious ways to dismiss (tap header, tap ✕, tap backdrop). */}
-        <button
-          onClick={onClose}
-          aria-label="Close sectors panel"
-          style={{
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "10px 16px 8px",
-            background: "transparent",
-            border: "none",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            cursor: "pointer",
-            width: "100%",
-          }}
-        >
-          <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.22)", position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)" }} />
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#e6edf7", letterSpacing: 0.4 }}>Sectors</span>
-          <span
-            aria-hidden="true"
-            style={{
-              background: "rgba(255,255,255,0.10)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              borderRadius: 8,
-              color: "white",
-              width: 30,
-              height: 30,
-              display: "grid",
-              placeItems: "center",
-              fontSize: 14,
-            }}
-          >
-            ✕
-          </span>
-        </button>
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 14px calc(20px + env(safe-area-inset-bottom))" }}>
-          <SectorPanelContent {...sectorProps} />
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px calc(20px + env(safe-area-inset-bottom))" }}>
+          <SectorPanelContent {...sectorProps} onClose={onClose} />
         </div>
       </div>
     </>
