@@ -167,6 +167,14 @@ function SectorPanelContent({
   onFocusSector,
   onClose,
 }: SectorPanelProps & { onClose?: () => void }) {
+  // The mobile drawer is the only caller that passes `onClose`, so it doubles as
+  // the mobile/desktop discriminator. Sector rows read larger on the phone
+  // (touch target) and tighter on desktop.
+  const mobile = !!onClose;
+  const rowFont = mobile ? 16 : 13;
+  const rowPadV = mobile ? 8 : 6;
+  const rowGap = mobile ? 8 : 4; // vertical space between rows
+  const countFont = mobile ? 12 : 11;
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Fixed header — Sectors title, count, and All/None stay put while the
@@ -283,12 +291,18 @@ function SectorPanelContent({
                 display: "flex",
                 alignItems: "stretch",
                 gap: 0,
+                // The list is a column flexbox; without this, rows default to
+                // flex-shrink:1 and get COMPRESSED to fit when the content is
+                // taller than the container (short phone drawer) — which ate the
+                // padding and clipped the text. Keep each row at its natural
+                // height and let the container scroll instead.
+                flexShrink: 0,
                 borderRadius: 6,
                 overflow: "hidden",
                 opacity: on ? 1 : 0.45,
-                fontSize: 16,
+                fontSize: rowFont,
                 lineHeight: 1.1,
-                marginBottom: 8,
+                marginBottom: rowGap,
                 // Visible card so the row's 8px padding actually reads.
                 background: isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
                 border: isHovered
@@ -303,7 +317,7 @@ function SectorPanelContent({
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
-                  padding: "8px 8px",
+                  padding: `${rowPadV}px 8px`,
                   cursor: "pointer",
                   background: "transparent",
                   transition: "background 120ms",
@@ -438,14 +452,14 @@ function SectorPanelContent({
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "8px 8px",
+                  padding: `${rowPadV}px 8px`,
                   cursor: "pointer",
                   background: "transparent",
                   transition: "background 120ms",
                 }}
               >
                 <span style={{ flex: 1 }}>{s}</span>
-                <span style={{ opacity: 0.5, fontSize: 12 }}>{counts[s] ?? 0}</span>
+                <span style={{ opacity: 0.5, fontSize: countFont }}>{counts[s] ?? 0}</span>
               </div>
             </div>
           );
