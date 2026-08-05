@@ -22,8 +22,10 @@ const VALUATION_LABELS: Record<ValuationType, string> = {
   fundraising_valuation: "Fundraising Valuation",
   yearly_revenue: "Yearly Revenue",
 };
+import { MOBILE_COMPANY_POSITIONS, MOBILE_LAYOUT_SETTINGS, MOBILE_SECTOR_CENTERS } from "./mobileLayout";
 import {
   CANVAS_DESKTOP,
+  CANVAS_MOBILE_45,
   SECTOR_CENTERS,
   flatStyleForSector,
   hexToRgba,
@@ -45,18 +47,238 @@ import { useValuations, valuationAt, latestYear, latestUpdated, type ValuationDa
 
 const MOBILE_BREAKPOINT_PX = 768;
 
+// "Mobile" = a narrow (portrait-phone) viewport OR a phone held in landscape.
+// The landscape clause keys off a coarse pointer + short viewport so a phone on
+// its side (wider than the breakpoint) still gets the mobile chrome (drawer +
+// touch controls), while a desktop window or an iPad in landscape does not.
+const MOBILE_MEDIA_QUERY =
+  `(max-width: ${MOBILE_BREAKPOINT_PX}px), ` +
+  `(max-height: 500px) and (orientation: landscape) and (pointer: coarse)`;
+
 function useIsMobile(): boolean {
   const [m, setM] = useState<boolean>(() =>
-    typeof window !== "undefined" &&
-    window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches,
+    typeof window !== "undefined" && window.matchMedia(MOBILE_MEDIA_QUERY).matches,
   );
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`);
+    const mq = window.matchMedia(MOBILE_MEDIA_QUERY);
     const handler = (e: MediaQueryListEvent) => setM(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
   return m;
+}
+
+// ---- Mobile-only spacing overrides ----
+// The phone renders the full desktop-canvas map in a much smaller viewport, so
+// planets + labels crowd. These override the resolved layout knobs on MOBILE
+// ONLY (desktop is untouched), and are live-adjustable via the floating gear
+// panel (MobileSpacingControls). Each maps to a usePhysicsLayout knob:
+//   collidePadding — flat extra gap between planets, slide units (desktop base ~30)
+//   sizeSpacing    — extra gap scaled by planet radius (0.15 ≈ 15%); 0 = off
+//   packingDensity — planet ink fraction; LOWER = smaller planets, more room (desktop 0.5)
+//   labelSizePx    — label font px; smaller = less label overlap (desktop 10)
+type MobileSpacing = {
+  collidePadding: number;
+  sizeSpacing: number;
+  packingDensity: number;
+  labelSizePx: number;
+};
+const MOBILE_SPACING_DEFAULTS: MobileSpacing = {
+  collidePadding: 0,
+  sizeSpacing: 0,
+  packingDensity: 0.5,
+  labelSizePx: 10,
+};
+// Slider bounds for the mobile spacing panel.
+const MOBILE_SPACING_FIELDS: {
+  key: keyof MobileSpacing;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}[] = [
+  { key: "collidePadding", label: "Planet gap", min: 0, max: 300, step: 5 },
+  { key: "sizeSpacing", label: "Size-scaled gap", min: 0, max: 0.5, step: 0.01 },
+  { key: "packingDensity", label: "Planet size (density)", min: 0.25, max: 0.7, step: 0.01 },
+  { key: "labelSizePx", label: "Label size", min: 6, max: 16, step: 1 },
+];
+const MOBILE_SPACING_STORE_KEY = "mm.mobileSpacing";
+function loadMobileSpacing(): MobileSpacing {
+  if (typeof window === "undefined") return MOBILE_SPACING_DEFAULTS;
+  try {
+    const raw = window.localStorage.getItem(MOBILE_SPACING_STORE_KEY);
+    if (raw) return { ...MOBILE_SPACING_DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    /* ignore malformed storage */
+  }
+  return MOBILE_SPACING_DEFAULTS;
+}
+
+// Mobile map-shape iterations, toggled in the gear panel:
+//   full     — whole desktop map fit into the viewport ("meet"), letterboxed
+//              top/bottom (current look).
+//   vertical — the map region is inset between the view tabs and the bottom
+//              controls, and the viewBox is narrowed to that region's (portrait)
+//              aspect so the map fills it top-to-bottom (crops the far L/R,
+//              pan to see edges).
+type MobileMapLayout = "full" | "vertical";
+const MOBILE_MAP_LAYOUT_STORE_KEY = "mm.mobileMapLayout";
+function loadMobileMapLayout(): MobileMapLayout {
+  if (typeof window === "undefined") return "full";
+  try {
+    const raw = window.localStorage.getItem(MOBILE_MAP_LAYOUT_STORE_KEY);
+    if (raw === "vertical" || raw === "full") return raw;
+  } catch {
+    /* ignore */
+  }
+  return "full";
+}
+// Insets (px) carved out for the "vertical" map iteration — room for the view
+// tabs (top) and the bottom control stack. Tunable while we dial in the look.
+// Stronger sector gravity in the vertical view so planets hold their spread-out
+// portrait centers (fill the tall frame) instead of blobbing into the middle.
+// Fixed slide-unit extent of the portrait sector layout (centered on the canvas)
+// that the vertical view frames. Roughly the mobile sector-center grid (x ±900,
+// y ±1900) plus planet radii. Framing this fixed box — rather than a live node
+// bounding box — keeps the fit stable and immune to scattered outlier dots.
+
+// Floating gear button (top-right) + slide-down panel of sliders for the mobile
+// spacing knobs. Values are owned by the parent; this is presentational.
+function MobileSpacingControls({
+  open,
+  onToggle,
+  values,
+  onChange,
+  onReset,
+  layout,
+  onLayoutChange,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  values: MobileSpacing;
+  onChange: (v: MobileSpacing) => void;
+  onReset: () => void;
+  layout: MobileMapLayout;
+  onLayoutChange: (l: MobileMapLayout) => void;
+}) {
+  const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 16,
+        right: 16,
+        zIndex: 14,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 8,
+      }}
+    >
+      <button
+        aria-label="Spacing settings"
+        aria-pressed={open}
+        onClick={onToggle}
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          background: open ? "rgba(120,160,255,0.22)" : "rgba(0,0,0,0.5)",
+          border: open ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.2)",
+          color: "white",
+          display: "grid",
+          placeItems: "center",
+          backdropFilter: "blur(6px)",
+          cursor: "pointer",
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 20, display: "block", lineHeight: 1 }}>
+          tune
+        </span>
+      </button>
+      {open && (
+        <div
+          style={{
+            width: 244,
+            background: "rgba(10,14,24,0.92)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 12,
+            padding: 14,
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontFamily: calibri, fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>
+              Map spacing
+            </span>
+            <button
+              onClick={onReset}
+              style={{
+                fontFamily: calibri,
+                fontSize: 11,
+                color: "rgba(255,255,255,0.75)",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 6,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              Reset
+            </button>
+          </div>
+          {/* Map-shape iteration toggle */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>Map layout</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(["full", "vertical"] as MobileMapLayout[]).map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => onLayoutChange(opt)}
+                  style={{
+                    flex: 1,
+                    fontFamily: calibri,
+                    fontSize: 12,
+                    padding: "6px 0",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
+                    color: "white",
+                    background: layout === opt ? "rgba(120,160,255,0.25)" : "rgba(255,255,255,0.06)",
+                    border: layout === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.1)" }} />
+          {MOBILE_SPACING_FIELDS.map((f) => (
+            <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ display: "flex", justifyContent: "space-between", fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>
+                <span>{f.label}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>{values[f.key]}</span>
+              </span>
+              <input
+                type="range"
+                min={f.min}
+                max={f.max}
+                step={f.step}
+                value={values[f.key]}
+                onChange={(e) => onChange({ ...values, [f.key]: Number(e.target.value) })}
+                style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -70,6 +292,18 @@ function useIsEditMode(): boolean {
     const params = new URLSearchParams(window.location.search);
     const v = params.get("edit");
     return v === "1" || v === "true";
+  }, []);
+}
+
+/**
+ * Mobile-layout editor: `?edit=mobile` forces the 4:5 portrait view + drag
+ * editing on ANY device (so you can author the mobile layout on desktop with a
+ * mouse). Read once on mount.
+ */
+function useMobileEditMode(): boolean {
+  return useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("edit") === "mobile";
   }, []);
 }
 
@@ -303,12 +537,10 @@ function SectorPanelContent({
                 fontSize: rowFont,
                 lineHeight: 1.1,
                 marginBottom: rowGap,
-                // Visible card so the row's 8px padding actually reads.
+                // Visible card so the row's padding reads — no outline (hover is
+                // signalled by the background alone).
                 background: isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
-                border: isHovered
-                  ? "1px solid rgba(255,255,255,0.25)"
-                  : "1px solid rgba(255,255,255,0.08)",
-                transition: "background 120ms, border-color 120ms",
+                transition: "background 120ms",
               }}
             >
               {/* Checkbox half — toggles visibility; hover handled by parent row */}
@@ -2559,20 +2791,216 @@ async function buildMapFontCss(): Promise<string> {
   return mapFontCssCache;
 }
 
+// Floating toolbar for the mobile 4:5 layout editor (?edit=mobile): planet-size
+// scale slider, placement count, per-planet clear, and export.
+type MobilePhysics = {
+  collidePadding: number;
+  sizeSpacing: number;
+  repulsion: number;
+  sectorPull: number;
+  nameThreshold: number;
+};
+const MOBILE_PHYSICS_FIELDS: { key: keyof MobilePhysics; label: string; min: number; max: number; step: number }[] = [
+  { key: "collidePadding", label: "Planet gap", min: 0, max: 120, step: 2 },
+  { key: "sizeSpacing", label: "Size-scaled gap", min: 0, max: 0.4, step: 0.01 },
+  { key: "repulsion", label: "Spread (fill space)", min: 0, max: 120, step: 2 },
+  { key: "sectorPull", label: "Sector pull", min: 0, max: 0.25, step: 0.01 },
+  { key: "nameThreshold", label: "Name visibility (px)", min: 0, max: 120, step: 5 },
+];
+
+function MobileEditorToolbar({
+  placed,
+  total,
+  scale,
+  onScale,
+  physics,
+  onPhysics,
+  showWells,
+  onToggleWells,
+  selectedName,
+  selectedPlaced,
+  onClearSelected,
+  onDeselect,
+  onCopy,
+  onDownload,
+  onReset,
+}: {
+  placed: number;
+  total: number;
+  scale: number;
+  onScale: (n: number) => void;
+  physics: MobilePhysics;
+  onPhysics: (key: keyof MobilePhysics, value: number) => void;
+  showWells: boolean;
+  onToggleWells: () => void;
+  selectedName: string | null;
+  selectedPlaced: boolean;
+  onClearSelected: () => void;
+  onDeselect: () => void;
+  onCopy: () => void;
+  onDownload: () => void;
+  onReset: () => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
+  const btn: React.CSSProperties = {
+    fontFamily: calibri,
+    fontSize: 12,
+    color: "white",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: 6,
+    padding: "5px 10px",
+    cursor: "pointer",
+  };
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 16,
+        left: 16,
+        zIndex: 20,
+        width: 250,
+        background: "rgba(10,14,24,0.94)",
+        border: "1px solid rgba(255,255,255,0.16)",
+        borderRadius: 12,
+        padding: 14,
+        backdropFilter: "blur(10px)",
+        boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        fontFamily: calibri,
+        color: "white",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>Mobile 4:5 layout</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{placed}/{total}</span>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? "Expand" : "Collapse"}
+            style={{ ...btn, padding: "2px 8px", lineHeight: 1 }}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
+        </span>
+      </div>
+      {collapsed ? null : (
+      <>
+      <button
+        onClick={onToggleWells}
+        style={{ ...btn, background: showWells ? "rgba(124,224,255,0.25)" : "rgba(255,255,255,0.08)", borderColor: showWells ? "rgba(124,224,255,0.6)" : "rgba(255,255,255,0.2)" }}
+      >
+        {showWells ? "Hide sector wells" : "Show sector wells"}
+      </button>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.85 }}>
+          <span>Planet scale</span>
+          <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>{scale.toFixed(2)}×</span>
+        </span>
+        <input
+          type="range"
+          min={0.3}
+          max={3}
+          step={0.05}
+          value={scale}
+          onChange={(e) => onScale(Number(e.target.value))}
+          style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
+        />
+      </label>
+      {MOBILE_PHYSICS_FIELDS.map((f) => (
+        <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.85 }}>
+            <span>{f.label}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>
+              {f.step < 1 ? physics[f.key].toFixed(2) : Math.round(physics[f.key])}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={f.min}
+            max={f.max}
+            step={f.step}
+            value={physics[f.key]}
+            onChange={(e) => onPhysics(f.key, Number(e.target.value))}
+            style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
+          />
+        </label>
+      ))}
+      <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
+        {selectedName ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ color: "#ffe066" }}>{selectedName}</span>
+              {selectedPlaced ? " · placed" : " · auto"}
+            </span>
+            <span style={{ display: "flex", gap: 4, flex: "0 0 auto" }}>
+              {selectedPlaced && (
+                <button onClick={onClearSelected} style={{ ...btn, padding: "3px 8px" }}>Clear</button>
+              )}
+              <button onClick={onDeselect} style={{ ...btn, padding: "3px 8px" }}>✕</button>
+            </span>
+          </div>
+        ) : (
+          <span>Drag planets to place them inside the dashed 4:5 frame.</span>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={onCopy} style={{ ...btn, flex: 1 }}>Copy</button>
+        <button onClick={onDownload} style={{ ...btn, flex: 1 }}>Download</button>
+        <button onClick={onReset} style={btn}>Reset</button>
+      </div>
+      </>
+      )}
+    </div>
+  );
+}
+
 export default function MediaMap() {
   const isMobile = useIsMobile();
   const isEditMode = useIsEditMode();
-  // Temporary mobile plan: use the desktop map layout on phones too (same
-  // canvas, sector centers, pins, connections) rather than the portrait grid.
-  // The whole map is fit to the viewport ("meet"), and only Large Cap labels
-  // show until the user zooms in (see suppressNonLargeCapLabel below).
-  const canvas = useMemo(() => CANVAS_DESKTOP, []);
+  // Mobile "vertical" iteration (gear panel): re-layout on the portrait canvas
+  // with mobile sector centers so every planet fits a tall viewport, instead of
+  // fitting/cropping the landscape desktop map. Declared early because `canvas`
+  // and the physics inputs switch on it.
+  const [mobileMapLayout, setMobileMapLayout] = useState<MobileMapLayout>(loadMobileMapLayout);
+  // `?edit=mobile` forces the 4:5 view + drag editing on any device (author on
+  // desktop). `mobileDesign` = the 4:5 portrait view is active — either a real
+  // phone in "vertical" mode, or the editor on any device.
+  const mobileEdit = useMobileEditMode();
+  const verticalMap = (isMobile && mobileMapLayout === "vertical") || mobileEdit;
+  // Desktop / "full" mobile use the landscape canvas; "vertical" uses the
+  // portrait canvas. The map is fit to the viewport ("meet"), and on mobile only
+  // Large Cap labels show until the user zooms in (see suppressNonLargeCapLabel).
+  const canvas = useMemo(() => (verticalMap ? CANVAS_MOBILE_45 : CANVAS_DESKTOP), [verticalMap]);
 
   // Per-company position overrides. Seeded from the file at mount; mutated in
   // memory by the editor; saved by exporting back to layout.ts (manual paste).
   const [positions, setPositions] = useState<Record<string, PlanetPosition>>(
     () => ({ ...COMPANY_POSITIONS }),
   );
+  // Mobile (4:5) hand-placed positions + global planet scale, authored via
+  // ?edit=mobile and exported to mobileLayout.ts.
+  const [mobilePositions, setMobilePositions] = useState<Record<string, { x: number; y: number }>>(
+    () => ({ ...MOBILE_COMPANY_POSITIONS }),
+  );
+  const [mobileScale, setMobileScale] = useState<number>(MOBILE_LAYOUT_SETTINGS.scale);
+  // Live-tunable 4:5-view physics + name threshold (sliders in the ?edit=mobile
+  // toolbar). Seeded from the saved settings; exported with the layout.
+  const [mobilePhysics, setMobilePhysics] = useState({
+    collidePadding: MOBILE_LAYOUT_SETTINGS.collidePadding,
+    sizeSpacing: MOBILE_LAYOUT_SETTINGS.sizeSpacing,
+    repulsion: MOBILE_LAYOUT_SETTINGS.repulsion,
+    sectorPull: MOBILE_LAYOUT_SETTINGS.sectorPull,
+    nameThreshold: MOBILE_LAYOUT_SETTINGS.nameThreshold,
+  });
+  // 4:5 sector gravity wells (draggable in ?edit=mobile) + their visibility.
+  const [mobileSectorCenters, setMobileSectorCenters] = useState<Record<string, { x: number; y: number }>>(
+    () => ({ ...MOBILE_SECTOR_CENTERS }),
+  );
+  const [showSectorWells, setShowSectorWells] = useState(true);
 
   // Editor-only state. Selected planet drives the inspector; dragState is the
   // planet currently being dragged in slide-coords. Both are no-ops outside
@@ -2613,6 +3041,25 @@ export default function MediaMap() {
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
+  // Live-tunable mobile spacing (floating gear panel). Persisted to localStorage
+  // so tuning survives reloads. Applied to `eff` on mobile only (see below).
+  const [mobileSpacing, setMobileSpacing] = useState<MobileSpacing>(loadMobileSpacing);
+  const [spacingPanelOpen, setSpacingPanelOpen] = useState(false);
+  // (mobileMapLayout is declared at the top of the component — it gates `canvas`.)
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MOBILE_SPACING_STORE_KEY, JSON.stringify(mobileSpacing));
+    } catch {
+      /* ignore storage failures (private mode, quota) */
+    }
+  }, [mobileSpacing]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MOBILE_MAP_LAYOUT_STORE_KEY, mobileMapLayout);
+    } catch {
+      /* ignore */
+    }
+  }, [mobileMapLayout]);
   // Name of the planet currently shown in the right-side detail panel.
   // Set on click in non-edit mode; cleared by the panel's close button.
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
@@ -3044,7 +3491,7 @@ export default function MediaMap() {
   // Layout knobs: Sanity's saved Map Editor settings (at the viewed moment) win
   // over the local edit-toolbar state, so the public map matches the editor's
   // spacing/density. Falls back to the local defaults when Sanity has no settings.
-  const eff = {
+  const effBase = {
     packingDensity: sanity?.settings?.packingDensity ?? packingDensity,
     collidePadding: sanity?.settings?.collidePadding ?? collidePadding,
     labelSizePx: sanity?.settings?.labelSizePx ?? labelSizePx,
@@ -3054,6 +3501,22 @@ export default function MediaMap() {
     sectorPull: sanity?.settings?.sectorPull,
     repulsion: sanity?.settings?.repulsion,
   };
+  // On mobile, layer the live-tunable mobile spacing on top (desktop = effBase).
+  // Layout knobs: base (Sanity/local) → mobile gear (phone) → 4:5-view physics.
+  // The 4:5 view gets its own collision + repulsion so all planets spread to
+  // FILL the frame without overlapping (unplaced ones flow around the pins).
+  const eff = {
+    ...effBase,
+    ...(isMobile ? mobileSpacing : {}),
+    ...(verticalMap
+      ? {
+          sectorPull: mobilePhysics.sectorPull,
+          collidePadding: mobilePhysics.collidePadding,
+          sizeSpacing: mobilePhysics.sizeSpacing,
+          repulsion: mobilePhysics.repulsion,
+        }
+      : {}),
+  };
 
   const anchorDiam = useMemo(
     () =>
@@ -3061,8 +3524,9 @@ export default function MediaMap() {
         displayedCompanies.map((c) => c.valuation_b),
         canvas.w * canvas.h,
         eff.packingDensity,
-      ),
-    [displayedCompanies, canvas, eff.packingDensity],
+        // Mobile 4:5 view: global planet-size multiplier from the editor slider.
+      ) * (verticalMap ? mobileScale : 1),
+    [displayedCompanies, canvas, eff.packingDensity, verticalMap, mobileScale],
   );
 
   // Natural slide-units-per-pixel at zoom=1 — used to size label-collision
@@ -3072,7 +3536,12 @@ export default function MediaMap() {
   // width-fitted, so we pick whichever dimension drives the active viewBox.
   const naturalSlideUnitsPerPx = useMemo(() => {
     if (containerW === 0 || containerH === 0) return 1;
-    return layoutMode === "linear" ? canvas.h / containerH : canvas.w / containerW;
+    // Map mode fits with "meet" (contain) → the limiting dimension is whichever
+    // ratio is larger. Landscape canvas in a landscape-ish box is width-limited
+    // (canvas.w/containerW); the portrait canvas is height-limited.
+    return layoutMode === "linear"
+      ? canvas.h / containerH
+      : Math.max(canvas.w / containerW, canvas.h / containerH);
   }, [layoutMode, canvas, containerW, containerH]);
 
   // Per-planet label half-extent (slide units). The label is rendered as one
@@ -3115,12 +3584,21 @@ export default function MediaMap() {
       .filter((c) => enabled.has(c.sector))
       .map((c) => {
         const unknownIdx = unknownSectors.indexOf(c.sector);
-        // Sanity wins for center/hue/style when configured; else the local
-        // sectors.ts defaults (and edit-mode sector overrides).
-        const center =
-          sanity?.centerBySector[c.sector] ??
-          sectorPositions[c.sector] ??
-          sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
+        // Mobile 4:5 view: start unplaced planets from the mobile sector centers
+        // scaled into the smaller 4:5 canvas (they'll be dragged into place in
+        // the editor; hand-placed ones are pinned via `positions`). Otherwise
+        // Sanity wins, then local defaults.
+        let center: { x: number; y: number };
+        if (verticalMap) {
+          // Dragged well wins; else the scaled default mobile grid.
+          const c0 = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, true);
+          center = mobileSectorCenters[c.sector] ?? { x: c0.x * 0.66, y: c0.y * 0.5 };
+        } else {
+          center =
+            sanity?.centerBySector[c.sector] ??
+            sectorPositions[c.sector] ??
+            sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
+        }
         // Red label when the value isn't live-sourced from the valuation sheet
         // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
         const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
@@ -3137,19 +3615,29 @@ export default function MediaMap() {
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
     const entityInputs = (sanity?.entities ?? []).filter((e) => enabled.has(e.sector));
     return [...companyInputs, ...entityInputs];
-  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate]);
+  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, verticalMap, mobileSectorCenters]);
 
   // Connections used for both physics and rendering: Sanity (windowed at T) when
   // configured, else the local edit-state. The edit-mode connection authoring
   // (selection/draw/export) still operates on the local `connections` state.
   const effectiveConnections = sanity ? sanity.connections : connections;
 
+  // Mobile (4:5) placements as hard pins so planets stay exactly where they're
+  // dropped; live drags override via `dragState` in the renderer. Companies with
+  // no mobile position fall back to their sector center + physics.
+  const mobilePinnedPositions = useMemo(() => {
+    const out: Record<string, PlanetPosition> = {};
+    for (const [name, p] of Object.entries(mobilePositions)) out[name] = { x: p.x, y: p.y, pin: true };
+    return out;
+  }, [mobilePositions]);
+
   const nodes = usePhysicsLayout({
     inputs,
     bounds: physicsBounds,
     viewMode: layoutMode,
-    positions: sanity ? sanity.positions : positions,
-    isEditMode,
+    // Mobile 4:5 view uses the hand-placed pins; desktop uses Sanity/local.
+    positions: verticalMap ? mobilePinnedPositions : sanity ? sanity.positions : positions,
+    isEditMode: isEditMode || mobileEdit,
     anchorDiam,
     collidePadding: eff.collidePadding,
     entityRadius: eff.entityRadius,
@@ -3160,7 +3648,6 @@ export default function MediaMap() {
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
   });
-
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
   // and a horizontal scrollbar appears.
@@ -3188,6 +3675,9 @@ export default function MediaMap() {
   }, []);
 
   const view = useMemo(() => {
+    // Both desktop and the mobile 4:5 view frame the whole canvas ("meet"), so
+    // the 4:5 view shows the entire portrait frame (fits the measured region on
+    // a phone; letterboxed in the wide desktop editor).
     const w = canvas.w / zoom;
     const h = canvas.h / zoom;
     const cx = canvas.x + canvas.w / 2 + pan.x;
@@ -3203,7 +3693,9 @@ export default function MediaMap() {
   const slideUnitsPerPx =
     layoutMode === "linear"
       ? containerH > 0 ? canvas.h / (containerH * zoom) : 1
-      : containerW > 0 ? view.w / containerW : 1;
+      : containerW > 0 && containerH > 0
+        ? Math.max(view.w / containerW, view.h / containerH) // "meet": limiting ratio
+        : 1;
 
   // Drag-to-pan (no auto-recenter on release — felt distracting).
   const dragRef = useRef<{ startX: number; startY: number; pan0: { x: number; y: number } } | null>(null);
@@ -3278,30 +3770,30 @@ export default function MediaMap() {
   };
   const onMouseUp = (e: React.MouseEvent) => {
     if (isSyntheticMouse()) return;
-    // Commit a sector drag (if active) to the sector-position overrides.
+    // Commit a sector-well drag (if active). Mobile editor → 4:5 wells; else
+    // the desktop sector-position overrides.
     if (sectorDragRef.current && sectorDragState && didDragRef.current) {
       const name = sectorDragRef.current.name;
-      setSectorPositions((prev) => ({
-        ...prev,
-        [name]: {
-          x: Math.round(sectorDragState.x),
-          y: Math.round(sectorDragState.y),
-        },
-      }));
+      const pos = { x: Math.round(sectorDragState.x), y: Math.round(sectorDragState.y) };
+      if (mobileEdit) setMobileSectorCenters((prev) => ({ ...prev, [name]: pos }));
+      else setSectorPositions((prev) => ({ ...prev, [name]: pos }));
     }
     sectorDragRef.current = null;
     setSectorDragState(null);
-    // Commit a planet drag (if active) to the positions state.
+    // Commit a planet drag (if active). In the mobile editor it writes the 4:5
+    // placement; otherwise the desktop positions.
     if (planetDragRef.current && dragState && didDragRef.current) {
       const name = planetDragRef.current.name;
-      setPositions((prev) => ({
-        ...prev,
-        [name]: {
-          x: Math.round(dragState.x),
-          y: Math.round(dragState.y),
-          pin: prev[name]?.pin ?? false,
-        },
-      }));
+      const x = Math.round(dragState.x);
+      const y = Math.round(dragState.y);
+      if (mobileEdit) {
+        setMobilePositions((prev) => ({ ...prev, [name]: { x, y } }));
+      } else {
+        setPositions((prev) => ({
+          ...prev,
+          [name]: { x, y, pin: prev[name]?.pin ?? false },
+        }));
+      }
     }
     planetDragRef.current = null;
     setDragState(null);
@@ -3381,7 +3873,7 @@ export default function MediaMap() {
 
   // Begin a planet drag in edit mode. Called from Planet's onMouseDown.
   const onPlanetDragStart = (node: PlanetNode, e: React.MouseEvent) => {
-    if (!isEditMode) return;
+    if (!isEditMode && !mobileEdit) return;
     e.stopPropagation();
     cancelZoomAnim();
     planetDragRef.current = {
@@ -3401,7 +3893,7 @@ export default function MediaMap() {
     centerY: number,
     e: React.MouseEvent,
   ) => {
-    if (!isEditMode) return;
+    if (!isEditMode && !mobileEdit) return;
     e.stopPropagation();
     cancelZoomAnim();
     sectorDragRef.current = {
@@ -3471,6 +3963,57 @@ export default function MediaMap() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // ---- Mobile (4:5) editor export ----
+  const exportMobileLayoutAsCode = () => {
+    const entries = Object.entries(mobilePositions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, p]) => `  ${JSON.stringify(name)}: { x: ${Math.round(p.x)}, y: ${Math.round(p.y)} },`)
+      .join("\n");
+    const settings =
+      `export const MOBILE_LAYOUT_SETTINGS = {\n` +
+      `  scale: ${mobileScale.toFixed(3)},\n` +
+      `  collidePadding: ${Math.round(mobilePhysics.collidePadding)},\n` +
+      `  sizeSpacing: ${mobilePhysics.sizeSpacing.toFixed(3)},\n` +
+      `  repulsion: ${Math.round(mobilePhysics.repulsion)},\n` +
+      `  sectorPull: ${mobilePhysics.sectorPull.toFixed(3)},\n` +
+      `  nameThreshold: ${Math.round(mobilePhysics.nameThreshold)},\n` +
+      `};\n`;
+    const wells = Object.entries(mobileSectorCenters)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, p]) => `  ${JSON.stringify(name)}: { x: ${Math.round(p.x)}, y: ${Math.round(p.y)} },`)
+      .join("\n");
+    return (
+      `// Generated by ?edit=mobile. Paste into src/mobileLayout.ts.\n` +
+      `export const MOBILE_SECTOR_CENTERS: Record<string, MobilePosition> = {\n${wells}\n};\n\n` +
+      `export const MOBILE_COMPANY_POSITIONS: Record<string, MobilePosition> = {\n${entries}\n};\n\n` +
+      settings
+    );
+  };
+  const saveMobileToClipboard = async () => {
+    const code = exportMobileLayoutAsCode();
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      console.log(code);
+    }
+  };
+  const saveMobileAsDownload = () => {
+    const blob = new Blob([exportMobileLayoutAsCode()], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mobileLayout.ts";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const resetMobilePositions = () => setMobilePositions({ ...MOBILE_COMPANY_POSITIONS });
+  const clearMobilePosition = (name: string) =>
+    setMobilePositions((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
 
   // True when in-memory positions differ from the on-disk source.
   const isDirty = useMemo(() => {
@@ -3737,7 +4280,8 @@ export default function MediaMap() {
     animateView(targetZoom, targetPan);
   };
 
-  // Reset to the full view, smoothly.
+  // Reset to the default view, smoothly. In vertical mode the base view is
+  // already the content-fit (see the `view` memo), so zoom=1/pan=0 frames it.
   const resetView = () => {
     animateView(1, { x: 0, y: 0 }, 1100);
   };
@@ -3987,6 +4531,9 @@ export default function MediaMap() {
         <div
           style={{
             position: "absolute",
+            // Fill the whole map area. In the mobile 4:5 view the canvas is
+            // width-limited under "meet", so it spans the full phone width and
+            // extends behind the tab/control overlays (which sit on top).
             inset: 0,
             opacity: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? 0 : 1,
             pointerEvents: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? "none" : "auto",
@@ -4083,6 +4630,21 @@ export default function MediaMap() {
               fill="url(#starfield)"
               opacity={0.6}
             />
+
+            {/* 4:5 frame guide — the mobile canvas bounds, shown in the editor. */}
+            {mobileEdit && (
+              <rect
+                x={canvas.x}
+                y={canvas.y}
+                width={canvas.w}
+                height={canvas.h}
+                fill="none"
+                stroke="#ffe066"
+                strokeWidth={3 * slideUnitsPerPx}
+                strokeDasharray={`${12 * slideUnitsPerPx} ${8 * slideUnitsPerPx}`}
+                pointerEvents="none"
+              />
+            )}
 
             {/* Connection lines — drawn beneath the planets so the circles and
                 labels stay on top. Map mode only (in linear mode the planets
@@ -4209,7 +4771,7 @@ export default function MediaMap() {
                   onClick={(node) => {
                     if (didDragRef.current) return;
                     bgClickSuppressRef.current = true; // a planet click, not a background click
-                    if (isEditMode) {
+                    if (isEditMode || mobileEdit) {
                       if (connectMode) {
                         handleConnectClick(node.name);
                       } else {
@@ -4223,17 +4785,22 @@ export default function MediaMap() {
                   }}
                   dimmed={hoveredSector !== null && n.sector !== hoveredSector}
                   labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
-                  isEditMode={isEditMode}
+                  isEditMode={isEditMode || mobileEdit}
                   isSelected={
-                    isEditMode &&
+                    (isEditMode || mobileEdit) &&
                     (selectedPlanet === n.name ||
                       (connectMode && connectFrom === n.name))
                   }
-                  onPlanetMouseDown={isEditMode && !connectMode ? onPlanetDragStart : undefined}
+                  onPlanetMouseDown={(isEditMode || mobileEdit) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                  // 4:5 view: show names by on-screen size (tunable threshold).
+                  // Other mobile: only Large Cap until zoomed in.
                   labelSuppressed={
-                    isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
+                    verticalMap
+                      ? false
+                      : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
                   }
+                  labelMinScreenDiameter={verticalMap ? mobilePhysics.nameThreshold : 0}
                 />
               );
             })}
@@ -4294,6 +4861,59 @@ export default function MediaMap() {
                 );
               });
             })()}
+
+            {/* Mobile 4:5 sector wells — draggable gravity centers. */}
+            {mobileEdit && showSectorWells && (() => {
+              const visibleSectors = allSectors.filter((s) => enabled.has(s));
+              const unknownVisible = visibleSectors.filter((s) => !isKnownSector(s));
+              const chipW = 110 * slideUnitsPerPx;
+              const chipH = 24 * slideUnitsPerPx;
+              const chipFontPx = 11 * slideUnitsPerPx;
+              return visibleSectors.map((s) => {
+                const unknownIdx = unknownVisible.indexOf(s);
+                const c0 = sectorCenterFor(s, unknownIdx, unknownVisible.length, true);
+                const baseCenter = mobileSectorCenters[s] ?? { x: c0.x * 0.66, y: c0.y * 0.5 };
+                const liveCenter =
+                  sectorDragState && sectorDragState.name === s
+                    ? { x: sectorDragState.x, y: sectorDragState.y }
+                    : baseCenter;
+                const isOverridden = !!mobileSectorCenters[s];
+                return (
+                  <g
+                    key={`msec-${s}`}
+                    transform={`translate(${liveCenter.x},${liveCenter.y})`}
+                    style={{ cursor: "grab" }}
+                    onMouseDown={(e) => onSectorDragStart(s, baseCenter.x, baseCenter.y, e)}
+                  >
+                    <circle r={7 * slideUnitsPerPx} fill="#7ce0ff" opacity={0.9} />
+                    <rect
+                      x={-chipW / 2}
+                      y={chipH * 0.4}
+                      width={chipW}
+                      height={chipH}
+                      rx={4 * slideUnitsPerPx}
+                      fill={isOverridden ? "rgba(124,224,255,0.45)" : "rgba(124,224,255,0.18)"}
+                      stroke="#7ce0ff"
+                      strokeWidth={1.5 * slideUnitsPerPx}
+                    />
+                    <text
+                      x={0}
+                      y={chipH * 0.4 + chipH / 2}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={chipFontPx}
+                      fontWeight={700}
+                      fill="#7ce0ff"
+                      stroke="rgba(0,0,0,0.75)"
+                      strokeWidth={0.6 * slideUnitsPerPx}
+                      style={{ paintOrder: "stroke fill", letterSpacing: 0.8, textTransform: "uppercase", pointerEvents: "none", userSelect: "none" }}
+                    >
+                      {s}
+                    </text>
+                  </g>
+                );
+              });
+            })()}
           </svg>
         </div>
         </div>
@@ -4316,6 +4936,27 @@ export default function MediaMap() {
           zoomTarget={aggZoomTarget}
           highlightSector={hoveredSector}
         />
+
+        {/* Mobile 4:5 layout editor toolbar — only with ?edit=mobile. */}
+        {mobileEdit && (
+          <MobileEditorToolbar
+            placed={Object.keys(mobilePositions).length}
+            total={displayedCompanies.filter((c) => enabled.has(c.sector)).length}
+            scale={mobileScale}
+            onScale={setMobileScale}
+            physics={mobilePhysics}
+            onPhysics={(k, v) => setMobilePhysics((p) => ({ ...p, [k]: v }))}
+            showWells={showSectorWells}
+            onToggleWells={() => setShowSectorWells((v) => !v)}
+            selectedName={selectedPlanet}
+            selectedPlaced={!!(selectedPlanet && mobilePositions[selectedPlanet])}
+            onClearSelected={() => selectedPlanet && clearMobilePosition(selectedPlanet)}
+            onDeselect={() => setSelectedPlanet(null)}
+            onCopy={saveMobileToClipboard}
+            onDownload={saveMobileAsDownload}
+            onReset={resetMobilePositions}
+          />
+        )}
 
         {/* Editor toolbar — only rendered when ?edit=1 is in the URL. */}
         {isEditMode && (
@@ -4373,7 +5014,8 @@ export default function MediaMap() {
             style={{
               position: "absolute",
               top: 16,
-              right: 16,
+              // Mobile: anchor to the left edge; desktop: keep it upper-right.
+              ...(isMobile ? { left: 16 } : { right: 16 }),
               zIndex: 12,
               display: "flex",
               background: "rgba(255,255,255,0.08)",
@@ -4406,7 +5048,7 @@ export default function MediaMap() {
                     transition: "background 160ms, color 160ms, box-shadow 160ms",
                   }}
                 >
-                  {mode.toUpperCase()}
+                  <span className="cap-center">{mode.toUpperCase()}</span>
                 </button>
               );
             })}
@@ -4564,7 +5206,7 @@ export default function MediaMap() {
             }}
           >
             <span className="material-symbols-outlined" style={{ opacity: 0.6, fontSize: 16 }}>history</span>
-            TIME MACHINE
+            <span className="cap-center">TIME MACHINE</span>
           </button>
         </div>
 
@@ -4596,7 +5238,7 @@ export default function MediaMap() {
             }}
           >
             <span style={{ opacity: 0.5, fontSize: 11 }}>✕</span>
-            CLOSE TIMELINE
+            <span className="cap-center">CLOSE TIMELINE</span>
           </button>
         )}
 
@@ -4668,27 +5310,44 @@ export default function MediaMap() {
                 border: "1px solid rgba(255,255,255,0.15)",
               }}
             >
-              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
               <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
+              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
               <button
                 aria-label="Refresh view"
                 className="mm-hover"
                 onClick={() => (viewMode === "aggregate" ? setAggZoomTarget(1) : resetView())}
                 style={{
                   ...zoomBtnStyle,
-                  width: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "0 12px",
-                  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: 1,
+                  // Mobile: icon-only, so keep the square 34×34 zoom-button footprint
+                  // (grid + placeItems:center) → same width as − / +, icon centered.
+                  // Desktop: auto-width pill with the REFRESH label.
+                  ...(isMobile
+                    ? {}
+                    : {
+                        width: "auto",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "0 12px",
+                        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: 1,
+                      }),
                 }}
               >
-                REFRESH
-                <span className="material-symbols-outlined" style={{ opacity: 0.6, fontSize: 16 }}>refresh</span>
+                {!isMobile && <span className="cap-center">REFRESH</span>}
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    opacity: isMobile ? 1 : 0.6,
+                    fontSize: isMobile ? 18 : 16,
+                    display: "block",
+                    lineHeight: 1,
+                  }}
+                >
+                  refresh
+                </span>
               </button>
             </div>
             {viewMode === "map" && (
@@ -4717,6 +5376,20 @@ export default function MediaMap() {
         )}
 
       </div>
+
+      {/* Mobile-only: floating gear panel to live-tune map spacing. Hidden while
+          the timeline is open (CLOSE TIMELINE sits in the same top-right spot). */}
+      {isMobile && !timelineOpen && (
+        <MobileSpacingControls
+          open={spacingPanelOpen}
+          onToggle={() => setSpacingPanelOpen((o) => !o)}
+          values={mobileSpacing}
+          onChange={setMobileSpacing}
+          onReset={() => setMobileSpacing(MOBILE_SPACING_DEFAULTS)}
+          layout={mobileMapLayout}
+          onLayoutChange={setMobileMapLayout}
+        />
+      )}
 
       {/* Mobile-only: bottom pill bar that opens the sectors drawer. */}
       {isMobile && (

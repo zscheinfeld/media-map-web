@@ -192,6 +192,46 @@ function liveCollide(
  * Only the non-pinned end moves; pinned planets act as fixed anchors. Clamped at
  * 0.9 so high strengths pull hard and converge fast without overshooting.
  */
+/**
+ * Hard guarantee that no FREE planet sits inside a FIXED (pinned) one — the most
+ * visible overlap artifact (a small planet's label floating on a huge planet).
+ * Ejects each overlapping free planet radially to the pinned planet's edge, at
+ * full strength. A few iterations handle a free planet caught between two pinned
+ * planets. Cheap: O(fixed × free). Run AFTER the general de-overlap so nothing
+ * pushes the free planets back in.
+ */
+function ejectFromFixed(
+  nodes: PlanetNode[],
+  padding: number,
+  entityRadius: number,
+  sizeSpacing: number,
+  iterations: number,
+) {
+  const fixed = nodes.filter(isFixed)
+  if (!fixed.length) return
+  for (let k = 0; k < iterations; k++) {
+    for (const a of nodes) {
+      if (isFixed(a)) continue
+      const ra = collisionRadius(a, padding, entityRadius, sizeSpacing)
+      for (const f of fixed) {
+        const min = collisionRadius(f, padding, entityRadius, sizeSpacing) + ra
+        let dx = a.x - f.x
+        let dy = a.y - f.y
+        let l2 = dx * dx + dy * dy
+        if (l2 >= min * min) continue
+        if (l2 < 1e-6) {
+          dx = 1
+          dy = 0
+          l2 = 1
+        }
+        const l = Math.sqrt(l2)
+        a.x = f.x + (dx / l) * min
+        a.y = f.y + (dy / l) * min
+      }
+    }
+  }
+}
+
 function connectionForce(links: [PlanetNode, PlanetNode][], strength: number) {
   const force = (alpha: number) => {
     for (const [a, b] of links) {
@@ -271,6 +311,10 @@ export type PhysicsOptions = {
   isEditMode?: boolean
   /** Apple's diameter in slide units (see sizing.computeAnchorDiam). */
   anchorDiam?: number
+  /** Minimum planet radius (slide units). Floors tiny small-cap planets so they
+   *  stay visible — used on the portrait/mobile view where they'd be sub-pixel
+   *  dots. 0 = no floor (pure valuation-proportional sizing). */
+  minRadius?: number
   /** Extra spacing between planets, slide units. */
   collidePadding?: number
   /**
@@ -326,6 +370,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     positions = {},
     isEditMode = false,
     anchorDiam = ANCHOR_DIAM_FALLBACK,
+    minRadius = 0,
     collidePadding = 80,
     entityRadius = 140,
     sizeSpacing = 0,
@@ -396,7 +441,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const center = c.center
       // Entities are text-only: no radius (collision spacing comes from their
       // label box + the entity-padding knob).
-      const r = c.isEntity ? 0 : diameterFor(c.valuation_b, anchorDiam) / 2
+      const r = c.isEntity ? 0 : Math.max(minRadius, diameterFor(c.valuation_b, anchorDiam) / 2)
       const pos = positions[c.name]
       const targetX = pos ? pos.x : center.x
       const targetY = pos ? pos.y : center.y
@@ -609,11 +654,14 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       // bursts of the attraction sim: planets spread apart without drifting off
       // their sector, and pinned planets stay fixed. End on a de-overlap pass so
       // the snapshot the tween eases toward is overlap-free.
-      for (let round = 0; round < 8; round++) {
-        separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 10, 1)
+      for (let round = 0; round < 10; round++) {
+        separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 16, 1)
         sim.tick(20)
       }
-      separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 16, 1)
+      // Final hard de-overlap: many sweeps so tight clusters around big pinned
+      // planets fully resolve (the snapshot the tween eases toward is final).
+      separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 60, 1)
+      ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
 
       const settled = new Map<string, {x: number; y: number}>()
       const savedFx = new Map<string, {fx: number | null; fy: number | null}>()
@@ -747,6 +795,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           // Hard guarantee: after the soft forces step, directly separate any
           // remaining overlaps so the rendered frame is never overlapping.
           separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 2, 0.5)
+          ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 2)
           setNodes(built.slice())
         })
       simRef.current = sim
@@ -786,6 +835,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         prewarm.tick(5)
       }
       separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 20, 1)
+      ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
     }
 
     const sim = forceSimulation<PlanetNode>(built)
@@ -811,6 +861,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         if (anyTweening) sim.alphaTarget(0.08)
         else if (sim.alphaTarget() > 0) sim.alphaTarget(0)
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 2, 0.5)
+        ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 2)
         setNodes(built.slice())
       })
     simRef.current = sim

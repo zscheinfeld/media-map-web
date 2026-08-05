@@ -35,6 +35,26 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* All-caps button labels sit optically high: Calibri's line box keeps empty
+   descender space below the caps (all-caps text has no descenders), so vertical
+   centering leaves more gap below than above. Trim the text box to the cap /
+   baseline edges where supported (perfect optical centering); fall back to a
+   small proportional downward nudge everywhere else. Applies desktop + mobile. */
+.cap-center {
+  /* inline-block so it's a block container in every context (incl. non-flex
+     buttons like the view-mode tabs) — text-box-trim only trims block
+     containers, so an inline span wouldn't get trimmed. */
+  display: inline-block;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+}
+@supports not (text-box-trim: trim-both) {
+  .cap-center {
+    position: relative;
+    top: 0.06em;
+  }
+}
+
 /* Sidebar collapse/expand icon buttons: white, 50% by default, 100% on hover. */
 .panel-icon-btn {
   color: rgba(255, 255, 255, 0.5);
