@@ -22,10 +22,11 @@ const VALUATION_LABELS: Record<ValuationType, string> = {
   fundraising_valuation: "Fundraising Valuation",
   yearly_revenue: "Yearly Revenue",
 };
-import { MOBILE_COMPANY_POSITIONS, MOBILE_LAYOUT_SETTINGS, MOBILE_SECTOR_CENTERS } from "./mobileLayout";
+import { MOBILE_LAYOUTS, type MobileViewType, type MobileLayout, type MobileSettings } from "./mobileLayout";
 import {
   CANVAS_DESKTOP,
   CANVAS_MOBILE_45,
+  CANVAS_MOBILE_HORIZONTAL,
   SECTOR_CENTERS,
   flatStyleForSector,
   hexToRgba,
@@ -68,98 +69,96 @@ function useIsMobile(): boolean {
   return m;
 }
 
-// ---- Mobile-only spacing overrides ----
-// The phone renders the full desktop-canvas map in a much smaller viewport, so
-// planets + labels crowd. These override the resolved layout knobs on MOBILE
-// ONLY (desktop is untouched), and are live-adjustable via the floating gear
-// panel (MobileSpacingControls). Each maps to a usePhysicsLayout knob:
-//   collidePadding — flat extra gap between planets, slide units (desktop base ~30)
-//   sizeSpacing    — extra gap scaled by planet radius (0.15 ≈ 15%); 0 = off
-//   packingDensity — planet ink fraction; LOWER = smaller planets, more room (desktop 0.5)
-//   labelSizePx    — label font px; smaller = less label overlap (desktop 10)
-type MobileSpacing = {
-  collidePadding: number;
-  sizeSpacing: number;
-  packingDensity: number;
-  labelSizePx: number;
+// ---- Mobile view types + per-type layouts ----
+// Each mobile view type is an independently-authored layout (settings, planet
+// positions, sector wells) on its own canvas: `full` reuses the desktop
+// landscape canvas (unplaced planets fall back to the desktop layout);
+// `vertical` is 4:5 portrait; `horizontal` is 16:9 landscape.
+const CANVAS_BY_TYPE: Record<MobileViewType, { x: number; y: number; w: number; h: number }> = {
+  full: CANVAS_DESKTOP,
+  vertical: CANVAS_MOBILE_45,
+  horizontal: CANVAS_MOBILE_HORIZONTAL,
 };
-const MOBILE_SPACING_DEFAULTS: MobileSpacing = {
-  collidePadding: 0,
-  sizeSpacing: 0,
-  packingDensity: 0.5,
-  labelSizePx: 10,
-};
-// Slider bounds for the mobile spacing panel.
-const MOBILE_SPACING_FIELDS: {
-  key: keyof MobileSpacing;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-}[] = [
-  { key: "collidePadding", label: "Planet gap", min: 0, max: 300, step: 5 },
-  { key: "sizeSpacing", label: "Size-scaled gap", min: 0, max: 0.5, step: 0.01 },
-  { key: "packingDensity", label: "Planet size (density)", min: 0.25, max: 0.7, step: 0.01 },
-  { key: "labelSizePx", label: "Label size", min: 6, max: 16, step: 1 },
-];
-const MOBILE_SPACING_STORE_KEY = "mm.mobileSpacing";
-function loadMobileSpacing(): MobileSpacing {
-  if (typeof window === "undefined") return MOBILE_SPACING_DEFAULTS;
-  try {
-    const raw = window.localStorage.getItem(MOBILE_SPACING_STORE_KEY);
-    if (raw) return { ...MOBILE_SPACING_DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    /* ignore malformed storage */
-  }
-  return MOBILE_SPACING_DEFAULTS;
-}
+const MOBILE_VIEW_TYPES: MobileViewType[] = ["full", "vertical", "horizontal"];
 
-// Mobile map-shape iterations, toggled in the gear panel:
-//   full     — whole desktop map fit into the viewport ("meet"), letterboxed
-//              top/bottom (current look).
-//   vertical — the map region is inset between the view tabs and the bottom
-//              controls, and the viewBox is narrowed to that region's (portrait)
-//              aspect so the map fills it top-to-bottom (crops the far L/R,
-//              pan to see edges).
-type MobileMapLayout = "full" | "vertical";
-const MOBILE_MAP_LAYOUT_STORE_KEY = "mm.mobileMapLayout";
-function loadMobileMapLayout(): MobileMapLayout {
+const MOBILE_VIEW_STORE_KEY = "mm.mobileViewType";
+function loadMobileViewType(): MobileViewType {
   if (typeof window === "undefined") return "full";
   try {
-    const raw = window.localStorage.getItem(MOBILE_MAP_LAYOUT_STORE_KEY);
-    if (raw === "vertical" || raw === "full") return raw;
+    const raw = window.localStorage.getItem(MOBILE_VIEW_STORE_KEY);
+    if (raw === "full" || raw === "vertical" || raw === "horizontal") return raw;
   } catch {
     /* ignore */
   }
   return "full";
 }
-// Insets (px) carved out for the "vertical" map iteration — room for the view
-// tabs (top) and the bottom control stack. Tunable while we dial in the look.
-// Stronger sector gravity in the vertical view so planets hold their spread-out
-// portrait centers (fill the tall frame) instead of blobbing into the middle.
-// Fixed slide-unit extent of the portrait sector layout (centered on the canvas)
-// that the vertical view frames. Roughly the mobile sector-center grid (x ±900,
-// y ±1900) plus planet radii. Framing this fixed box — rather than a live node
-// bounding box — keeps the fit stable and immune to scattered outlier dots.
 
-// Floating gear button (top-right) + slide-down panel of sliders for the mobile
-// spacing knobs. Values are owned by the parent; this is presentational.
-function MobileSpacingControls({
+// Deep-clone the default layouts so the in-memory editor state doesn't mutate
+// the imported constants.
+function cloneMobileLayouts(
+  src: Record<MobileViewType, MobileLayout>,
+): Record<MobileViewType, MobileLayout> {
+  const out = {} as Record<MobileViewType, MobileLayout>;
+  for (const t of MOBILE_VIEW_TYPES) {
+    const l = src[t];
+    out[t] = {
+      settings: { ...l.settings },
+      positions: { ...l.positions },
+      sectorCenters: { ...l.sectorCenters },
+    };
+  }
+  return out;
+}
+
+// Editor sliders for a mobile view's settings.
+const MOBILE_SETTINGS_FIELDS: { key: keyof MobileSettings; label: string; min: number; max: number; step: number }[] = [
+  { key: "scale", label: "Planet scale", min: 0.3, max: 3, step: 0.05 },
+  { key: "collidePadding", label: "Planet gap", min: 0, max: 120, step: 2 },
+  { key: "sizeSpacing", label: "Size-scaled gap", min: 0, max: 0.4, step: 0.01 },
+  { key: "repulsion", label: "Spread (fill space)", min: 0, max: 120, step: 2 },
+  { key: "sectorPull", label: "Sector pull", min: 0, max: 0.25, step: 0.01 },
+  { key: "nameThreshold", label: "Name visibility (px)", min: 0, max: 120, step: 5 },
+];
+
+// The map area's background gradient — shared so the aggregate view samples the
+// exact same colors, and the list view's frozen Company column can sample a flat
+// tone per row (see sampleListGradient) so it re-creates the gradient behind it.
+const LIST_BG_GRADIENT = "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)";
+
+// The gradient's stops (0% / 51% / 100%), as RGB, for per-row sampling.
+const LIST_GRADIENT_STOPS: [number, [number, number, number]][] = [
+  [0, [30, 3, 0]],
+  [0.51, [1, 12, 76]],
+  [1, [7, 0, 16]],
+];
+// Solid color of the background gradient at vertical fraction `f` (0 = top).
+function sampleListGradient(f: number): string {
+  const clamped = f < 0 ? 0 : f > 1 ? 1 : f;
+  let [f0, c0] = LIST_GRADIENT_STOPS[0];
+  for (let i = 1; i < LIST_GRADIENT_STOPS.length; i++) {
+    const [f1, c1] = LIST_GRADIENT_STOPS[i];
+    if (clamped <= f1) {
+      const t = f1 === f0 ? 0 : (clamped - f0) / (f1 - f0);
+      return `rgb(${Math.round(c0[0] + (c1[0] - c0[0]) * t)}, ${Math.round(c0[1] + (c1[1] - c0[1]) * t)}, ${Math.round(c0[2] + (c1[2] - c0[2]) * t)})`;
+    }
+    [f0, c0] = [f1, c1];
+  }
+  return `rgb(${c0[0]}, ${c0[1]}, ${c0[2]})`;
+}
+
+// Floating gear button (top-right) that switches the mobile view type
+// (full / vertical / horizontal). Layout authoring lives in the ?edit=mobile
+// desktop editor; on the phone this is just the view switcher.
+function MobileViewSwitcher({
   open,
   onToggle,
-  values,
-  onChange,
-  onReset,
-  layout,
-  onLayoutChange,
+  viewType,
+  onViewType,
 }: {
   open: boolean;
   onToggle: () => void;
-  values: MobileSpacing;
-  onChange: (v: MobileSpacing) => void;
-  onReset: () => void;
-  layout: MobileMapLayout;
-  onLayoutChange: (l: MobileMapLayout) => void;
+  viewType: MobileViewType;
+  onViewType: (t: MobileViewType) => void;
 }) {
   const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
   return (
@@ -176,7 +175,7 @@ function MobileSpacingControls({
       }}
     >
       <button
-        aria-label="Spacing settings"
+        aria-label="Map view"
         aria-pressed={open}
         onClick={onToggle}
         style={{
@@ -199,7 +198,7 @@ function MobileSpacingControls({
       {open && (
         <div
           style={{
-            width: 244,
+            width: 200,
             background: "rgba(10,14,24,0.92)",
             border: "1px solid rgba(255,255,255,0.15)",
             borderRadius: 12,
@@ -208,72 +207,29 @@ function MobileSpacingControls({
             boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
             display: "flex",
             flexDirection: "column",
-            gap: 12,
+            gap: 8,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontFamily: calibri, fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>
-              Map spacing
-            </span>
+          <span style={{ fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>Map view</span>
+          {MOBILE_VIEW_TYPES.map((opt) => (
             <button
-              onClick={onReset}
+              key={opt}
+              onClick={() => onViewType(opt)}
               style={{
                 fontFamily: calibri,
-                fontSize: 11,
-                color: "rgba(255,255,255,0.75)",
-                background: "transparent",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 6,
-                padding: "2px 8px",
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: 8,
                 cursor: "pointer",
+                textAlign: "left",
+                textTransform: "capitalize",
+                color: "white",
+                background: viewType === opt ? "rgba(120,160,255,0.25)" : "rgba(255,255,255,0.06)",
+                border: viewType === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
               }}
             >
-              Reset
+              {opt}
             </button>
-          </div>
-          {/* Map-shape iteration toggle */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>Map layout</span>
-            <div style={{ display: "flex", gap: 6 }}>
-              {(["full", "vertical"] as MobileMapLayout[]).map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => onLayoutChange(opt)}
-                  style={{
-                    flex: 1,
-                    fontFamily: calibri,
-                    fontSize: 12,
-                    padding: "6px 0",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                    color: "white",
-                    background: layout === opt ? "rgba(120,160,255,0.25)" : "rgba(255,255,255,0.06)",
-                    border: layout === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
-                  }}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.1)" }} />
-          {MOBILE_SPACING_FIELDS.map((f) => (
-            <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ display: "flex", justifyContent: "space-between", fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>
-                <span>{f.label}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>{values[f.key]}</span>
-              </span>
-              <input
-                type="range"
-                min={f.min}
-                max={f.max}
-                step={f.step}
-                value={values[f.key]}
-                onChange={(e) => onChange({ ...values, [f.key]: Number(e.target.value) })}
-                style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
-              />
-            </label>
           ))}
         </div>
       )}
@@ -2269,13 +2225,66 @@ function CompanyListView({
   sort,
   onSort,
   active,
+  isMobile,
 }: {
   rows: ListRow[];
   sort: ListSort;
   onSort: (key: ListSortKey) => void;
   active: boolean;
+  isMobile: boolean;
 }) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+  // Freeze the Company column on mobile so its names stay visible while the row
+  // scrolls horizontally. Each frozen cell is painted (below) with the solid
+  // color of the background gradient at its own vertical position, so the stacked
+  // column re-creates the gradient behind it. Hover is a box-shadow so it doesn't
+  // fight the direct-DOM background writes.
+  const stickyHead: React.CSSProperties = isMobile
+    ? { position: "sticky", left: 0, zIndex: 3 }
+    : {};
+  const stickyCell = (hovered: boolean): React.CSSProperties =>
+    isMobile
+      ? {
+          position: "sticky",
+          left: 0,
+          zIndex: 1,
+          boxShadow: hovered ? "inset 0 0 0 999px rgba(255,255,255,0.06)" : undefined,
+        }
+      : {};
+  // Paint each frozen cell's background from its live screen position, matching
+  // the map-area gradient (0% at viewport top → 100% at bottom). Direct DOM
+  // writes on scroll/resize avoid re-rendering 170 rows per frame.
+  useEffect(() => {
+    if (!isMobile) return;
+    const scroller = scrollRef.current;
+    const tbody = tbodyRef.current;
+    if (!scroller || !tbody) return;
+    let raf = 0;
+    const paint = () => {
+      raf = 0;
+      const cells = tbody.querySelectorAll<HTMLElement>("td[data-frozen]");
+      const n = cells.length;
+      if (!n) return;
+      const rect = tbody.getBoundingClientRect();
+      const rowH = rect.height / n;
+      const vh = window.innerHeight || 1;
+      cells.forEach((cell, i) => {
+        cell.style.backgroundColor = sampleListGradient((rect.top + (i + 0.5) * rowH) / vh);
+      });
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
+    paint();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+    // `rows` in deps so a sort re-order repaints (cells move but keep inline bg).
+  }, [isMobile, rows, active]);
   const columns: { key: ListSortKey; label: string; align: "left" | "right" }[] = [
     { key: "company", label: "Company", align: "left" },
     { key: "sector", label: "Sector", align: "left" },
@@ -2311,6 +2320,7 @@ function CompanyListView({
   };
   return (
     <div
+      ref={scrollRef}
       style={{
         position: "absolute",
         // Start below the floating view-mode toggle (top:16, ~34px tall) so the
@@ -2320,7 +2330,9 @@ function CompanyListView({
         right: 0,
         bottom: 0,
         overflow: "auto",
-        padding: "0 16px 16px",
+        // Mobile: no horizontal padding so the frozen Company column sits flush
+        // to the screen edge and no data peeks to its left.
+        padding: isMobile ? "0 0 16px" : "0 16px 16px",
         boxSizing: "border-box",
         zIndex: 5,
         fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
@@ -2356,7 +2368,7 @@ function CompanyListView({
                 <th
                   key={col.key}
                   onClick={() => onSort(col.key)}
-                  style={{ ...th, textAlign: col.align, color: active ? "#fff" : th.color }}
+                  style={{ ...th, ...(col.key === "company" ? { ...stickyHead, paddingLeft: 20 } : {}), textAlign: col.align, color: active ? "#fff" : th.color }}
                   aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   {col.label}
@@ -2380,7 +2392,7 @@ function CompanyListView({
             })}
           </tr>
         </thead>
-        <tbody>
+        <tbody ref={tbodyRef}>
           {rows.map((r, i) => {
             // Staggered slide-up on enter: each row's opacity/transform is
             // delayed a little more than the last so they cascade in. Delay is
@@ -2402,7 +2414,7 @@ function CompanyListView({
                 cursor: "pointer",
               }}
             >
-              <td style={{ ...td, fontWeight: 700 }}>{r.name}</td>
+              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20 }}>{r.name}</td>
               <td style={td}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span
@@ -2450,7 +2462,7 @@ type AggBand = { name: string; sector: string; color: string; values: number[] }
 type AggregateData = { dates: MapDate[]; bands: AggBand[]; maxTotal: number };
 
 // Same blue gradient the maps use, so the aggregate view feels of a piece.
-const AGG_GRADIENT = "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)";
+const AGG_GRADIENT = LIST_BG_GRADIENT;
 const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
 
 // Per-company band color overrides (keyed by lowercased company name). Used when
@@ -2791,30 +2803,16 @@ async function buildMapFontCss(): Promise<string> {
   return mapFontCssCache;
 }
 
-// Floating toolbar for the mobile 4:5 layout editor (?edit=mobile): planet-size
-// scale slider, placement count, per-planet clear, and export.
-type MobilePhysics = {
-  collidePadding: number;
-  sizeSpacing: number;
-  repulsion: number;
-  sectorPull: number;
-  nameThreshold: number;
-};
-const MOBILE_PHYSICS_FIELDS: { key: keyof MobilePhysics; label: string; min: number; max: number; step: number }[] = [
-  { key: "collidePadding", label: "Planet gap", min: 0, max: 120, step: 2 },
-  { key: "sizeSpacing", label: "Size-scaled gap", min: 0, max: 0.4, step: 0.01 },
-  { key: "repulsion", label: "Spread (fill space)", min: 0, max: 120, step: 2 },
-  { key: "sectorPull", label: "Sector pull", min: 0, max: 0.25, step: 0.01 },
-  { key: "nameThreshold", label: "Name visibility (px)", min: 0, max: 120, step: 5 },
-];
-
+// Floating toolbar for the mobile layout editor (?edit=mobile): a view-type
+// selector (full/vertical/horizontal), that view's settings sliders, sector-well
+// toggle, per-planet clear, and export of the whole per-type MOBILE_LAYOUTS.
 function MobileEditorToolbar({
+  viewType,
+  onViewType,
   placed,
   total,
-  scale,
-  onScale,
-  physics,
-  onPhysics,
+  settings,
+  onSetting,
   showWells,
   onToggleWells,
   selectedName,
@@ -2825,12 +2823,12 @@ function MobileEditorToolbar({
   onDownload,
   onReset,
 }: {
+  viewType: MobileViewType;
+  onViewType: (t: MobileViewType) => void;
   placed: number;
   total: number;
-  scale: number;
-  onScale: (n: number) => void;
-  physics: MobilePhysics;
-  onPhysics: (key: keyof MobilePhysics, value: number) => void;
+  settings: MobileSettings;
+  onSetting: (key: keyof MobileSettings, value: number) => void;
   showWells: boolean;
   onToggleWells: () => void;
   selectedName: string | null;
@@ -2861,6 +2859,8 @@ function MobileEditorToolbar({
         left: 16,
         zIndex: 20,
         width: 250,
+        maxHeight: "calc(100vh - 32px)",
+        overflowY: "auto",
         background: "rgba(10,14,24,0.94)",
         border: "1px solid rgba(255,255,255,0.16)",
         borderRadius: 12,
@@ -2875,7 +2875,7 @@ function MobileEditorToolbar({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>Mobile 4:5 layout</span>
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>Mobile layout</span>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, opacity: 0.6 }}>{placed}/{total}</span>
           <button
@@ -2887,6 +2887,29 @@ function MobileEditorToolbar({
           </button>
         </span>
       </div>
+      {/* View-type selector — which mobile layout you're editing. */}
+      <div style={{ display: "flex", gap: 6 }}>
+        {MOBILE_VIEW_TYPES.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onViewType(opt)}
+            style={{
+              flex: 1,
+              fontFamily: calibri,
+              fontSize: 11,
+              padding: "6px 0",
+              borderRadius: 6,
+              cursor: "pointer",
+              textTransform: "capitalize",
+              color: "white",
+              background: viewType === opt ? "rgba(120,160,255,0.28)" : "rgba(255,255,255,0.06)",
+              border: viewType === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
       {collapsed ? null : (
       <>
       <button
@@ -2895,27 +2918,12 @@ function MobileEditorToolbar({
       >
         {showWells ? "Hide sector wells" : "Show sector wells"}
       </button>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.85 }}>
-          <span>Planet scale</span>
-          <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>{scale.toFixed(2)}×</span>
-        </span>
-        <input
-          type="range"
-          min={0.3}
-          max={3}
-          step={0.05}
-          value={scale}
-          onChange={(e) => onScale(Number(e.target.value))}
-          style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
-        />
-      </label>
-      {MOBILE_PHYSICS_FIELDS.map((f) => (
+      {MOBILE_SETTINGS_FIELDS.map((f) => (
         <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.85 }}>
             <span>{f.label}</span>
             <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>
-              {f.step < 1 ? physics[f.key].toFixed(2) : Math.round(physics[f.key])}
+              {f.step < 1 ? settings[f.key].toFixed(2) : Math.round(settings[f.key])}
             </span>
           </span>
           <input
@@ -2923,8 +2931,8 @@ function MobileEditorToolbar({
             min={f.min}
             max={f.max}
             step={f.step}
-            value={physics[f.key]}
-            onChange={(e) => onPhysics(f.key, Number(e.target.value))}
+            value={settings[f.key]}
+            onChange={(e) => onSetting(f.key, Number(e.target.value))}
             style={{ width: "100%", accentColor: "#9db4ff", cursor: "pointer" }}
           />
         </label>
@@ -2944,7 +2952,7 @@ function MobileEditorToolbar({
             </span>
           </div>
         ) : (
-          <span>Drag planets to place them inside the dashed 4:5 frame.</span>
+          <span>Drag planets to place them inside the dashed frame.</span>
         )}
       </div>
       <div style={{ display: "flex", gap: 6 }}>
@@ -2961,46 +2969,42 @@ function MobileEditorToolbar({
 export default function MediaMap() {
   const isMobile = useIsMobile();
   const isEditMode = useIsEditMode();
-  // Mobile "vertical" iteration (gear panel): re-layout on the portrait canvas
-  // with mobile sector centers so every planet fits a tall viewport, instead of
-  // fitting/cropping the landscape desktop map. Declared early because `canvas`
-  // and the physics inputs switch on it.
-  const [mobileMapLayout, setMobileMapLayout] = useState<MobileMapLayout>(loadMobileMapLayout);
-  // `?edit=mobile` forces the 4:5 view + drag editing on any device (author on
-  // desktop). `mobileDesign` = the 4:5 portrait view is active — either a real
-  // phone in "vertical" mode, or the editor on any device.
+  // Mobile view type + per-type layouts. On the phone the gear switches the view
+  // type (persisted); ?edit=mobile is the desktop editor whose selector controls
+  // `mobileEditType`. `activeType` is whichever is being shown/edited; its layout
+  // (settings + positions + sector wells) drives the canvas and physics.
+  const [mobileViewType, setMobileViewType] = useState<MobileViewType>(loadMobileViewType);
+  const [mobileEditType, setMobileEditType] = useState<MobileViewType>("vertical");
   const mobileEdit = useMobileEditMode();
-  const verticalMap = (isMobile && mobileMapLayout === "vertical") || mobileEdit;
-  // Desktop / "full" mobile use the landscape canvas; "vertical" uses the
-  // portrait canvas. The map is fit to the viewport ("meet"), and on mobile only
-  // Large Cap labels show until the user zooms in (see suppressNonLargeCapLabel).
-  const canvas = useMemo(() => (verticalMap ? CANVAS_MOBILE_45 : CANVAS_DESKTOP), [verticalMap]);
+  const activeType: MobileViewType = mobileEdit ? mobileEditType : mobileViewType;
+  // A mobile authored view is active (phone or editor); desktop non-edit = false.
+  const mobileView = isMobile || mobileEdit;
+  const [mobileLayouts, setMobileLayouts] = useState<Record<MobileViewType, MobileLayout>>(
+    () => cloneMobileLayouts(MOBILE_LAYOUTS),
+  );
+  const activeLayout = mobileLayouts[activeType];
+  const activeSettings = activeLayout.settings;
+  const mobilePositions = activeLayout.positions;
+  const mobileSectorCenters = activeLayout.sectorCenters;
+  const [showSectorWells, setShowSectorWells] = useState(true);
+  // Mutators scoped to the active view type.
+  const updateActiveLayout = (fn: (l: MobileLayout) => MobileLayout) =>
+    setMobileLayouts((prev) => ({ ...prev, [activeType]: fn(prev[activeType]) }));
+  const setActiveSetting = (key: keyof MobileSettings, value: number) =>
+    updateActiveLayout((l) => ({ ...l, settings: { ...l.settings, [key]: value } }));
+
+  // The active view's canvas: full = desktop landscape; vertical = 4:5;
+  // horizontal = 16:9. Desktop (non-mobile, non-edit) uses the desktop canvas.
+  const canvas = useMemo(
+    () => (mobileView ? CANVAS_BY_TYPE[activeType] : CANVAS_DESKTOP),
+    [mobileView, activeType],
+  );
 
   // Per-company position overrides. Seeded from the file at mount; mutated in
   // memory by the editor; saved by exporting back to layout.ts (manual paste).
   const [positions, setPositions] = useState<Record<string, PlanetPosition>>(
     () => ({ ...COMPANY_POSITIONS }),
   );
-  // Mobile (4:5) hand-placed positions + global planet scale, authored via
-  // ?edit=mobile and exported to mobileLayout.ts.
-  const [mobilePositions, setMobilePositions] = useState<Record<string, { x: number; y: number }>>(
-    () => ({ ...MOBILE_COMPANY_POSITIONS }),
-  );
-  const [mobileScale, setMobileScale] = useState<number>(MOBILE_LAYOUT_SETTINGS.scale);
-  // Live-tunable 4:5-view physics + name threshold (sliders in the ?edit=mobile
-  // toolbar). Seeded from the saved settings; exported with the layout.
-  const [mobilePhysics, setMobilePhysics] = useState({
-    collidePadding: MOBILE_LAYOUT_SETTINGS.collidePadding,
-    sizeSpacing: MOBILE_LAYOUT_SETTINGS.sizeSpacing,
-    repulsion: MOBILE_LAYOUT_SETTINGS.repulsion,
-    sectorPull: MOBILE_LAYOUT_SETTINGS.sectorPull,
-    nameThreshold: MOBILE_LAYOUT_SETTINGS.nameThreshold,
-  });
-  // 4:5 sector gravity wells (draggable in ?edit=mobile) + their visibility.
-  const [mobileSectorCenters, setMobileSectorCenters] = useState<Record<string, { x: number; y: number }>>(
-    () => ({ ...MOBILE_SECTOR_CENTERS }),
-  );
-  const [showSectorWells, setShowSectorWells] = useState(true);
 
   // Editor-only state. Selected planet drives the inspector; dragState is the
   // planet currently being dragged in slide-coords. Both are no-ops outside
@@ -3041,25 +3045,16 @@ export default function MediaMap() {
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
-  // Live-tunable mobile spacing (floating gear panel). Persisted to localStorage
-  // so tuning survives reloads. Applied to `eff` on mobile only (see below).
-  const [mobileSpacing, setMobileSpacing] = useState<MobileSpacing>(loadMobileSpacing);
-  const [spacingPanelOpen, setSpacingPanelOpen] = useState(false);
-  // (mobileMapLayout is declared at the top of the component — it gates `canvas`.)
+  // Gear panel open/close (phone view switcher).
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  // Persist the phone's chosen view type.
   useEffect(() => {
     try {
-      window.localStorage.setItem(MOBILE_SPACING_STORE_KEY, JSON.stringify(mobileSpacing));
-    } catch {
-      /* ignore storage failures (private mode, quota) */
-    }
-  }, [mobileSpacing]);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(MOBILE_MAP_LAYOUT_STORE_KEY, mobileMapLayout);
+      window.localStorage.setItem(MOBILE_VIEW_STORE_KEY, mobileViewType);
     } catch {
       /* ignore */
     }
-  }, [mobileMapLayout]);
+  }, [mobileViewType]);
   // Name of the planet currently shown in the right-side detail panel.
   // Set on click in non-edit mode; cleared by the panel's close button.
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
@@ -3501,19 +3496,17 @@ export default function MediaMap() {
     sectorPull: sanity?.settings?.sectorPull,
     repulsion: sanity?.settings?.repulsion,
   };
-  // On mobile, layer the live-tunable mobile spacing on top (desktop = effBase).
-  // Layout knobs: base (Sanity/local) → mobile gear (phone) → 4:5-view physics.
-  // The 4:5 view gets its own collision + repulsion so all planets spread to
-  // FILL the frame without overlapping (unplaced ones flow around the pins).
+  // On a mobile view, the active view type's own settings drive the physics so
+  // all planets spread to FILL its frame without overlapping (unplaced ones flow
+  // around the pins). Desktop = effBase.
   const eff = {
     ...effBase,
-    ...(isMobile ? mobileSpacing : {}),
-    ...(verticalMap
+    ...(mobileView
       ? {
-          sectorPull: mobilePhysics.sectorPull,
-          collidePadding: mobilePhysics.collidePadding,
-          sizeSpacing: mobilePhysics.sizeSpacing,
-          repulsion: mobilePhysics.repulsion,
+          sectorPull: activeSettings.sectorPull,
+          collidePadding: activeSettings.collidePadding,
+          sizeSpacing: activeSettings.sizeSpacing,
+          repulsion: activeSettings.repulsion,
         }
       : {}),
   };
@@ -3524,9 +3517,9 @@ export default function MediaMap() {
         displayedCompanies.map((c) => c.valuation_b),
         canvas.w * canvas.h,
         eff.packingDensity,
-        // Mobile 4:5 view: global planet-size multiplier from the editor slider.
-      ) * (verticalMap ? mobileScale : 1),
-    [displayedCompanies, canvas, eff.packingDensity, verticalMap, mobileScale],
+        // Mobile view: per-type global planet-size multiplier.
+      ) * (mobileView ? activeSettings.scale : 1),
+    [displayedCompanies, canvas, eff.packingDensity, mobileView, activeSettings.scale],
   );
 
   // Natural slide-units-per-pixel at zoom=1 — used to size label-collision
@@ -3588,16 +3581,22 @@ export default function MediaMap() {
         // scaled into the smaller 4:5 canvas (they'll be dragged into place in
         // the editor; hand-placed ones are pinned via `positions`). Otherwise
         // Sanity wins, then local defaults.
+        const desktopCenter = () =>
+          sanity?.centerBySector[c.sector] ??
+          sectorPositions[c.sector] ??
+          sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
         let center: { x: number; y: number };
-        if (verticalMap) {
-          // Dragged well wins; else the scaled default mobile grid.
-          const c0 = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, true);
-          center = mobileSectorCenters[c.sector] ?? { x: c0.x * 0.66, y: c0.y * 0.5 };
+        if (mobileView) {
+          const well = mobileSectorCenters[c.sector];
+          if (well) center = well;
+          else if (activeType === "full") center = desktopCenter();
+          else {
+            // vertical/horizontal: scale the mobile sector grid into the canvas.
+            const c0 = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, true);
+            center = { x: c0.x * (canvas.w / 3000), y: c0.y * (canvas.h / 5000) };
+          }
         } else {
-          center =
-            sanity?.centerBySector[c.sector] ??
-            sectorPositions[c.sector] ??
-            sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
+          center = desktopCenter();
         }
         // Red label when the value isn't live-sourced from the valuation sheet
         // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
@@ -3615,28 +3614,33 @@ export default function MediaMap() {
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
     const entityInputs = (sanity?.entities ?? []).filter((e) => enabled.has(e.sector));
     return [...companyInputs, ...entityInputs];
-  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, verticalMap, mobileSectorCenters]);
+  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, activeType, canvas, mobileSectorCenters]);
 
   // Connections used for both physics and rendering: Sanity (windowed at T) when
   // configured, else the local edit-state. The edit-mode connection authoring
   // (selection/draw/export) still operates on the local `connections` state.
   const effectiveConnections = sanity ? sanity.connections : connections;
 
-  // Mobile (4:5) placements as hard pins so planets stay exactly where they're
-  // dropped; live drags override via `dragState` in the renderer. Companies with
-  // no mobile position fall back to their sector center + physics.
+  // Mobile placements as hard pins so planets stay exactly where they're dropped;
+  // live drags override via `dragState` in the renderer. Un-authored planets fall
+  // back to their sector well + physics — except the FULL view, which falls back
+  // to the desktop layout so it starts as the desktop map.
   const mobilePinnedPositions = useMemo(() => {
     const out: Record<string, PlanetPosition> = {};
+    if (activeType === "full") {
+      const base = sanity ? sanity.positions : positions;
+      for (const [name, p] of Object.entries(base)) out[name] = { ...p };
+    }
     for (const [name, p] of Object.entries(mobilePositions)) out[name] = { x: p.x, y: p.y, pin: true };
     return out;
-  }, [mobilePositions]);
+  }, [mobilePositions, activeType, sanity, positions]);
 
   const nodes = usePhysicsLayout({
     inputs,
     bounds: physicsBounds,
     viewMode: layoutMode,
-    // Mobile 4:5 view uses the hand-placed pins; desktop uses Sanity/local.
-    positions: verticalMap ? mobilePinnedPositions : sanity ? sanity.positions : positions,
+    // Mobile view uses the per-type pins; desktop uses Sanity/local.
+    positions: mobileView ? mobilePinnedPositions : sanity ? sanity.positions : positions,
     isEditMode: isEditMode || mobileEdit,
     anchorDiam,
     collidePadding: eff.collidePadding,
@@ -3775,7 +3779,7 @@ export default function MediaMap() {
     if (sectorDragRef.current && sectorDragState && didDragRef.current) {
       const name = sectorDragRef.current.name;
       const pos = { x: Math.round(sectorDragState.x), y: Math.round(sectorDragState.y) };
-      if (mobileEdit) setMobileSectorCenters((prev) => ({ ...prev, [name]: pos }));
+      if (mobileEdit) updateActiveLayout((l) => ({ ...l, sectorCenters: { ...l.sectorCenters, [name]: pos } }));
       else setSectorPositions((prev) => ({ ...prev, [name]: pos }));
     }
     sectorDragRef.current = null;
@@ -3787,7 +3791,7 @@ export default function MediaMap() {
       const x = Math.round(dragState.x);
       const y = Math.round(dragState.y);
       if (mobileEdit) {
-        setMobilePositions((prev) => ({ ...prev, [name]: { x, y } }));
+        updateActiveLayout((l) => ({ ...l, positions: { ...l.positions, [name]: { x, y } } }));
       } else {
         setPositions((prev) => ({
           ...prev,
@@ -3964,30 +3968,33 @@ export default function MediaMap() {
     URL.revokeObjectURL(url);
   };
 
-  // ---- Mobile (4:5) editor export ----
+  // ---- Mobile editor export ----
+  // Emits the whole per-type MOBILE_LAYOUTS object (paste over it in
+  // src/mobileLayout.ts).
   const exportMobileLayoutAsCode = () => {
-    const entries = Object.entries(mobilePositions)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, p]) => `  ${JSON.stringify(name)}: { x: ${Math.round(p.x)}, y: ${Math.round(p.y)} },`)
-      .join("\n");
-    const settings =
-      `export const MOBILE_LAYOUT_SETTINGS = {\n` +
-      `  scale: ${mobileScale.toFixed(3)},\n` +
-      `  collidePadding: ${Math.round(mobilePhysics.collidePadding)},\n` +
-      `  sizeSpacing: ${mobilePhysics.sizeSpacing.toFixed(3)},\n` +
-      `  repulsion: ${Math.round(mobilePhysics.repulsion)},\n` +
-      `  sectorPull: ${mobilePhysics.sectorPull.toFixed(3)},\n` +
-      `  nameThreshold: ${Math.round(mobilePhysics.nameThreshold)},\n` +
-      `};\n`;
-    const wells = Object.entries(mobileSectorCenters)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, p]) => `  ${JSON.stringify(name)}: { x: ${Math.round(p.x)}, y: ${Math.round(p.y)} },`)
-      .join("\n");
+    const rec = (obj: Record<string, { x: number; y: number }>, indent: string) =>
+      Object.entries(obj)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, p]) => `${indent}${JSON.stringify(name)}: { x: ${Math.round(p.x)}, y: ${Math.round(p.y)} },`)
+        .join("\n");
+    const typeBlock = (t: MobileViewType) => {
+      const l = mobileLayouts[t];
+      const s = l.settings;
+      return (
+        `  ${t}: {\n` +
+        `    settings: { scale: ${s.scale.toFixed(3)}, collidePadding: ${Math.round(s.collidePadding)}, ` +
+        `sizeSpacing: ${s.sizeSpacing.toFixed(3)}, repulsion: ${Math.round(s.repulsion)}, ` +
+        `sectorPull: ${s.sectorPull.toFixed(3)}, nameThreshold: ${Math.round(s.nameThreshold)} },\n` +
+        `    sectorCenters: {\n${rec(l.sectorCenters, "      ")}\n    },\n` +
+        `    positions: {\n${rec(l.positions, "      ")}\n    },\n` +
+        `  },`
+      );
+    };
     return (
-      `// Generated by ?edit=mobile. Paste into src/mobileLayout.ts.\n` +
-      `export const MOBILE_SECTOR_CENTERS: Record<string, MobilePosition> = {\n${wells}\n};\n\n` +
-      `export const MOBILE_COMPANY_POSITIONS: Record<string, MobilePosition> = {\n${entries}\n};\n\n` +
-      settings
+      `// Generated by ?edit=mobile. Paste over MOBILE_LAYOUTS in src/mobileLayout.ts.\n` +
+      `export const MOBILE_LAYOUTS: Record<MobileViewType, MobileLayout> = {\n` +
+      MOBILE_VIEW_TYPES.map(typeBlock).join("\n") +
+      `\n};\n`
     );
   };
   const saveMobileToClipboard = async () => {
@@ -4007,12 +4014,17 @@ export default function MediaMap() {
     a.click();
     URL.revokeObjectURL(url);
   };
-  const resetMobilePositions = () => setMobilePositions({ ...MOBILE_COMPANY_POSITIONS });
+  // Reset the ACTIVE view type's layout to the on-disk default.
+  const resetMobilePositions = () =>
+    updateActiveLayout(() => {
+      const d = MOBILE_LAYOUTS[activeType];
+      return { settings: { ...d.settings }, positions: { ...d.positions }, sectorCenters: { ...d.sectorCenters } };
+    });
   const clearMobilePosition = (name: string) =>
-    setMobilePositions((prev) => {
-      const next = { ...prev };
-      delete next[name];
-      return next;
+    updateActiveLayout((l) => {
+      const positions = { ...l.positions };
+      delete positions[name];
+      return { ...l, positions };
     });
 
   // True when in-memory positions differ from the on-disk source.
@@ -4524,7 +4536,7 @@ export default function MediaMap() {
         </button>
       )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
-            background: "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)" }}>
+            background: LIST_BG_GRADIENT }}>
         {/* Live interactive map — always mounted so physics keeps running.
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
@@ -4677,14 +4689,20 @@ export default function MediaMap() {
                     isSelected={isEditMode && selectedConnIdx === idx}
                     isHovered={hoveredConn?.idx === idx}
                     interactive={isEditMode}
-                    onMouseEnter={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
-                    onMouseMove={(e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
-                    onMouseLeave={() => setHoveredConn((prev) => (prev?.idx === idx ? null : prev))}
-                    onClick={(e) => {
-                      if (!isEditMode) return;
-                      e.stopPropagation();
-                      setSelectedConnIdx(idx);
-                    }}
+                    // No connection hover/tap on mobile — drop the handlers so the
+                    // hit-area goes inert (see ConnectionLine).
+                    onMouseEnter={isMobile ? undefined : (e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                    onMouseMove={isMobile ? undefined : (e) => setHoveredConn({ idx, x: e.clientX, y: e.clientY })}
+                    onMouseLeave={isMobile ? undefined : () => setHoveredConn((prev) => (prev?.idx === idx ? null : prev))}
+                    onClick={
+                      isMobile
+                        ? undefined
+                        : (e) => {
+                            if (!isEditMode) return;
+                            e.stopPropagation();
+                            setSelectedConnIdx(idx);
+                          }
+                    }
                   />
                 </g>
               );
@@ -4793,14 +4811,14 @@ export default function MediaMap() {
                   }
                   onPlanetMouseDown={(isEditMode || mobileEdit) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                  // 4:5 view: show names by on-screen size (tunable threshold).
-                  // Other mobile: only Large Cap until zoomed in.
+                  // Mobile view: show names by on-screen size (tunable threshold).
+                  // Desktop: only Large Cap until zoomed in.
                   labelSuppressed={
-                    verticalMap
+                    mobileView
                       ? false
                       : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
                   }
-                  labelMinScreenDiameter={verticalMap ? mobilePhysics.nameThreshold : 0}
+                  labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
                 />
               );
             })}
@@ -4927,6 +4945,7 @@ export default function MediaMap() {
           sort={listSort}
           onSort={handleListSort}
           active={viewMode === "list" && !timelineOpen}
+          isMobile={isMobile}
         />
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
@@ -4937,15 +4956,15 @@ export default function MediaMap() {
           highlightSector={hoveredSector}
         />
 
-        {/* Mobile 4:5 layout editor toolbar — only with ?edit=mobile. */}
+        {/* Mobile layout editor toolbar — only with ?edit=mobile. */}
         {mobileEdit && (
           <MobileEditorToolbar
+            viewType={mobileEditType}
+            onViewType={setMobileEditType}
             placed={Object.keys(mobilePositions).length}
             total={displayedCompanies.filter((c) => enabled.has(c.sector)).length}
-            scale={mobileScale}
-            onScale={setMobileScale}
-            physics={mobilePhysics}
-            onPhysics={(k, v) => setMobilePhysics((p) => ({ ...p, [k]: v }))}
+            settings={activeSettings}
+            onSetting={setActiveSetting}
             showWells={showSectorWells}
             onToggleWells={() => setShowSectorWells((v) => !v)}
             selectedName={selectedPlanet}
@@ -5377,17 +5396,14 @@ export default function MediaMap() {
 
       </div>
 
-      {/* Mobile-only: floating gear panel to live-tune map spacing. Hidden while
-          the timeline is open (CLOSE TIMELINE sits in the same top-right spot). */}
-      {isMobile && !timelineOpen && (
-        <MobileSpacingControls
-          open={spacingPanelOpen}
-          onToggle={() => setSpacingPanelOpen((o) => !o)}
-          values={mobileSpacing}
-          onChange={setMobileSpacing}
-          onReset={() => setMobileSpacing(MOBILE_SPACING_DEFAULTS)}
-          layout={mobileMapLayout}
-          onLayoutChange={setMobileMapLayout}
+      {/* Mobile-only: gear button that switches the mobile view type. Hidden
+          while the timeline is open (CLOSE TIMELINE sits in the same spot). */}
+      {isMobile && !mobileEdit && !timelineOpen && (
+        <MobileViewSwitcher
+          open={switcherOpen}
+          onToggle={() => setSwitcherOpen((o) => !o)}
+          viewType={mobileViewType}
+          onViewType={(t) => { setMobileViewType(t); setSwitcherOpen(false); }}
         />
       )}
 

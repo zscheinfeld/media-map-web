@@ -54,6 +54,9 @@ export function ConnectionLine({
         y2={by}
         stroke="transparent"
         strokeWidth={Math.max(18 * slideUnitsPerPx, strokeW)}
+        // Inert when no handlers are wired (e.g. mobile) so it neither shows a
+        // hover tooltip nor intercepts taps meant for panning.
+        pointerEvents={onMouseEnter || onMouseMove || onClick ? undefined : "none"}
         style={{cursor: interactive ? "pointer" : "default"}}
         onMouseEnter={onMouseEnter}
         onMouseMove={onMouseMove}

@@ -6,9 +6,11 @@
 // right side because most sectors live in the left two-thirds of the layout.
 export const CANVAS_DESKTOP = { x: -2225, y: -1253, w: 5052, h: 3279 };
 export const CANVAS_MOBILE = { x: -1200, y: -2500, w: 2400, h: 5000 };
-// 4:5 portrait canvas for the mobile "vertical" view + its hand-placed layout
-// (MOBILE_COMPANY_POSITIONS), authored via the ?edit=mobile browser editor.
+// 4:5 portrait canvas for the mobile "vertical" view + its hand-placed layout,
+// authored via the ?edit=mobile browser editor.
 export const CANVAS_MOBILE_45 = { x: -1000, y: -1250, w: 2000, h: 2500 };
+// 16:9 landscape canvas for the mobile "horizontal" (rotated-phone) view.
+export const CANVAS_MOBILE_HORIZONTAL = { x: -1280, y: -720, w: 2560, h: 1440 };
 
 // Sector → canvas position (slide-coord space). These are the "gravity wells"
 // the physics simulation pulls each sector's planets toward.
