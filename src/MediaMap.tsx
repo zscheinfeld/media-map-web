@@ -97,7 +97,14 @@ const CANVAS_BY_TYPE: Record<MobileViewType, { x: number; y: number; w: number; 
   horizontal: CANVAS_DESKTOP,
   square: CANVAS_MOBILE_SQUARE,
 };
-const MOBILE_VIEW_TYPES: MobileViewType[] = ["full", "vertical", "horizontal", "square"];
+const MOBILE_VIEW_TYPES: MobileViewType[] = ["horizontal", "full", "square", "vertical"];
+// Display labels for the view-type tabs (switcher + editor selector).
+const MOBILE_VIEW_LABELS: Record<MobileViewType, string> = {
+  horizontal: "Horizontal",
+  full: "Full 16:9",
+  square: "Square 1:1",
+  vertical: "Vertical 4:5",
+};
 
 // Horizontal + square start from the FULL view's placement + wells (inherited at
 // runtime; their own entries override per-planet). Full itself also seeds the
@@ -189,11 +196,14 @@ function MobileViewSwitcher({
   onToggle,
   viewType,
   onViewType,
+  elevated = false,
 }: {
   open: boolean;
   onToggle: () => void;
   viewType: MobileViewType;
   onViewType: (t: MobileViewType) => void;
+  /** Raise above the horizontal rotate-prompt overlay (z 40) so it stays usable. */
+  elevated?: boolean;
 }) {
   const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
   return (
@@ -202,7 +212,7 @@ function MobileViewSwitcher({
         position: "absolute",
         top: 16,
         right: 16,
-        zIndex: 14,
+        zIndex: elevated ? 45 : 14,
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-end",
@@ -257,13 +267,12 @@ function MobileViewSwitcher({
                 borderRadius: 8,
                 cursor: "pointer",
                 textAlign: "left",
-                textTransform: "capitalize",
                 color: "white",
                 background: viewType === opt ? "rgba(120,160,255,0.25)" : "rgba(255,255,255,0.06)",
                 border: viewType === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
               }}
             >
-              {opt}
+              {MOBILE_VIEW_LABELS[opt]}
             </button>
           ))}
         </div>
@@ -2967,17 +2976,16 @@ function MobileEditorToolbar({
             style={{
               flex: 1,
               fontFamily: calibri,
-              fontSize: 11,
-              padding: "6px 0",
+              fontSize: 10,
+              padding: "6px 2px",
               borderRadius: 6,
               cursor: "pointer",
-              textTransform: "capitalize",
               color: "white",
               background: viewType === opt ? "rgba(120,160,255,0.28)" : "rgba(255,255,255,0.06)",
               border: viewType === opt ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            {opt}
+            {MOBILE_VIEW_LABELS[opt]}
           </button>
         ))}
       </div>
@@ -5596,6 +5604,7 @@ export default function MediaMap() {
           onToggle={() => setSwitcherOpen((o) => !o)}
           viewType={mobileViewType}
           onViewType={(t) => { setMobileViewType(t); setSwitcherOpen(false); }}
+          elevated={showRotatePrompt}
         />
       )}
 
