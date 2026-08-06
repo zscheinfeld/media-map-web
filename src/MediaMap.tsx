@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import {
   usePhysicsLayout,
@@ -3535,6 +3535,19 @@ export default function MediaMap() {
     return [...known, ...unknown];
   }, [baseCompanies]);
 
+  // Desktop-canvas gravity center for a sector (Sanity → local sector override →
+  // computed default). ONE resolver so the Full view's planets AND the draggable
+  // sector-well handles use the exact same coordinate — otherwise the handle
+  // renders in a different fallback spot than the planets it controls.
+  const unknownSectorList = useMemo(() => allSectors.filter(s => !isKnownSector(s)), [allSectors]);
+  const desktopCenterForSector = useCallback(
+    (s: string) =>
+      sanity?.centerBySector[s] ??
+      sectorPositions[s] ??
+      sectorCenterFor(s, unknownSectorList.indexOf(s), unknownSectorList.length, false),
+    [sanity, sectorPositions, unknownSectorList],
+  );
+
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const c of baseCompanies) out[c.sector] = (out[c.sector] ?? 0) + 1;
@@ -3658,10 +3671,7 @@ export default function MediaMap() {
         // scaled into the smaller 4:5 canvas (they'll be dragged into place in
         // the editor; hand-placed ones are pinned via `positions`). Otherwise
         // Sanity wins, then local defaults.
-        const desktopCenter = () =>
-          sanity?.centerBySector[c.sector] ??
-          sectorPositions[c.sector] ??
-          sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, false);
+        const desktopCenter = () => desktopCenterForSector(c.sector);
         let center: { x: number; y: number };
         if (mobileView) {
           const well = mobileSectorCenters[c.sector];
@@ -3696,7 +3706,7 @@ export default function MediaMap() {
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
     const entityInputs = (sanity?.entities ?? []).filter((e) => enabled.has(e.sector));
     return [...companyInputs, ...entityInputs];
-  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, activeType, canvas, mobileSectorCenters]);
+  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, activeType, canvas, mobileSectorCenters, desktopCenterForSector]);
 
   // Connections used for both physics and rendering: Sanity (windowed at T) when
   // configured, else the local edit-state. The edit-mode connection authoring
@@ -4972,7 +4982,13 @@ export default function MediaMap() {
               return visibleSectors.map((s) => {
                 const unknownIdx = unknownVisible.indexOf(s);
                 const c0 = sectorCenterFor(s, unknownIdx, unknownVisible.length, true);
-                const baseCenter = mobileSectorCenters[s] ?? { x: c0.x * 0.66, y: c0.y * 0.5 };
+                // Handle fallback must match the planets' gravity: Full uses the
+                // desktop-canvas center; vertical/horizontal use the scaled grid.
+                const baseCenter =
+                  mobileSectorCenters[s] ??
+                  (activeType === "full"
+                    ? desktopCenterForSector(s)
+                    : { x: c0.x * 0.66, y: c0.y * 0.5 });
                 const liveCenter =
                   sectorDragState && sectorDragState.name === s
                     ? { x: sectorDragState.x, y: sectorDragState.y }
