@@ -2827,6 +2827,9 @@ function MobileEditorToolbar({
   onSetting,
   showWells,
   onToggleWells,
+  sectors,
+  enabledSectors,
+  onToggleSector,
   selectedName,
   selectedPlaced,
   onClearSelected,
@@ -2843,6 +2846,9 @@ function MobileEditorToolbar({
   onSetting: (key: keyof MobileSettings, value: number) => void;
   showWells: boolean;
   onToggleWells: () => void;
+  sectors: string[];
+  enabledSectors: Set<string>;
+  onToggleSector: (s: string) => void;
   selectedName: string | null;
   selectedPlaced: boolean;
   onClearSelected: () => void;
@@ -2852,6 +2858,24 @@ function MobileEditorToolbar({
   onReset: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [sectorsOpen, setSectorsOpen] = useState(false);
+  // Drag the whole panel by its header so it can be moved off the planets.
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 16, y: 16 });
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      setPos({ x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy });
+    };
+    const up = () => { dragRef.current = null; };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  }, []);
+  const onHeaderMouseDown = (e: React.MouseEvent) => {
+    dragRef.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+    e.preventDefault();
+  };
   const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
   const btn: React.CSSProperties = {
     fontFamily: calibri,
@@ -2867,8 +2891,8 @@ function MobileEditorToolbar({
     <div
       style={{
         position: "absolute",
-        top: 16,
-        left: 16,
+        top: pos.y,
+        left: pos.x,
         zIndex: 20,
         width: 250,
         maxHeight: "calc(100vh - 32px)",
@@ -2886,11 +2910,16 @@ function MobileEditorToolbar({
         color: "white",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>Mobile layout</span>
+      {/* Header doubles as the drag handle (grab anywhere but the buttons). */}
+      <div
+        onMouseDown={onHeaderMouseDown}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, cursor: "grab", userSelect: "none" }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4 }}>Mobile layout ⠿</span>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, opacity: 0.6 }}>{placed}/{total}</span>
           <button
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? "Expand" : "Collapse"}
             style={{ ...btn, padding: "2px 8px", lineHeight: 1 }}
@@ -2930,6 +2959,42 @@ function MobileEditorToolbar({
       >
         {showWells ? "Hide sector wells" : "Show sector wells"}
       </button>
+      {/* Sector on/off — collapsible chip grid; toggling filters the planets. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          onClick={() => setSectorsOpen((o) => !o)}
+          style={{ ...btn, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        >
+          <span>Sectors ({enabledSectors.size}/{sectors.length})</span>
+          <span style={{ opacity: 0.7 }}>{sectorsOpen ? "▾" : "▸"}</span>
+        </button>
+        {sectorsOpen && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {sectors.map((s) => {
+              const on = enabledSectors.has(s);
+              return (
+                <button
+                  key={s}
+                  onClick={() => onToggleSector(s)}
+                  title={s}
+                  style={{
+                    fontFamily: calibri,
+                    fontSize: 10.5,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    color: on ? "white" : "rgba(255,255,255,0.5)",
+                    background: on ? "rgba(120,160,255,0.28)" : "rgba(255,255,255,0.05)",
+                    border: on ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.14)",
+                  }}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {MOBILE_SETTINGS_FIELDS.map((f) => (
         <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.85 }}>
@@ -4984,6 +5049,9 @@ export default function MediaMap() {
             onSetting={setActiveSetting}
             showWells={showSectorWells}
             onToggleWells={() => setShowSectorWells((v) => !v)}
+            sectors={allSectors}
+            enabledSectors={enabled}
+            onToggleSector={toggleSector}
             selectedName={selectedPlanet}
             selectedPlaced={!!(selectedPlanet && mobilePositions[selectedPlanet])}
             onClearSelected={() => selectedPlanet && clearMobilePosition(selectedPlanet)}
