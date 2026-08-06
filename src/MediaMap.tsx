@@ -26,7 +26,7 @@ import { MOBILE_LAYOUTS, type MobileViewType, type MobileLayout, type MobileSett
 import {
   CANVAS_DESKTOP,
   CANVAS_MOBILE_45,
-  CANVAS_MOBILE_HORIZONTAL,
+  CANVAS_MOBILE_SQUARE,
   SECTOR_CENTERS,
   flatStyleForSector,
   hexToRgba,
@@ -69,6 +69,21 @@ function useIsMobile(): boolean {
   return m;
 }
 
+// True while the viewport is portrait (taller than wide). Drives the horizontal
+// view's "rotate your phone" prompt.
+function useIsPortrait(): boolean {
+  const [p, setP] = useState<boolean>(() =>
+    typeof window !== "undefined" && window.matchMedia("(orientation: portrait)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait)");
+    const handler = (e: MediaQueryListEvent) => setP(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return p;
+}
+
 // ---- Mobile view types + per-type layouts ----
 // Each mobile view type is an independently-authored layout (settings, planet
 // positions, sector wells) on its own canvas: `full` reuses the desktop
@@ -77,16 +92,24 @@ function useIsMobile(): boolean {
 const CANVAS_BY_TYPE: Record<MobileViewType, { x: number; y: number; w: number; h: number }> = {
   full: CANVAS_DESKTOP,
   vertical: CANVAS_MOBILE_45,
-  horizontal: CANVAS_MOBILE_HORIZONTAL,
+  // Horizontal uses the desktop canvas so it inherits the full view's placement
+  // pixel-for-pixel (it's the landscape/rotated-phone experience of the full map).
+  horizontal: CANVAS_DESKTOP,
+  square: CANVAS_MOBILE_SQUARE,
 };
-const MOBILE_VIEW_TYPES: MobileViewType[] = ["full", "vertical", "horizontal"];
+const MOBILE_VIEW_TYPES: MobileViewType[] = ["full", "vertical", "horizontal", "square"];
+
+// Horizontal + square start from the FULL view's placement + wells (inherited at
+// runtime; their own entries override per-planet). Full itself also seeds the
+// desktop layout for un-authored planets.
+const inheritsFullLayout = (t: MobileViewType) => t === "horizontal" || t === "square";
 
 const MOBILE_VIEW_STORE_KEY = "mm.mobileViewType";
 function loadMobileViewType(): MobileViewType {
   if (typeof window === "undefined") return "full";
   try {
     const raw = window.localStorage.getItem(MOBILE_VIEW_STORE_KEY);
-    if (raw === "full" || raw === "vertical" || raw === "horizontal") return raw;
+    if (raw && (MOBILE_VIEW_TYPES as string[]).includes(raw)) return raw as MobileViewType;
   } catch {
     /* ignore */
   }
@@ -3065,13 +3088,25 @@ export default function MediaMap() {
   const activeType: MobileViewType = mobileEdit ? mobileEditType : mobileViewType;
   // A mobile authored view is active (phone or editor); desktop non-edit = false.
   const mobileView = isMobile || mobileEdit;
+  // The horizontal view is the landscape/rotated-phone experience. On a real
+  // phone held portrait, prompt the user to rotate instead of showing the map.
+  // (In the desktop editor we always show the map so it stays authorable.)
+  const isPortrait = useIsPortrait();
+  const showRotatePrompt = isMobile && !mobileEdit && activeType === "horizontal" && isPortrait;
   const [mobileLayouts, setMobileLayouts] = useState<Record<MobileViewType, MobileLayout>>(
     () => cloneMobileLayouts(MOBILE_LAYOUTS),
   );
   const activeLayout = mobileLayouts[activeType];
   const activeSettings = activeLayout.settings;
   const mobilePositions = activeLayout.positions;
-  const mobileSectorCenters = activeLayout.sectorCenters;
+  // Horizontal + square inherit full's wells as a base; their own entries override.
+  const mobileSectorCenters = useMemo(
+    () =>
+      inheritsFullLayout(activeType)
+        ? { ...mobileLayouts.full.sectorCenters, ...activeLayout.sectorCenters }
+        : activeLayout.sectorCenters,
+    [activeType, activeLayout.sectorCenters, mobileLayouts.full.sectorCenters],
+  );
   const [showSectorWells, setShowSectorWells] = useState(true);
   // Bump to re-settle the physics sim from current positions without changing
   // any layout settings (the editor's "Refresh physics" button).
@@ -3688,9 +3723,9 @@ export default function MediaMap() {
         if (mobileView) {
           const well = mobileSectorCenters[c.sector];
           if (well) center = well;
-          else if (activeType === "full") center = desktopCenter();
+          else if (activeType === "full" || inheritsFullLayout(activeType)) center = desktopCenter();
           else {
-            // vertical/horizontal: scale the mobile sector grid into the canvas.
+            // vertical: scale the mobile sector grid into the canvas.
             const c0 = sectorCenterFor(c.sector, unknownIdx, unknownSectors.length, true);
             center = { x: c0.x * (canvas.w / 3000), y: c0.y * (canvas.h / 5000) };
           }
@@ -3731,13 +3766,20 @@ export default function MediaMap() {
   // to the desktop layout so it starts as the desktop map.
   const mobilePinnedPositions = useMemo(() => {
     const out: Record<string, PlanetPosition> = {};
-    if (activeType === "full") {
+    // Full + the inheriting types (horizontal/square) start from the desktop
+    // layout so every planet is placed; horizontal/square then layer full's
+    // authored positions on top, and finally this view's own overrides win.
+    if (activeType === "full" || inheritsFullLayout(activeType)) {
       const base = sanity ? sanity.positions : positions;
       for (const [name, p] of Object.entries(base)) out[name] = { ...p };
+      if (inheritsFullLayout(activeType)) {
+        for (const [name, p] of Object.entries(mobileLayouts.full.positions))
+          out[name] = { x: p.x, y: p.y, pin: true };
+      }
     }
     for (const [name, p] of Object.entries(mobilePositions)) out[name] = { x: p.x, y: p.y, pin: true };
     return out;
-  }, [mobilePositions, activeType, sanity, positions]);
+  }, [mobilePositions, activeType, sanity, positions, mobileLayouts.full.positions]);
 
   const nodes = usePhysicsLayout({
     inputs,
@@ -4642,6 +4684,38 @@ export default function MediaMap() {
       )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
             background: LIST_BG_GRADIENT }}>
+        {/* Horizontal view on a portrait phone: cover the map with a rotate
+            prompt. The map stays mounted underneath so physics keeps running and
+            it's ready the instant the phone is turned. */}
+        {showRotatePrompt && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 40,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 18,
+              textAlign: "center",
+              padding: 32,
+              background: LIST_BG_GRADIENT,
+              color: "#e6edf7",
+              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 64, opacity: 0.85, transform: "rotate(90deg)" }}
+            >
+              screen_rotation
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, maxWidth: 320 }}>
+              Please rotate your phone to view the full map
+            </span>
+          </div>
+        )}
         {/* Live interactive map — always mounted so physics keeps running.
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
@@ -5001,7 +5075,7 @@ export default function MediaMap() {
                 // desktop-canvas center; vertical/horizontal use the scaled grid.
                 const baseCenter =
                   mobileSectorCenters[s] ??
-                  (activeType === "full"
+                  (activeType === "full" || inheritsFullLayout(activeType)
                     ? desktopCenterForSector(s)
                     : { x: c0.x * 0.66, y: c0.y * 0.5 });
                 const liveCenter =

@@ -11,6 +11,9 @@ export const CANVAS_MOBILE = { x: -1200, y: -2500, w: 2400, h: 5000 };
 export const CANVAS_MOBILE_45 = { x: -1000, y: -1250, w: 2000, h: 2500 };
 // 16:9 landscape canvas for the mobile "horizontal" (rotated-phone) view.
 export const CANVAS_MOBILE_HORIZONTAL = { x: -1280, y: -720, w: 2560, h: 1440 };
+// 1:1 canvas for the mobile "square" view. Sized to contain the full view's
+// placement (which it inherits) so planets start visible before manual tuning.
+export const CANVAS_MOBILE_SQUARE = { x: -2000, y: -2000, w: 4000, h: 4000 };
 
 // Sector → canvas position (slide-coord space). These are the "gravity wells"
 // the physics simulation pulls each sector's planets toward.
