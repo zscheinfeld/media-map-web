@@ -7,6 +7,8 @@ export type ConnectModePanelProps = {
   connectFrom: string | null
   onToggle: () => void
   onCancel: () => void
+  /** Bare = render just the controls (no Card/title) for the connected control panel. */
+  bare?: boolean
 }
 
 /**
@@ -20,26 +22,11 @@ export function ConnectModePanel({
   connectFrom,
   onToggle,
   onCancel,
+  bare = false,
 }: ConnectModePanelProps) {
-  return (
-    <Card
-      padding={3}
-      radius={2}
-      shadow={1}
-      style={{
-        width: '100%',
-        background: 'rgba(7,14,32,0.92)',
-      }}
-    >
-      <Stack space={3}>
-        <Text
-          size={0}
-          weight="semibold"
-          style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
-        >
-          Connections
-        </Text>
-        <Button
+  const body = (
+    <Stack space={3}>
+      <Button
           text={connectMode ? 'Exit connect mode' : 'Connect planets'}
           tone={connectMode ? 'primary' : 'default'}
           mode={connectMode ? 'default' : 'ghost'}
@@ -66,6 +53,22 @@ export function ConnectModePanel({
             )}
           </Stack>
         )}
+    </Stack>
+  )
+
+  if (bare) return body
+
+  return (
+    <Card padding={3} radius={2} shadow={1} style={{width: '100%', background: 'rgba(7,14,32,0.92)'}}>
+      <Stack space={3}>
+        <Text
+          size={0}
+          weight="semibold"
+          style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
+        >
+          Connections
+        </Text>
+        {body}
       </Stack>
     </Card>
   )

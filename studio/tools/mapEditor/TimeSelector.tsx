@@ -8,6 +8,8 @@ export type TimeSelectorProps = {
   /** Whether the sector marker pills are shown on the canvas. */
   showSectorLabels: boolean
   onToggleSectorLabels: (next: boolean) => void
+  /** Bare = render just the controls (no Card/title) for the connected control panel. */
+  bare?: boolean
 }
 
 /**
@@ -24,33 +26,16 @@ export function TimeSelector({
   yearRange = EDITOR_YEAR_RANGE,
   showSectorLabels,
   onToggleSectorLabels,
+  bare = false,
 }: TimeSelectorProps) {
   const year = yearOfMoment(moment)
   const [yMin, yMax] = yearRange
   const years: number[] = []
   for (let y = yMax; y >= yMin; y--) years.push(y) // newest-first
 
-  return (
-    <Card
-      padding={3}
-      radius={2}
-      shadow={1}
-      style={{
-        width: '100%',
-        background: 'rgba(7,14,32,0.92)',
-      }}
-    >
-      <Stack space={3}>
-        <Flex justify="space-between" align="center">
-          <Text
-            size={0}
-            weight="semibold"
-            style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
-          >
-            Map at
-          </Text>
-        </Flex>
-        <Select
+  const body = (
+    <Stack space={3}>
+      <Select
           fontSize={1}
           value={String(year)}
           onChange={(e) => onChange(momentForYear(parseInt(e.currentTarget.value, 10)))}
@@ -91,6 +76,24 @@ export function TimeSelector({
             />
           </span>
         </Flex>
+    </Stack>
+  )
+
+  if (bare) return body
+
+  return (
+    <Card padding={3} radius={2} shadow={1} style={{width: '100%', background: 'rgba(7,14,32,0.92)'}}>
+      <Stack space={3}>
+        <Flex justify="space-between" align="center">
+          <Text
+            size={0}
+            weight="semibold"
+            style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
+          >
+            Map at
+          </Text>
+        </Flex>
+        {body}
       </Stack>
     </Card>
   )

@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent} from 'react'
-import {Button, Card, Flex, Spinner, Stack, Text} from '@sanity/ui'
-import {AddIcon, RemoveIcon} from '@sanity/icons'
+import {Box, Button, Card, Flex, Spinner, Stack, Text} from '@sanity/ui'
+import {AddIcon, ChevronDownIcon, RemoveIcon} from '@sanity/icons'
 import {useClient} from 'sanity'
 import {
   ConnectionLine,
@@ -25,6 +25,7 @@ import {ConnectionInspector} from './ConnectionInspector'
 import {SectorInspector} from './SectorInspector'
 import {ConnectModePanel} from './ConnectModePanel'
 import {LAYOUT_KNOBS_DEFAULTS, LayoutKnobs, type LayoutKnobsValues} from './LayoutKnobs'
+import {CollapsibleSection} from './CollapsibleSection'
 import {TimeSelector} from './TimeSelector'
 import {SaveBar} from './SaveBar'
 import {DEFAULT_MOMENT, yearOfMoment, type Moment} from './moment'
@@ -130,6 +131,9 @@ export function MapEditorTool() {
   // Sector label/marker visibility (the yellow pills). On by default; editors can
   // hide them when they're distracting (also hides the sector drag handles).
   const [showSectorLabels, setShowSectorLabels] = useState(true)
+  // Master collapse for the connected left-hand control panel (get it out of the
+  // way to see the map); individual sections collapse independently within it.
+  const [controlsOpen, setControlsOpen] = useState(true)
   const panDragRef = useRef<{
     startScreenX: number
     startScreenY: number
@@ -272,12 +276,15 @@ export function MapEditorTool() {
       .map((i) => {
         const comp = data.companiesByName[i.name]
         // i.valuation_b already carries manual-or-default; explicit precedence:
-        const v =
-          liveValuationAt(liveValuations, comp?.slug, viewedYear) ??
-          comp?.manualValue ??
-          sheetValuations[i.name.toLowerCase()]
+        const live = liveValuationAt(liveValuations, comp?.slug, viewedYear)
+        const v = live ?? comp?.manualValue ?? sheetValuations[i.name.toLowerCase()]
         const center = resolvedSectorCenters[i.sector] ?? i.center
-        return v === undefined ? {...i, center} : {...i, valuation_b: v, center}
+        // Red name when the value isn't live-sourced for the viewed year (NA /
+        // blank / not in the sheet) — matches the public map's #ff6b6b flag.
+        const labelColor = live === undefined ? '#ff6b6b' : undefined
+        return v === undefined
+          ? {...i, center, labelColor}
+          : {...i, valuation_b: v, center, labelColor}
       })
     // Entities are text-only nodes; only those whose appearance windows cover the
     // current moment are laid out. Their gravity center tracks the live sector.
@@ -915,53 +922,102 @@ export function MapEditorTool() {
         </svg>
       )}
 
-      {/* Left control column (top-left): time selector, then layout knobs, then
-          connection authoring — stacked in one flex column so they stay tidy
-          and reflow with each panel's height. */}
+      {/* Left control panel (top-left): one connected, collapsible card. A master
+          header collapses the whole panel to get it out of the way; inside, each
+          section (Map at / Layout / Connections) is an independent accordion so
+          the tall slider list can be tucked away without hiding the year picker. */}
       {data && !error && (
-        <div
+        <Card
+          radius={3}
+          shadow={2}
           style={{
             position: 'absolute',
             top: 12,
             left: 12,
             width: 280,
+            maxHeight: 'calc(100% - 24px)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            background: 'rgba(7,14,32,0.92)',
+            overflow: 'hidden',
           }}
         >
-          <TimeSelector
-            moment={moment}
-            onChange={setMoment}
-            showSectorLabels={showSectorLabels}
-            onToggleSectorLabels={setShowSectorLabels}
-          />
-          <LayoutKnobs
-            packingDensity={knobs.packingDensity}
-            collidePadding={knobs.collidePadding}
-            labelSizePx={knobs.labelSizePx}
-            connectionPull={knobs.connectionPull}
-            entityRadius={knobs.entityRadius}
-            sizeSpacing={knobs.sizeSpacing}
-            sectorPull={knobs.sectorPull}
-            repulsion={knobs.repulsion}
-            setPackingDensity={setKnob('packingDensity')}
-            setCollidePadding={setKnob('collidePadding')}
-            setLabelSizePx={setKnob('labelSizePx')}
-            setConnectionPull={setKnob('connectionPull')}
-            setEntityRadius={setKnob('entityRadius')}
-            setSizeSpacing={setKnob('sizeSpacing')}
-            setSectorPull={setKnob('sectorPull')}
-            setRepulsion={setKnob('repulsion')}
-            anchorDiam={anchorDiam}
-          />
-          <ConnectModePanel
-            connectMode={connectMode}
-            connectFrom={connectFrom}
-            onToggle={toggleConnectMode}
-            onCancel={cancelConnectSelection}
-          />
-        </div>
+          <Flex
+            align="center"
+            justify="space-between"
+            onClick={() => setControlsOpen((o) => !o)}
+            style={{
+              cursor: 'pointer',
+              userSelect: 'none',
+              padding: '10px 12px',
+              borderBottom: controlsOpen ? '1px solid rgba(255,255,255,0.12)' : undefined,
+              flex: '0 0 auto',
+            }}
+          >
+            <Text
+              size={1}
+              weight="semibold"
+              style={{color: '#ffe066', letterSpacing: 1, textTransform: 'uppercase'}}
+            >
+              Map Controls
+            </Text>
+            <Text
+              size={2}
+              style={{
+                color: 'rgba(255,255,255,0.6)',
+                display: 'inline-flex',
+                transition: 'transform 140ms ease',
+                transform: controlsOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+              }}
+            >
+              <ChevronDownIcon />
+            </Text>
+          </Flex>
+          {controlsOpen && (
+            <Box style={{overflowY: 'auto', flex: '1 1 auto'}}>
+              <CollapsibleSection title="Map at" first>
+                <TimeSelector
+                  bare
+                  moment={moment}
+                  onChange={setMoment}
+                  showSectorLabels={showSectorLabels}
+                  onToggleSectorLabels={setShowSectorLabels}
+                />
+              </CollapsibleSection>
+              <CollapsibleSection title="Layout">
+                <LayoutKnobs
+                  bare
+                  packingDensity={knobs.packingDensity}
+                  collidePadding={knobs.collidePadding}
+                  labelSizePx={knobs.labelSizePx}
+                  connectionPull={knobs.connectionPull}
+                  entityRadius={knobs.entityRadius}
+                  sizeSpacing={knobs.sizeSpacing}
+                  sectorPull={knobs.sectorPull}
+                  repulsion={knobs.repulsion}
+                  setPackingDensity={setKnob('packingDensity')}
+                  setCollidePadding={setKnob('collidePadding')}
+                  setLabelSizePx={setKnob('labelSizePx')}
+                  setConnectionPull={setKnob('connectionPull')}
+                  setEntityRadius={setKnob('entityRadius')}
+                  setSizeSpacing={setKnob('sizeSpacing')}
+                  setSectorPull={setKnob('sectorPull')}
+                  setRepulsion={setKnob('repulsion')}
+                  anchorDiam={anchorDiam}
+                />
+              </CollapsibleSection>
+              <CollapsibleSection title="Connections">
+                <ConnectModePanel
+                  bare
+                  connectMode={connectMode}
+                  connectFrom={connectFrom}
+                  onToggle={toggleConnectMode}
+                  onCancel={cancelConnectSelection}
+                />
+              </CollapsibleSection>
+            </Box>
+          )}
+        </Card>
       )}
 
       {/* Staged-changes bar (top-right). */}

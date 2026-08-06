@@ -33,6 +33,8 @@ export type LayoutKnobsProps = LayoutKnobsValues & {
   setRepulsion: (v: number) => void
   /** Apple's current rendered diameter in slide units — shown as a hint. */
   anchorDiam: number
+  /** Bare = render just the controls (no Card/title) for the connected control panel. */
+  bare?: boolean
 }
 
 function SliderRow(props: {
@@ -84,37 +86,22 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
     props.setRepulsion(LAYOUT_KNOBS_DEFAULTS.repulsion)
   }
 
-  return (
-    <Card
-      padding={3}
-      radius={2}
-      shadow={1}
-      style={{
-        width: '100%',
-        background: 'rgba(7,14,32,0.92)',
-      }}
-    >
-      <Stack space={4}>
-        <Flex justify="space-between" align="center">
-          <Text
-            size={0}
-            weight="semibold"
-            style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
-          >
-            Layout Knobs
-          </Text>
-          <Button
-            text="Defaults"
-            mode="ghost"
-            tone="default"
-            fontSize={0}
-            padding={2}
-            onClick={reset}
-            title="Restore the default knob values (stages as a change until you Save)"
-          />
-        </Flex>
+  const defaultsButton = (
+    <Button
+      text="Defaults"
+      mode="ghost"
+      tone="default"
+      fontSize={0}
+      padding={2}
+      onClick={reset}
+      title="Restore the default knob values (stages as a change until you Save)"
+    />
+  )
 
-        <SliderRow
+  const body = (
+    <Stack space={4}>
+      {props.bare && <Flex justify="flex-end">{defaultsButton}</Flex>}
+      <SliderRow
           label="Planet size (density)"
           value={props.packingDensity}
           formatted={props.packingDensity.toFixed(2)}
@@ -192,6 +179,25 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
             Apple ≈ {props.anchorDiam.toFixed(0)} slide units
           </Text>
         </Box>
+    </Stack>
+  )
+
+  if (props.bare) return body
+
+  return (
+    <Card padding={3} radius={2} shadow={1} style={{width: '100%', background: 'rgba(7,14,32,0.92)'}}>
+      <Stack space={4}>
+        <Flex justify="space-between" align="center">
+          <Text
+            size={0}
+            weight="semibold"
+            style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
+          >
+            Layout Knobs
+          </Text>
+          {defaultsButton}
+        </Flex>
+        {body}
       </Stack>
     </Card>
   )
