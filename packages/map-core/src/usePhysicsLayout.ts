@@ -401,6 +401,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const hasFirstAnimRef = useRef(false)
   const tweenRafRef = useRef<number | null>(null)
+  const prevRestartTokenRef = useRef(restartToken)
 
   // Stable keys so the sim only restarts on meaningful change (membership,
   // valuation/size, center moves, overrides, labels, connections, bounds).
@@ -434,6 +435,14 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     if (inputs.length === 0) {
       setNodes([])
       return
+    }
+
+    // Manual "refresh physics" (restartToken bumped): drop the cached nodes so
+    // every planet RELOADS fresh at its target (sector well / pin) and the sim
+    // re-settles from scratch, rather than reheating from wherever it sat.
+    if (restartToken !== prevRestartTokenRef.current) {
+      prevRestartTokenRef.current = restartToken
+      nodeMapRef.current.clear()
     }
 
     const active = inputs
