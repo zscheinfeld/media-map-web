@@ -303,6 +303,11 @@ const VALUATION_ZOOM_THRESHOLD = 1.9;
 // labels appear. Doesn't affect desktop.
 const MOBILE_LABEL_ZOOM_THRESHOLD = 2.5;
 
+// Mobile: text-only entities (sub-brands) are hidden by default to reduce
+// clutter, and reveal once the user zooms past this threshold. Entities have
+// r=0 so the diameter-based name threshold can't reveal them — this drives it.
+const ENTITY_MOBILE_ZOOM_THRESHOLD = 2.0;
+
 function formatValuation(b: number): string {
   if (b >= 1000) return `$${(b / 1000).toFixed(b >= 10000 ? 1 : 2)}T`;
   if (b >= 10) return `$${b.toFixed(0)}B`;
@@ -2827,6 +2832,7 @@ function MobileEditorToolbar({
   onSetting,
   showWells,
   onToggleWells,
+  onRefreshPhysics,
   sectors,
   enabledSectors,
   onToggleSector,
@@ -2846,6 +2852,7 @@ function MobileEditorToolbar({
   onSetting: (key: keyof MobileSettings, value: number) => void;
   showWells: boolean;
   onToggleWells: () => void;
+  onRefreshPhysics: () => void;
   sectors: string[];
   enabledSectors: Set<string>;
   onToggleSector: (s: string) => void;
@@ -2959,6 +2966,8 @@ function MobileEditorToolbar({
       >
         {showWells ? "Hide sector wells" : "Show sector wells"}
       </button>
+      {/* Re-settle the sim from current positions, keeping all settings/pins. */}
+      <button onClick={onRefreshPhysics} style={btn}>↻ Refresh physics</button>
       {/* Sector on/off — collapsible chip grid; toggling filters the planets. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button
@@ -3064,6 +3073,9 @@ export default function MediaMap() {
   const mobilePositions = activeLayout.positions;
   const mobileSectorCenters = activeLayout.sectorCenters;
   const [showSectorWells, setShowSectorWells] = useState(true);
+  // Bump to re-settle the physics sim from current positions without changing
+  // any layout settings (the editor's "Refresh physics" button).
+  const [physicsBump, setPhysicsBump] = useState(0);
   // Mutators scoped to the active view type.
   const updateActiveLayout = (fn: (l: MobileLayout) => MobileLayout) =>
     setMobileLayouts((prev) => ({ ...prev, [activeType]: fn(prev[activeType]) }));
@@ -3743,6 +3755,7 @@ export default function MediaMap() {
     labelRadii,
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
+    restartToken: physicsBump,
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -4911,6 +4924,8 @@ export default function MediaMap() {
                       : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
                   }
                   labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                  // Mobile: hide entities by default, reveal once zoomed in.
+                  entityLabelSuppressed={mobileView && zoom < ENTITY_MOBILE_ZOOM_THRESHOLD}
                 />
               );
             })}
@@ -5065,6 +5080,7 @@ export default function MediaMap() {
             onSetting={setActiveSetting}
             showWells={showSectorWells}
             onToggleWells={() => setShowSectorWells((v) => !v)}
+            onRefreshPhysics={() => setPhysicsBump((n) => n + 1)}
             sectors={allSectors}
             enabledSectors={enabled}
             onToggleSector={toggleSector}

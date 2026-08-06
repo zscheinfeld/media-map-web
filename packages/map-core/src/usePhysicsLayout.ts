@@ -355,6 +355,9 @@ export type PhysicsOptions = {
    * planet visually at the drop point through the Sanity write round-trip.
    */
   dragging?: {name: string; x: number; y: number} | null
+  /** Bump this number to re-settle the sim from the current positions WITHOUT
+   *  changing any settings (a manual "refresh physics"). */
+  restartToken?: number
 }
 
 /**
@@ -380,6 +383,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     connections = [],
     connectionStrength = CONNECTION_PULL,
     dragging = null,
+    restartToken = 0,
   } = opts
 
   const [nodes, setNodes] = useState<PlanetNode[]>([])
@@ -872,7 +876,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       sim.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey])
+  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken])
 
   // Wake/cool the sim on drag enter/leave. The tick callback already nudges
   // alphaTarget on every tick, but the sim can be fully cooled (alpha=0) when

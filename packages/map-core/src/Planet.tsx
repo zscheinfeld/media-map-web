@@ -21,6 +21,10 @@ export type PlanetProps = {
   labelSuppressed?: boolean
   /** Below this on-screen diameter the label is hidden (unless hovered). 0 = always show. */
   labelMinScreenDiameter?: number
+  /** Hide entity (text-only) labels unless hovered/edit. Entities have r=0 so the
+   *  diameter threshold can't reveal them on zoom — the caller drives this from a
+   *  zoom threshold instead (e.g. hidden on mobile until zoomed in). */
+  entityLabelSuppressed?: boolean
 }
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
@@ -40,6 +44,7 @@ export function Planet({
   showValuation = false,
   labelSuppressed = false,
   labelMinScreenDiameter = 0,
+  entityLabelSuppressed = false,
 }: PlanetProps) {
   const safeName = node.name.replace(/[^a-z0-9]/gi, "_")
   const gradId = `planet-${safeName}`
@@ -136,10 +141,10 @@ export function Planet({
             pointerEvents="none"
           />
         )}
-        {/* Entities are all-label: respect the same label gate as planets so a
-            mobile name-threshold (their on-screen diameter is 0) hides them by
-            default, while edit mode always shows them for placement. */}
-        {(isEditMode || showLabel) && renderNameLabel(false)}
+        {/* Entities are all-label. Hidden when the caller suppresses them (e.g.
+            mobile, zoomed out); revealed on hover, in edit mode, or once the
+            caller stops suppressing (zoomed in past its threshold). */}
+        {(isEditMode || isHovered || !entityLabelSuppressed) && renderNameLabel(false)}
       </g>
     )
   }
