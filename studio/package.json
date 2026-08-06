@@ -8,7 +8,7 @@
     "dev": "sanity dev",
     "start": "sanity start",
     "build": "sanity build",
-    "deploy": "sanity deploy",
+    "deploy": "SANITY_AUTH_TOKEN= sanity deploy",
     "import": "tsx scripts/import-from-sheet.ts",
     "publish-drafts": "tsx scripts/publish-drafts.ts",
     "republish-all": "tsx scripts/republish-all.ts",
