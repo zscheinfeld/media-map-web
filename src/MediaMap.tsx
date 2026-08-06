@@ -181,7 +181,9 @@ function sampleListGradient(f: number): string {
 // valuation still needs converting. `usdFlag` strips the marker for display and
 // reports the flag, so the app can show the clean name and tint it bright blue
 // (a "fix me" cue) instead of printing the marker text on the map.
-const USD_FLAG_COLOR = "#3ba9ff";
+// TEMP: label tint disabled — all labels render white for now. Restore this
+// const (and its uses in the map input + list view) to bring the cue back.
+// const USD_FLAG_COLOR = "#3ba9ff";
 const USD_FLAG_STRIP_RE = /[\s\-–—]*convert\s+to\s+usd\s*!*\s*$/i;
 function usdFlag(name: string): { display: string; flag: boolean } {
   const flag = /convert\s+to\s+usd/i.test(name);
@@ -2463,7 +2465,7 @@ function CompanyListView({
                 cursor: "pointer",
               }}
             >
-              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20, ...(usdFlag(r.name).flag ? { color: USD_FLAG_COLOR } : {}) }}>{usdFlag(r.name).display}</td>
+              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20 }}>{usdFlag(r.name).display}</td>
               <td style={td}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span
@@ -3717,7 +3719,8 @@ export default function MediaMap() {
   const inputs = useMemo<LayoutInput[]>(() => {
     const allSectors = Array.from(new Set(displayedCompanies.map((c) => c.sector))).sort();
     const unknownSectors = allSectors.filter((s) => !isKnownSector(s));
-    const activeYearKey = String(activeDate.year);
+    // TEMP: only used by the disabled not-live red flag.
+    // const activeYearKey = String(activeDate.year);
     const companyInputs = displayedCompanies
       .filter((c) => enabled.has(c.sector))
       .map((c) => {
@@ -3740,12 +3743,10 @@ export default function MediaMap() {
         } else {
           center = desktopCenter();
         }
-        // Red label when the value isn't live-sourced from the valuation sheet
-        // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
-        const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
-        // "Convert to USD" authoring marker: strip it from the drawn label and
-        // tint the name bright blue as a "needs fixing" cue (wins over the red
-        // not-live flag). `name` stays the full identity for matching.
+        // TEMP: not-live red disabled — was:
+        // const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
+        // "Convert to USD" authoring marker: strip it from the drawn label. Colour
+        // is temporarily white too. `name` stays the full identity for matching.
         const usd = usdFlag(c.name);
         return {
           name: c.name,
@@ -3754,7 +3755,9 @@ export default function MediaMap() {
           center,
           hue: sanity?.hueBySector[c.sector] ?? hueForSector(c.sector),
           style: sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector),
-          labelColor: usd.flag ? USD_FLAG_COLOR : live ? undefined : "#ff6b6b",
+          // TEMP: all labels white — USD-flag blue + not-live red disabled for now.
+          // Restore with: usd.flag ? USD_FLAG_COLOR : live ? undefined : "#ff6b6b"
+          labelColor: undefined,
           ...(usd.flag ? { labelText: usd.display } : {}),
         };
       });
