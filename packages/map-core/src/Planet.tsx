@@ -61,7 +61,7 @@ export function Planet({
   // HTML-in-foreignObject labels mis-scale AND get text-inflated on iOS Safari
   // (giant ghost labels). Shared by the planet body + the entity branch.
   const renderNameLabel = (withValuation: boolean) => {
-    const words = node.name.trim().split(/\s+/)
+    const words = (node.labelText ?? node.name).trim().split(/\s+/)
     const valText = withValuation ? formatValuation(node.valuation_b) : null
     const lineH = labelFontPx
     const gap = valText ? labelFontPx * 0.15 : 0

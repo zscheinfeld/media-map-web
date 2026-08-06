@@ -462,6 +462,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         existing.pinned = pinned
         existing.labelRadius = labelR
         existing.labelColor = c.labelColor
+        existing.labelText = c.labelText
         if (pinned && pos) {
           existing.fx = pos.x
           existing.fy = pos.y
@@ -499,6 +500,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         fy: pinned && pos ? pos.y : null,
         labelRadius: labelR,
         labelColor: c.labelColor,
+        labelText: c.labelText,
       }
       map.set(c.name, node)
       return node

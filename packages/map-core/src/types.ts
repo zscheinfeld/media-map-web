@@ -80,6 +80,10 @@ export type PlanetNode = {
   // Optional override for the name-label text color (default white). The app uses
   // this to flag e.g. companies whose valuation isn't live-sourced yet.
   labelColor?: string
+  // Optional DISPLAY-ONLY label text (defaults to `name`); `name` remains the
+  // node identity used for matching. Lets the app strip an authoring marker from
+  // the drawn label without changing the underlying company name.
+  labelText?: string
 }
 
 // Data-source-agnostic input to `usePhysicsLayout`. The caller (app or Studio)
@@ -101,4 +105,8 @@ export type LayoutInput = {
   // Optional name-label text color (default white). The app flags non-live-sourced
   // valuations (e.g. NA / fallback companies) by passing a red here.
   labelColor?: string
+  // Optional DISPLAY-ONLY label text (defaults to `name`). `name` stays the node
+  // identity (connection/position matching); this only changes what's drawn, e.g.
+  // to strip an authoring marker like " - CONVERT TO USD" from the shown name.
+  labelText?: string
 }

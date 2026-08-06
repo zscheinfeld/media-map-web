@@ -146,6 +146,18 @@ function sampleListGradient(f: number): string {
   return `rgb(${c0[0]}, ${c0[1]}, ${c0[2]})`;
 }
 
+// "Needs USD conversion" authoring marker. Some companies carry a literal
+// " - CONVERT TO USD" suffix in their (Sanity) name as a reminder that their
+// valuation still needs converting. `usdFlag` strips the marker for display and
+// reports the flag, so the app can show the clean name and tint it bright blue
+// (a "fix me" cue) instead of printing the marker text on the map.
+const USD_FLAG_COLOR = "#3ba9ff";
+const USD_FLAG_STRIP_RE = /[\s\-–—]*convert\s+to\s+usd\s*!*\s*$/i;
+function usdFlag(name: string): { display: string; flag: boolean } {
+  const flag = /convert\s+to\s+usd/i.test(name);
+  return { display: flag ? name.replace(USD_FLAG_STRIP_RE, "").trim() || name : name, flag };
+}
+
 // Floating gear button (top-right) that switches the mobile view type
 // (full / vertical / horizontal). Layout authoring lives in the ?edit=mobile
 // desktop editor; on the phone this is just the view switcher.
@@ -1015,7 +1027,7 @@ function PlanetDetailPanel({
 
           <div style={{ marginBottom: 24, paddingRight: 36 }}>
             <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1, marginBottom: 6 }}>
-              {node.name}
+              {usdFlag(node.name).display}
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1.5, textTransform: "uppercase" }}>
               {node.sector}
@@ -2414,7 +2426,7 @@ function CompanyListView({
                 cursor: "pointer",
               }}
             >
-              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20 }}>{r.name}</td>
+              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20, ...(usdFlag(r.name).flag ? { color: USD_FLAG_COLOR } : {}) }}>{usdFlag(r.name).display}</td>
               <td style={td}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span
@@ -2754,7 +2766,7 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
               boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: 2 }}>{hoverBand.name}</div>
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>{usdFlag(hoverBand.name).display}</div>
             <div style={{ fontVariantNumeric: "tabular-nums" }}>
               {formatValuation(hoverBand.values[hover.i])} · {formatDate(dates[hover.i])}
             </div>
@@ -3601,6 +3613,10 @@ export default function MediaMap() {
         // Red label when the value isn't live-sourced from the valuation sheet
         // yet (NA / blank / not in it) — it's still shown via the legacy fallback.
         const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
+        // "Convert to USD" authoring marker: strip it from the drawn label and
+        // tint the name bright blue as a "needs fixing" cue (wins over the red
+        // not-live flag). `name` stays the full identity for matching.
+        const usd = usdFlag(c.name);
         return {
           name: c.name,
           sector: c.sector,
@@ -3608,7 +3624,8 @@ export default function MediaMap() {
           center,
           hue: sanity?.hueBySector[c.sector] ?? hueForSector(c.sector),
           style: sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector),
-          labelColor: live ? undefined : "#ff6b6b",
+          labelColor: usd.flag ? USD_FLAG_COLOR : live ? undefined : "#ff6b6b",
+          ...(usd.flag ? { labelText: usd.display } : {}),
         };
       });
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
