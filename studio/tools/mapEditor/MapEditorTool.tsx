@@ -975,7 +975,7 @@ export function MapEditorTool() {
           </Flex>
           {controlsOpen && (
             <Box style={{overflowY: 'auto', flex: '1 1 auto'}}>
-              <CollapsibleSection title="Map at" first>
+              <CollapsibleSection title="Map Year" first>
                 <TimeSelector
                   bare
                   moment={moment}

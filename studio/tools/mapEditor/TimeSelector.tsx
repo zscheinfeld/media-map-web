@@ -90,7 +90,7 @@ export function TimeSelector({
             weight="semibold"
             style={{color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase'}}
           >
-            Map at
+            Map Year
           </Text>
         </Flex>
         {body}

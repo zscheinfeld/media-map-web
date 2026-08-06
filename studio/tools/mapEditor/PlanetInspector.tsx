@@ -78,19 +78,13 @@ export function PlanetInspector({
     >
       <Stack space={4}>
         <Flex align="center" justify="space-between" gap={2}>
-          <Text
-            size={2}
-            weight="semibold"
-            style={{
-              color: '#fff',
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {selectedCompany.name}
-          </Text>
+          {/* Box owns the truncation (minWidth:0 lets it shrink); Text's own
+              textOverflow prop ellipsizes without clipping the glyph tops. */}
+          <Box style={{flex: '1 1 auto', minWidth: 0}}>
+            <Text size={2} weight="semibold" textOverflow="ellipsis" style={{color: '#fff'}}>
+              {selectedCompany.name}
+            </Text>
+          </Box>
           <Box style={{flex: '0 0 auto'}}>
             <Button mode="bleed" tone="default" text="✕" onClick={onClose} padding={2} fontSize={1} />
           </Box>
@@ -172,16 +166,13 @@ export function PlanetInspector({
               transition: 'background 140ms ease, border-color 140ms ease',
             }}
           >
-            <Flex align="center" gap={2}>
-              <Text size={3}>📌</Text>
-              <Text
-                size={2}
-                weight="semibold"
-                style={{color: activeOverride.pin ? '#ffe066' : '#fff'}}
-              >
-                {activeOverride.pin ? 'Pinned' : 'Pin position'}
-              </Text>
-            </Flex>
+            <Text
+              size={2}
+              weight="semibold"
+              style={{color: activeOverride.pin ? '#ffe066' : '#fff'}}
+            >
+              {activeOverride.pin ? 'Pinned' : 'Pin position'}
+            </Text>
             {/* The switch's off-state track vanishes on the navy panel, so ring it. */}
             <span
               style={{
