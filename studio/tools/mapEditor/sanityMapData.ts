@@ -45,10 +45,19 @@ function toCoreStyle(s: SanityPlanetStyle): PlanetStyle | null {
   return Object.keys(out).length ? out : null
 }
 
-function latestValuation(manual: {value_billions_usd?: number; as_of_date?: string}[] | undefined): number {
-  if (!manual || manual.length === 0) return DEFAULT_VALUATION_B
+// The most recent manually-entered valuation, or undefined if none. Used both as
+// a size fallback and — matching the public app's precedence (live sheet →
+// manual → legacy) — as the middle tier when the live sheet doesn't cover a slug.
+function rawLatestValuation(
+  manual: {value_billions_usd?: number; as_of_date?: string}[] | undefined,
+): number | undefined {
+  if (!manual || manual.length === 0) return undefined
   const sorted = [...manual].sort((a, b) => (b.as_of_date ?? '').localeCompare(a.as_of_date ?? ''))
-  return sorted[0]?.value_billions_usd ?? DEFAULT_VALUATION_B
+  return sorted[0]?.value_billions_usd
+}
+
+function latestValuation(manual: {value_billions_usd?: number; as_of_date?: string}[] | undefined): number {
+  return rawLatestValuation(manual) ?? DEFAULT_VALUATION_B
 }
 
 // --- Raw GROQ shapes ------------------------------------------------------
@@ -79,6 +88,7 @@ export type RawExternalArticle = {
 type RawCompany = {
   _id: string
   name: string
+  slug?: string
   sector?: {_id: string; name: string; desktop_center?: Coord; default_style?: SanityPlanetStyle} | null
   planet_style?: SanityPlanetStyle
   position_overrides?: RawPositionOverride[]
@@ -145,6 +155,11 @@ export type EditorSector = {
 export type EditorCompany = {
   id: string
   name: string
+  /** Slug — the join key into the live valuations sheet (keyed by slug × year). */
+  slug?: string
+  /** Latest manual valuation (billions), or undefined if none. Middle tier of the
+   *  live → manual → legacy valuation precedence, mirroring the public app. */
+  manualValue?: number
   positionOverrides: RawPositionOverride[]
   appearanceWindows: RawAppearanceWindow[]
   // Optional so the entity placeable (which has none of these) stays structurally
@@ -260,6 +275,8 @@ function buildMapData(
     companiesByName[c.name] = {
       id: c._id,
       name: c.name,
+      slug: c.slug,
+      manualValue: rawLatestValuation(c.manual_valuations),
       positionOverrides: overrides,
       appearanceWindows: c.appearance_windows ?? [],
       vitals: c.vitals ?? [],
@@ -310,7 +327,7 @@ const SECTORS_Q = `*[_type == "sector"]{
   _id, name, desktop_center, mobile_center, desktop_center_overrides
 }`
 const COMPANIES_Q = `*[_type == "company"]{
-  _id, name, description,
+  _id, name, "slug": slug.current, description,
   sector->{_id, name, desktop_center, default_style},
   planet_style, position_overrides, appearance_windows, manual_valuations,
   vitals[]{_key, name, statistic, start_date, end_date},

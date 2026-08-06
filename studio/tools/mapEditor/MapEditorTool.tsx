@@ -18,6 +18,7 @@ import {
   type EditorEntity,
 } from './sanityMapData'
 import {useSheetValuations} from './sheetValuations'
+import {useLiveValuations, valuationAt as liveValuationAt} from './liveValuations'
 import {computeLabelRadii} from './labelRadii'
 import {PlanetInspector} from './PlanetInspector'
 import {ConnectionInspector} from './ConnectionInspector'
@@ -106,7 +107,12 @@ type DragRef = {
 export function MapEditorTool() {
   const client = useClient({apiVersion: '2024-01-01'})
   const {data, error} = useSanityMapData()
-  const {valuations: sheetValuations, loaded: valuationsLoaded} = useSheetValuations()
+  // Live valuations (slug × year) — the same published sheet the public map uses,
+  // so editor planet sizes match production AND resize as the year is scrubbed.
+  // The legacy name-matched sheet stays as the final fallback for uncovered rows.
+  const {data: liveValuations, loaded: liveValuationsLoaded} = useLiveValuations()
+  const {valuations: sheetValuations, loaded: sheetValuationsLoaded} = useSheetValuations()
+  const valuationsLoaded = liveValuationsLoaded && sheetValuationsLoaded
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [containerW, setContainerW] = useState(0)
   const [containerH, setContainerH] = useState(0)
@@ -249,11 +255,14 @@ export function MapEditorTool() {
     return out
   }, [data, pending, sectorDragState, moment])
 
-  // Sheet valuations override Sanity's fallback. Wait for data + valuations +
-  // container measurement before producing inputs so first layout settles once.
-  // Inputs' `center` uses the resolved sector center (Sanity + pending + live
-  // drag), so a planet without coordinates "drifts" toward whichever position
-  // the sector marker is at right now.
+  // Live valuations size the planets, matched to the viewed year so scrubbing the
+  // TimeSelector resizes them exactly like the public map. Precedence mirrors the
+  // app: live sheet (slug × year) → manual Sanity value → legacy name sheet →
+  // Sanity default. Wait for data + valuations + container measurement before
+  // producing inputs so first layout settles once. Inputs' `center` uses the
+  // resolved sector center (Sanity + pending + live drag), so a planet without
+  // coordinates "drifts" toward whichever position the sector marker is at now.
+  const viewedYear = String(yearOfMoment(moment))
   const inputs = useMemo(() => {
     if (!data || !valuationsLoaded || containerW === 0) return []
     // Only companies whose appearance windows cover the current moment are laid
@@ -261,7 +270,12 @@ export function MapEditorTool() {
     const companyInputs = data.inputs
       .filter((i) => appearanceActiveAt(data.companiesByName[i.name]?.appearanceWindows ?? [], moment))
       .map((i) => {
-        const v = sheetValuations[i.name.toLowerCase()]
+        const comp = data.companiesByName[i.name]
+        // i.valuation_b already carries manual-or-default; explicit precedence:
+        const v =
+          liveValuationAt(liveValuations, comp?.slug, viewedYear) ??
+          comp?.manualValue ??
+          sheetValuations[i.name.toLowerCase()]
         const center = resolvedSectorCenters[i.sector] ?? i.center
         return v === undefined ? {...i, center} : {...i, valuation_b: v, center}
       })
@@ -279,7 +293,7 @@ export function MapEditorTool() {
         style: null,
       }))
     return [...companyInputs, ...entityInputs]
-  }, [data, valuationsLoaded, sheetValuations, containerW, resolvedSectorCenters, moment])
+  }, [data, valuationsLoaded, liveValuations, sheetValuations, viewedYear, containerW, resolvedSectorCenters, moment])
 
   // Companies + entities share the {id, name, positionOverrides} shape, so the
   // drag/pin/inspector/connect pipeline treats them uniformly. Keyed by name.

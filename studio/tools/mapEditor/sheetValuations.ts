@@ -1,12 +1,12 @@
 import {useEffect, useState} from 'react'
 
-// === Valuation provider ===================================================
-// The editor needs planet sizes, but valuations don't live in Sanity (only
-// `manual_valuations` overrides do). For now the editor reads the same public
-// Google Sheet the app uses, matched by company name. This is the single swap
-// point: when valuations move to Supabase, replace the fetch/parse below with
-// a Supabase query and keep the return contract — a map of
-// lowercased-company-name → valuation in billions USD.
+// === Legacy valuation provider (name-matched fallback) ====================
+// The editor's PRIMARY size source is now the live slug × year sheet in
+// liveValuations.ts (the same one the public map uses). This legacy provider
+// reads the older gid=0 sheet matched by company NAME and remains only as the
+// final fallback for rows the live sheet + Sanity manual values don't cover
+// (mirrors the public app's precedence: live → manual → legacy). Returns a map
+// of lowercased-company-name → valuation in billions USD.
 // ==========================================================================
 
 const SHEET_ID = '1ZVOsVf4fcoh1y08MecBcYtuVWfM54hTP9WVhBDAmgrc'
