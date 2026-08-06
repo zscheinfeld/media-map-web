@@ -46,9 +46,12 @@ export function yearOfMoment(moment: Moment): number {
   return parseMoment(moment).year
 }
 
-/** Year-only label for a moment ("2025"), with "(now)" on the current year. */
+/** Year-only label for a moment ("2025"), with "(now)" on the current year.
+ *  UNDATED / unparseable moments (empty start_date) read as "Always" — i.e. the
+ *  override applies from the beginning — rather than rendering "NaN". */
 export function formatMomentYear(moment: Moment): string {
   const y = parseMoment(moment).year
+  if (!Number.isFinite(y)) return 'Always'
   return y >= EDITOR_CURRENT_YEAR ? `${y} (now)` : `${y}`
 }
 

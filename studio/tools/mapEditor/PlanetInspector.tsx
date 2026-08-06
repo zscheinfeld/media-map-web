@@ -1,7 +1,7 @@
 import {Box, Button, Card, Flex, Stack, Switch, Text} from '@sanity/ui'
 import {formatMomentYear, type Moment} from './moment'
 import type {ResolvedOverride} from './pendingChanges'
-import {vitalActiveAt, type EditorCompany} from './sanityMapData'
+import type {EditorCompany} from './sanityMapData'
 
 export type PlanetInspectorProps = {
   selectedCompany: EditorCompany | null
@@ -53,8 +53,6 @@ export function PlanetInspector({
 }: PlanetInspectorProps) {
   if (!selectedCompany) return null
   const momentLabel = formatMomentYear(currentMoment)
-  // Vitals visible on the current map (inside their date window).
-  const vitals = (selectedCompany.vitals ?? []).filter((v) => vitalActiveAt(v, currentMoment))
   // Related content — not time-bound; shown newest-first.
   const byDateDesc = (a: {published_date?: string}, b: {published_date?: string}) =>
     (b.published_date ?? '').localeCompare(a.published_date ?? '')
@@ -71,51 +69,32 @@ export function PlanetInspector({
         top: 92,
         right: 12,
         width: 280,
-        background: 'rgba(7,14,32,0.94)',
+        // Fully opaque so map planet labels behind the panel don't bleed through
+        // and visually collide with the panel's own text.
+        background: '#070e20',
         maxHeight: 'calc(100% - 110px)',
         overflow: 'auto',
       }}
     >
-      <Stack space={3}>
-        <Flex align="center" justify="space-between">
-          <Text size={1} weight="semibold" style={{color: '#fff'}}>
+      <Stack space={4}>
+        <Flex align="center" justify="space-between" gap={2}>
+          <Text
+            size={2}
+            weight="semibold"
+            style={{
+              color: '#fff',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {selectedCompany.name}
           </Text>
-          <Button mode="bleed" tone="default" text="✕" onClick={onClose} padding={2} fontSize={1} />
+          <Box style={{flex: '0 0 auto'}}>
+            <Button mode="bleed" tone="default" text="✕" onClick={onClose} padding={2} fontSize={1} />
+          </Box>
         </Flex>
-
-        {/* Vitals — time-bound fact tags shown for the current map. */}
-        {vitals.length > 0 && (
-          <Stack space={2}>
-            <Text size={0} muted style={{textTransform: 'uppercase', letterSpacing: 1}}>
-              Vitals
-            </Text>
-            <Flex wrap="wrap" gap={2}>
-              {vitals.map((v) => (
-                <Card
-                  key={v._key}
-                  padding={2}
-                  radius={2}
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                  }}
-                >
-                  <Stack space={1}>
-                    <Text size={1} weight="semibold" style={{color: '#fff'}}>
-                      {v.name}
-                    </Text>
-                    {v.statistic && (
-                      <Text size={0} style={{color: 'rgba(255,255,255,0.55)'}}>
-                        {v.statistic}
-                      </Text>
-                    )}
-                  </Stack>
-                </Card>
-              ))}
-            </Flex>
-          </Stack>
-        )}
 
         {/* Description — Evan's context blurb (not time-bound). */}
         {selectedCompany.description && (
@@ -172,31 +151,50 @@ export function PlanetInspector({
             </Text>
           ) : (
             <Text size={1} muted>
-              No specific coordinates yet — drifting in its sector. Drag to author a position from {momentLabel}.
-            </Text>
-          )}
-          {activeOverride && !isActiveAtCurrentMoment && (
-            <Text size={0} muted>
-              Inherited from {formatMomentYear(activeOverride.moment)} (forward-propagated).
+              No position yet — drag to place.
             </Text>
           )}
         </Stack>
 
-        {/* Pin toggle — acts on the active override. */}
+        {/* Pin toggle — acts on the active override. Prominent: a full-width row
+            that turns yellow when pinned so its state reads at a glance. */}
         {activeOverride && (
-          <Flex align="center" justify="space-between">
-            <Box>
-              <Text size={1} style={{color: '#fff'}}>
-                Pinned
+          <Flex
+            align="center"
+            justify="space-between"
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              background: activeOverride.pin ? 'rgba(255,224,102,0.14)' : 'rgba(255,255,255,0.05)',
+              border: activeOverride.pin
+                ? '1px solid rgba(255,224,102,0.55)'
+                : '1px solid rgba(255,255,255,0.16)',
+              transition: 'background 140ms ease, border-color 140ms ease',
+            }}
+          >
+            <Flex align="center" gap={2}>
+              <Text size={3}>📌</Text>
+              <Text
+                size={2}
+                weight="semibold"
+                style={{color: activeOverride.pin ? '#ffe066' : '#fff'}}
+              >
+                {activeOverride.pin ? 'Pinned' : 'Pin position'}
               </Text>
-              <Text size={0} muted>
-                On: locked. Off: soft attractor.
-              </Text>
-            </Box>
-            <Switch
-              checked={activeOverride.pin}
-              onChange={(e) => onTogglePin(e.currentTarget.checked)}
-            />
+            </Flex>
+            {/* The switch's off-state track vanishes on the navy panel, so ring it. */}
+            <span
+              style={{
+                display: 'inline-flex',
+                borderRadius: 999,
+                boxShadow: '0 0 0 1.5px rgba(255,255,255,0.6)',
+              }}
+            >
+              <Switch
+                checked={activeOverride.pin}
+                onChange={(e) => onTogglePin(e.currentTarget.checked)}
+              />
+            </span>
           </Flex>
         )}
 
