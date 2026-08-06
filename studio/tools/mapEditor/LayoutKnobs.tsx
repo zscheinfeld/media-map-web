@@ -111,7 +111,7 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
           onChange={props.setPackingDensity}
         />
         <SliderRow
-          label="Spacing (collide pad)"
+          label="Planet gap"
           value={props.collidePadding}
           formatted={`${props.collidePadding}`}
           min={0}
@@ -120,7 +120,7 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
           onChange={props.setCollidePadding}
         />
         <SliderRow
-          label="Size spacing"
+          label="Size-scaled gap"
           value={props.sizeSpacing}
           formatted={`${Math.round(props.sizeSpacing * 100)}%`}
           min={0}
@@ -129,7 +129,7 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
           onChange={props.setSizeSpacing}
         />
         <SliderRow
-          label="Sector pull (looser = spread)"
+          label="Sector pull"
           value={props.sectorPull}
           formatted={props.sectorPull.toFixed(3)}
           min={0.001}
@@ -138,7 +138,7 @@ export function LayoutKnobs(props: LayoutKnobsProps) {
           onChange={props.setSectorPull}
         />
         <SliderRow
-          label="Spread (repulsion)"
+          label="Spread (fill space)"
           value={props.repulsion}
           formatted={`${Math.round(props.repulsion)}`}
           min={0}

@@ -1440,7 +1440,7 @@ function EditorToolbar({
           format={(v) => v.toFixed(2)}
         />
         <SliderRow
-          label="Spacing (collide pad)"
+          label="Planet gap"
           value={collidePadding}
           min={0}
           max={300}
@@ -4703,16 +4703,17 @@ export default function MediaMap() {
               background: LIST_BG_GRADIENT,
               color: "#e6edf7",
               fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              textShadow: "none",
             }}
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: 64, opacity: 0.85, transform: "rotate(90deg)" }}
+              style={{ fontSize: 64, opacity: 0.85, transform: "rotate(90deg)", textShadow: "none", filter: "none" }}
             >
               screen_rotation
             </span>
-            <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, maxWidth: 320 }}>
-              Please rotate your phone to view the full map
+            <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, maxWidth: 320, textShadow: "none" }}>
+              Please rotate your phone to<br />view the full map
             </span>
           </div>
         )}
