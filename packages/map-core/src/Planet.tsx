@@ -136,7 +136,10 @@ export function Planet({
             pointerEvents="none"
           />
         )}
-        {renderNameLabel(false)}
+        {/* Entities are all-label: respect the same label gate as planets so a
+            mobile name-threshold (their on-screen diameter is 0) hides them by
+            default, while edit mode always shows them for placement. */}
+        {(isEditMode || showLabel) && renderNameLabel(false)}
       </g>
     )
   }
