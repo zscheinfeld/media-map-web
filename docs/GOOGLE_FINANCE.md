@@ -15,8 +15,44 @@ current-year column.
 populated. This whole transition is data-pipeline only.
 
 Decisions (this branch): **live formulas** in the sheet (no Apps Script / freeze),
-and **historical years handled manually** (Google Finance can't return historical
-market cap — its history is price/volume only).
+**historical years handled manually**, and a **fresh sheet** for Google Finance
+(the old FMP sheet + its nightly Action stay untouched as a reference).
+
+## Migration plan
+
+Legend: 🤖 = code/tooling (this repo) · 🧑 = manual step (Google Sheets / GitHub /
+Netlify). Ordered so the map never runs on stale data and rollback is one env flip.
+
+### Phase 1 — Tooling (🤖, in this branch)
+- [x] `jobs/gf-formulas.ts` — generate paste-ready GOOGLEFINANCE formulas from the roster's tickers (`npm run gf-formulas`).
+- [ ] Extract the ticker→GF mapping into a shared module so the reconciler reuses it.
+- [ ] `jobs/gf-sync-roster.ts` — the **roster reconciler**: add rows for new Sanity companies (with their GF formula), guarantee one row per slug (dedup), flag orphans. **Append/metadata-only — never writes existing rows' year values**, so formulas + manual history are safe.
+- [ ] `.github/workflows/gf-sync-roster.yml` — run the reconciler weekly + on-demand, targeting the new sheet (`GF_SHEET_ID`).
+
+### Phase 2 — Create & seed the new sheet (🧑)
+- [ ] Create a **new Google Sheet** (e.g. "Media Map — valuations (Google Finance)").
+- [ ] `npm run gf-formulas` → import `gf-formulas.csv` as the seed.
+- [ ] Shape it for the app parser: a **`slug`** column + year columns `2015…<current>`; put the formula under the **current-year** header; fill past years manually. *(Optional `last_updated` column for the "current month" label.)*
+- [ ] Re-ticker the `needs_review` rows (OTC/ADR → primary listings or major US ADRs — see table below), in Sanity or directly in the sheet.
+- [ ] **Share the sheet with the service-account email** (so the reconciler can write) and **Publish to web → CSV**.
+
+### Phase 3 — Verify on dev (🧑 + 🤖)
+- [ ] Point **local** `.env.local` `VITE_VALUATIONS_CSV_URL` at the new sheet's CSV.
+- [ ] Compare the dev map against the old (FMP) map — spot-check US names (should match) and each re-tickered non-US name. Fix formulas/tickers until it's right.
+
+### Phase 4 — Wire the reconciler (🧑)
+- [ ] Add the **`GF_SHEET_ID`** GitHub secret (the new sheet's ID).
+- [ ] Run `gf-sync-roster` once via **workflow_dispatch**; confirm it adds any missing companies and reports no duplicates. Then let the weekly schedule take over.
+
+### Phase 5 — Production cut-over (🧑)
+- [ ] Change `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the new sheet's CSV; redeploy.
+- [ ] Verify the live map. **Rollback = flip the env var back to the old URL.**
+
+### Phase 6 — Retire FMP (🧑, once confident)
+- [ ] Disable the old **`ingest-valuations`** Action (GitHub → Actions → Disable), or leave it running to keep the reference sheet fresh — your call.
+- [ ] Later: drop the `FMP_API_KEY` secret and retire `jobs/ingest-valuations.ts`.
+
+**Where things can go wrong:** OTC re-tickering (Phase 2) is the real work; London pence + non-US share-count accuracy need spot-checks (Phase 3); the reconciler must stay append/metadata-only (Phase 1) or it'll clobber formulas.
 
 ## The formula
 
