@@ -14,9 +14,44 @@ current-year column.
 ([src/loadValuations.ts](../src/loadValuations.ts)) no matter how the sheet is
 populated. This whole transition is data-pipeline only.
 
-Decisions (this branch): **live formulas** in the sheet (no Apps Script / freeze),
-**historical years handled manually**, and a **fresh sheet** for Google Finance
-(the old FMP sheet + its nightly Action stay untouched as a reference).
+Decisions (this branch):
+- **Fresh sheet** for Google Finance; the old FMP sheet + its nightly Action stay untouched as a reference.
+- **Live formulas** in the current-year column; **historical years entered manually**.
+- **Currency + FX_to_USD columns** so every year reads in billions USD.
+- **Year columns newest-first** (`2026 … 2015`) — cosmetic only; the app matches by header name, not position.
+- **Year rollover:** keep the current year live all year; when a new year starts, **freeze the just-ended year in place** (formula → its last value) and open a new live column. *(No Oct-1 snapshot for now — revisit at the next rollover.)*
+- A scheduled **roster reconciler** keeps the sheet in sync with Sanity (adds new companies, dedups, syncs metadata, does the rollover) — **append/metadata-only, never overwrites existing year values**.
+
+## New-sheet schema
+
+Left → right. Only **`slug`** and the **year columns** are load-bearing for the app
+([src/loadValuations.ts](../src/loadValuations.ts) joins by `slug`, reads any
+`/^\d{4}$/` header); the rest is for humans + sorting.
+
+| Column | Filled by | Notes |
+|---|---|---|
+| `slug` | reconciler (from Sanity) | **Required** — the join key. |
+| `name`, `sector`, `data type`, `data source` | reconciler (mirrors Sanity) | metadata sync; safe to sort by. |
+| `ticker` | reconciler | the **GOOGLEFINANCE symbol** (e.g. `NSE:RELIANCE`, `NASDAQ:AAPL`). |
+| `exchange` | reconciler | display. |
+| `Currency` | reconciler | listing currency (`USD`/`INR`/…). |
+| `FX_to_USD` | formula | `=IF(Currency="USD",1,IFERROR(GOOGLEFINANCE("CURRENCY:"&Currency&"USD"),""))` |
+| `vetting_status`, `Notes` | you | never touched by the reconciler. |
+| `last_updated` | you (optional) | drives the "current month" label; else calendar month. |
+| `2026` (current) | live formula | `=IFERROR(GOOGLEFINANCE(ticker,"marketcap")*FX_to_USD/1e9,"")` → billions USD. |
+| `2025 … 2015` | you (manual) | static billions-USD snapshots. |
+
+**Sorting is safe:** the app and the reconciler both key off `slug`, and Google
+Sheets keeps *same-row* relative references valid through sorts + column moves — and
+every per-row formula here references only cells in its own row.
+
+## Year rollover (automated by the reconciler)
+
+Each year column lives its whole life in place — live formula while it's the
+running year, frozen static value forever after:
+
+- **New calendar year, no column yet** → insert a new leftmost column (e.g. `2027`) with the live formula; it becomes the current year.
+- **A prior year's column still has formulas** → read its computed values and write them back as **static numbers** (the freeze). Runs once at the roll; the value is whatever the formula last held (~year-end). No Oct-1 capture for now.
 
 ## Migration plan
 
@@ -56,18 +91,21 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
 
 ## The formula
 
-Each current-year cell returns market cap in **billions USD**:
+The current-year cell reads the market cap in **billions USD**, pulling the rate
+from the row's `FX_to_USD` column (see schema above):
 
 ```
-# US listing (already USD):
-=IFERROR(GOOGLEFINANCE("NASDAQ:AAPL","marketcap")/1e9,"")
+# FX_to_USD column (row 2): 1 for USD, else the live rate:
+=IF(Currency="USD",1,IFERROR(GOOGLEFINANCE("CURRENCY:"&Currency&"USD"),""))
 
-# Non-US listing (convert local currency → USD):
-=IFERROR(GOOGLEFINANCE("NSE:RELIANCE","marketcap")*GOOGLEFINANCE("CURRENCY:INRUSD")/1e9,"")
+# current-year column: market cap × FX ÷ 1e9:
+=IFERROR(GOOGLEFINANCE(ticker,"marketcap")*FX_to_USD/1e9,"")
 ```
 
 `IFERROR(…, "")` keeps a transient `#N/A` from corrupting the published CSV — the
 cell just goes blank that refresh, and the app falls back exactly as today.
+`gf-formulas.ts` currently emits a **self-contained** variant (FX baked into each
+cell); it'll be reworked to the FX-column layout above as part of Phase 1.
 
 ## Generating the formulas
 
