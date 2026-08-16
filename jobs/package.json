@@ -6,7 +6,8 @@
   "scripts": {
     "suggest-tickers": "tsx suggest-tickers.ts",
     "apply-tickers": "tsx apply-tickers.ts",
-    "ingest-valuations": "tsx ingest-valuations.ts"
+    "ingest-valuations": "tsx ingest-valuations.ts",
+    "gf-formulas": "tsx gf-formulas.ts"
   },
   "dependencies": {
     "@sanity/client": "^6.21.3",

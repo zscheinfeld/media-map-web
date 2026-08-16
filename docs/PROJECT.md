@@ -120,6 +120,7 @@ The system is **live** — public app at `https://eshap-media-map.netlify.app`, 
 | **5 — Yearly historical maps** (one column per year; past = Oct-1 snapshot, current = latest; year picker; appearance windows on companies + entities as year ranges; connection year ranges; per-year aggregate windowing) | ✅ done |
 
 **Outstanding:**
+- **FMP → Google Finance** *(in progress — branch `google-finance-alternative`)*. Replace the paid FMP market-cap ingest with free `GOOGLEFINANCE()` formulas in the sheet (the app is unchanged — it just reads the published CSV). Live formulas for the current year; historical years handled manually (GF has no historical market cap). Main task = re-tickering OTC/ADR symbols to primary listings, since GF can't resolve most OTC pink tickers. Helper: `jobs/gf-formulas.ts`. Full guide: [docs/GOOGLE_FINANCE.md](GOOGLE_FINANCE.md).
 - **Mobile + touch** — the app has **no touch handlers** yet (mouse only), so phones can't pan/pinch/drag. This is the largest remaining build (see LAUNCH_PLAN.md).
 - **Dynamic feeds (4d)** — auto-pull external articles + Eshap content.
 - **Front-end polish** — restyle toward the light mockup; loading-moment animation.
