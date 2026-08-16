@@ -1,0 +1,39 @@
+name: GF sync roster
+
+# Keeps the Google Finance valuation sheet in sync with the Sanity roster:
+# adds new companies (with their GOOGLEFINANCE formulas), syncs metadata, and
+# reports duplicates/orphans. Never overwrites existing year values.
+#
+# Triggers:
+#   • nightly (safety net)
+#   • manual (workflow_dispatch)
+#   • Sanity webhook → repository_dispatch(type: sanity-company-change), so a new
+#     company in Studio syncs within seconds. Configure the webhook in Sanity to
+#     POST to the GitHub `dispatches` API with a token (see docs/GOOGLE_FINANCE.md).
+on:
+  schedule:
+    - cron: "0 1 * * *" # nightly at 01:00 UTC
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [sanity-company-change]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install job deps
+        working-directory: jobs
+        run: npm install
+      - name: Reconcile roster → Google Finance sheet
+        working-directory: jobs
+        env:
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_DATASET: production
+          SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
+          GF_SHEET_ID: ${{ secrets.GF_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: npm run gf-sync-roster -- --apply

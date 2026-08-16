@@ -58,18 +58,21 @@ running year, frozen static value forever after:
 Legend: 🤖 = code/tooling (this repo) · 🧑 = manual step (Google Sheets / GitHub /
 Netlify). Ordered so the map never runs on stale data and rollback is one env flip.
 
-### Phase 1 — Tooling (🤖, in this branch)
-- [x] `jobs/gf-formulas.ts` — generate paste-ready GOOGLEFINANCE formulas from the roster's tickers (`npm run gf-formulas`).
-- [ ] Extract the ticker→GF mapping into a shared module so the reconciler reuses it.
-- [ ] `jobs/gf-sync-roster.ts` — the **roster reconciler**: add rows for new Sanity companies (with their GF formula), guarantee one row per slug (dedup), flag orphans. **Append/metadata-only — never writes existing rows' year values**, so formulas + manual history are safe.
-- [ ] `.github/workflows/gf-sync-roster.yml` — run the reconciler weekly + on-demand, targeting the new sheet (`GF_SHEET_ID`).
+### Phase 1 — Tooling (🤖, in this branch) ✅ built
+- [x] `jobs/gfTicker.ts` — shared ticker→GOOGLEFINANCE + currency + formula helpers.
+- [x] `jobs/gf-formulas.ts` — offline preview CSV (`npm run gf-formulas`); optional now that the reconciler populates the sheet directly.
+- [x] `jobs/gf-sync-roster.ts` — the **reconciler** (`npm run gf-sync-roster`): adds new companies (with formulas), syncs metadata, dedups, flags orphans + needs-review. **Dry-run by default; `--apply` writes. Never touches existing year values / vetting / notes.**
+- [x] `jobs/switch-datasource-to-gf.ts` — bulk re-point companies' `data_source` FMP → Google Finance (+ `--deprecate-fmp`).
+- [x] `.github/workflows/gf-sync-roster.yml` — nightly + `workflow_dispatch` + `repository_dispatch` (webhook), `--apply`, targets `GF_SHEET_ID`.
+- [ ] *Follow-up:* automate the year rollover (freeze prior year + insert new column) inside the reconciler.
 
-### Phase 2 — Create & seed the new sheet (🧑)
+### Phase 2 — Create & populate the new sheet (🧑)
 - [ ] Create a **new Google Sheet** (e.g. "Media Map — valuations (Google Finance)").
-- [ ] `npm run gf-formulas` → import `gf-formulas.csv` as the seed.
-- [ ] Shape it for the app parser: a **`slug`** column + year columns `2015…<current>`; put the formula under the **current-year** header; fill past years manually. *(Optional `last_updated` column for the "current month" label.)*
-- [ ] Re-ticker the `needs_review` rows (OTC/ADR → primary listings or major US ADRs — see table below), in Sanity or directly in the sheet.
-- [ ] **Share the sheet with the service-account email** (so the reconciler can write) and **Publish to web → CSV**.
+- [ ] Add **one header row** with the schema columns (see *New-sheet schema* below): `slug · name · sector · data type · data source · ticker · exchange · Currency · FX_to_USD · vetting_status · Notes · last_updated · 2026 … 2015`.
+- [ ] **Share the sheet (Editor) with the service-account email** (`client_email` in `GOOGLE_SERVICE_ACCOUNT_JSON`).
+- [ ] Locally: set `GF_SHEET_ID` + the service-account creds in `jobs/.env`, then `npm run gf-sync-roster` (dry run) → review → `npm run gf-sync-roster -- --apply` to fill every company.
+- [ ] **Re-ticker** the `needs_review` companies **in Sanity** (OTC/ADR → primary listings / major US ADRs — table below); re-run the reconciler (the formulas self-heal).
+- [ ] Fill past-year values manually, then **Publish to web → CSV**.
 
 ### Phase 3 — Verify on dev (🧑 + 🤖)
 - [ ] Point **local** `.env.local` `VITE_VALUATIONS_CSV_URL` at the new sheet's CSV.
