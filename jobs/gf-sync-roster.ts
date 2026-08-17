@@ -116,8 +116,15 @@ async function main() {
   const toAdd: Company[] = []
   const metaUpdates: {range: string; value: string}[] = []
   const review: string[] = []
+  const rosterSeen = new Set<string>()
+  const rosterDups: string[] = []
   for (const c of roster) {
     if (!c.slug) continue
+    if (rosterSeen.has(c.slug)) {
+      rosterDups.push(c.slug) // two Sanity docs share a slug — skip, warn, fix in Sanity
+      continue
+    }
+    rosterSeen.add(c.slug)
     const r = resolveGf(c.ticker ?? '')
     if (r.review && (c.valuation_type ?? 'market_cap') === 'market_cap' && c.ticker) {
       review.push(`  ${c.slug}: ${r.review} (${c.ticker})`)
@@ -164,7 +171,8 @@ async function main() {
   console.log(`\n+ Add ${toAdd.length} new companies:`)
   for (const c of toAdd) console.log(`  ${c.slug}  (${resolveGf(c.ticker ?? '').gfTicker || c.ticker || 'no ticker'})`)
   console.log(`\n~ ${metaUpdates.length} metadata cell updates on existing rows.`)
-  if (dupSlugs.length) console.log(`\n⚠ Duplicate slugs (fix manually): ${[...new Set(dupSlugs)].join(', ')}`)
+  if (rosterDups.length) console.log(`\n⚠ Duplicate slugs in Sanity (only the first is added — fix in Studio): ${[...new Set(rosterDups)].join(', ')}`)
+  if (dupSlugs.length) console.log(`\n⚠ Duplicate slugs in the sheet (fix manually): ${[...new Set(dupSlugs)].join(', ')}`)
   if (orphans.length) console.log(`\n⚠ Orphan rows (slug not in Sanity — left as-is): ${orphans.join(', ')}`)
   if (review.length) console.log(`\n⚠ Needs re-tickering in Sanity (GF can't resolve):\n${review.join('\n')}`)
 

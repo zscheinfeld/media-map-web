@@ -63,10 +63,15 @@ export function resolveGf(ticker: string, exchange = ''): GfResolved {
     return {gfTicker: '', currency: '', review: `unknown suffix .${suf}`}
   }
 
-  // Plain symbol → US listing by exchange, else OTC/ADR (GF unreliable) → flag.
+  // Plain symbol.
   if (US_EXCHANGE[ex]) return {gfTicker: `${US_EXCHANGE[ex]}:${t}`, currency: 'USD', review: ''}
-  if (!ex) return {gfTicker: t, currency: 'USD', review: 'OTC/ADR? verify GF coverage'}
-  return {gfTicker: t, currency: 'USD', review: `unmapped exchange "${exchange}"`}
+  if (ex) return {gfTicker: t, currency: 'USD', review: `unmapped exchange "${exchange}"`}
+  // No exchange info (the Sanity roster doesn't carry it). Bare US symbols resolve
+  // on GOOGLEFINANCE as-is, so DON'T flag them; only flag the classic OTC-ADR shape
+  // — 5 letters ending F (foreign ordinary) or Y (ADR), e.g. RLNIY / TCTZF / PBSFY —
+  // which GF usually can't resolve and needs re-tickering to a primary listing.
+  const otc = /^[A-Z]{4}[FY]$/.test(t.toUpperCase())
+  return {gfTicker: t, currency: 'USD', review: otc ? 'likely OTC ADR — re-ticker to primary listing' : ''}
 }
 
 /** 0-based column index → A1 letter (0→A, 26→AA). */
