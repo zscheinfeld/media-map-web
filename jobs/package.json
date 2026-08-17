@@ -10,6 +10,7 @@
     "gf-formulas": "tsx gf-formulas.ts",
     "gf-sync-roster": "tsx gf-sync-roster.ts",
     "gf-verify": "tsx gf-verify.ts",
+    "gf-prefix-us-tickers": "tsx gf-prefix-us-tickers.ts",
     "switch-datasource-to-gf": "tsx switch-datasource-to-gf.ts"
   },
   "dependencies": {
