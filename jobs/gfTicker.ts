@@ -74,6 +74,22 @@ export function resolveGf(ticker: string, exchange = ''): GfResolved {
   return {gfTicker: t, currency: 'USD', review: otc ? 'likely OTC ADR — re-ticker to primary listing' : ''}
 }
 
+/** Build the GOOGLEFINANCE symbol from a (bare) ticker + separate exchange code.
+ *  This is the new model: Sanity stores `ticker` bare + `exchange` (e.g. NASDAQ),
+ *  and we combine them → "NASDAQ:AAPL". Falls back to `resolveGf` when there's no
+ *  exchange (a bare US ticker, or a legacy already-prefixed / suffixed ticker). */
+export function gfSymbolFor(ticker: string, exchange?: string): GfResolved {
+  const t = (ticker ?? '').trim()
+  const ex = (exchange ?? '').trim().toUpperCase()
+  if (!t || t.toUpperCase() === 'NA') return {gfTicker: '', currency: '', review: 'no ticker'}
+  if (t.includes(':')) return resolveGf(t) // already a full GF symbol (not yet split)
+  if (ex) {
+    const ccy = GX_CCY[ex] ?? ''
+    return {gfTicker: `${ex}:${t}`, currency: ccy, review: ccy ? '' : `unknown exchange ${ex}`}
+  }
+  return resolveGf(t) // bare symbol → US-as-is or OTC-ADR flag
+}
+
 /** 0-based column index → A1 letter (0→A, 26→AA). */
 export function colLetter(idx: number): string {
   let n = idx

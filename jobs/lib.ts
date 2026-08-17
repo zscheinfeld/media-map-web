@@ -27,6 +27,8 @@ export type Company = {
   name: string
   slug?: string
   ticker?: string
+  /** GOOGLEFINANCE exchange code (NASDAQ/NSE/…); combined with `ticker`. */
+  exchange?: string
   is_public?: boolean
   valuation_type?: ValuationType
   sector?: string
@@ -41,7 +43,7 @@ export type Company = {
 /** Every company in Sanity, with the fields the jobs care about. */
 export async function fetchRoster(client: SanityClient): Promise<Company[]> {
   return client.fetch<Company[]>(
-    `*[_type == "company"]{_id, name, "slug": slug.current, ticker, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
+    `*[_type == "company"]{_id, name, "slug": slug.current, ticker, exchange, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
   )
 }
 

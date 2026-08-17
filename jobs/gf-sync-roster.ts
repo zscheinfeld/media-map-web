@@ -21,7 +21,7 @@
 //      npm run gf-sync-roster -- --apply # write
 import {google} from 'googleapis'
 import {fetchRoster, sanityClient, type Company} from './lib.ts'
-import {resolveGf, fxFormula, marketCapFormula, colLetter} from './gfTicker.ts'
+import {gfSymbolFor, fxFormula, marketCapFormula, colLetter} from './gfTicker.ts'
 
 const APPLY = process.argv.includes('--apply')
 
@@ -82,11 +82,14 @@ async function readFmpExchanges(sheets: SheetTarget['sheets'], id: string): Prom
 /** Sanity company → the managed metadata each column should hold (by col-key).
  *  Exchange: the GF ticker's prefix when present, else the FMP-sheet value. */
 function managedValues(c: Company, fmpExchange: Map<string, string>): Record<string, string> {
-  const r = resolveGf(c.ticker ?? '')
-  const gfTicker = r.gfTicker || (c.ticker ?? '')
-  const exchange = gfTicker.includes(':')
-    ? gfTicker.slice(0, gfTicker.indexOf(':'))
-    : (fmpExchange.get(c.slug ?? '') ?? '')
+  const s = gfSymbolFor(c.ticker ?? '', c.exchange)
+  const gfTicker = s.gfTicker || (c.ticker ?? '')
+  // Prefer the Sanity `exchange` field; else the GF symbol's prefix; else the
+  // FMP-sheet bridge (for companies not yet backfilled).
+  const exchange =
+    (c.exchange ?? '').trim().toUpperCase() ||
+    (gfTicker.includes(':') ? gfTicker.slice(0, gfTicker.indexOf(':')) : '') ||
+    (fmpExchange.get(c.slug ?? '') ?? '')
   return {
     slug: c.slug ?? '',
     name: c.name ?? '',
@@ -95,7 +98,7 @@ function managedValues(c: Company, fmpExchange: Map<string, string>): Record<str
     source: c.dataSourceName ?? '',
     ticker: gfTicker,
     exchange,
-    currency: r.currency,
+    currency: s.currency,
   }
 }
 
@@ -168,7 +171,7 @@ async function main() {
       continue
     }
     rosterSeen.add(c.slug)
-    const r = resolveGf(c.ticker ?? '')
+    const r = gfSymbolFor(c.ticker ?? '', c.exchange)
     if (r.review && wantsGfFormula(c)) {
       review.push(`  ${c.slug}: ${r.review} (${c.ticker})`)
     }
@@ -211,7 +214,7 @@ async function main() {
     console.log(`⚠ No current-year column "${currentYear}" — add it to the header so new rows get live formulas (rollover automation is a follow-up).`)
   }
   console.log(`\n+ Add ${toAdd.length} new companies:`)
-  for (const c of toAdd) console.log(`  ${c.slug}  (${resolveGf(c.ticker ?? '').gfTicker || c.ticker || 'no ticker'})`)
+  for (const c of toAdd) console.log(`  ${c.slug}  (${gfSymbolFor(c.ticker ?? '', c.exchange).gfTicker || c.ticker || 'no ticker'})`)
   console.log(`\n~ ${metaUpdates.length} metadata cell updates on existing rows.`)
   if (rosterDups.length) console.log(`\n⚠ Duplicate slugs in Sanity (only the first is added — fix in Studio): ${[...new Set(rosterDups)].join(', ')}`)
   if (dupSlugs.length) console.log(`\n⚠ Duplicate slugs in the sheet (fix manually): ${[...new Set(dupSlugs)].join(', ')}`)

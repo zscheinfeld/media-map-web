@@ -192,6 +192,16 @@ export const company = defineType({
         }),
     }),
     defineField({
+      name: 'exchange',
+      title: 'Exchange',
+      type: 'string',
+      group: 'valuation',
+      description:
+        'GOOGLEFINANCE exchange code — e.g. NASDAQ, NYSE, NSE, HKG, TYO, LON, EPA, ETR, KRX. ' +
+        'Combined with the (bare) Ticker to build the GF symbol, e.g. NASDAQ + AAPL → NASDAQ:AAPL. ' +
+        'Leave blank for a plain US ticker that GOOGLEFINANCE resolves on its own.',
+    }),
+    defineField({
       name: 'last_synced',
       title: 'Last synced',
       type: 'datetime',
