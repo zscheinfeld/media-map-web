@@ -118,7 +118,14 @@ async function main() {
     ? await readFmpExchanges(t.sheets, process.env.SHEET_ID)
     : new Map<string, string>()
 
-  const resp = await t.sheets.spreadsheets.values.get({spreadsheetId: t.spreadsheetId, range: t.tab})
+  // Read as FORMULA so a live GF formula in the current-year cell is
+  // distinguishable from a hand-entered number (metadata cells read as plain text
+  // either way).
+  const resp = await t.sheets.spreadsheets.values.get({
+    spreadsheetId: t.spreadsheetId,
+    range: t.tab,
+    valueRenderOption: 'FORMULA',
+  })
   const rows = resp.data.values ?? []
   if (rows.length === 0) {
     throw new Error('Sheet is empty — add the header row first (see docs/GOOGLE_FINANCE.md → New-sheet schema).')
@@ -185,17 +192,25 @@ async function main() {
     }
     for (const [key, val] of Object.entries(managed)) {
       const ci = col[key]
-      if (ci < 0 || val === '') continue
+      if (ci < 0) continue
       const cur = (existing.cells[ci] ?? '').trim()
+      // Write when different — including clearing a cell whose Sanity value is now
+      // empty (e.g. a ticker/exchange removed when a company goes private).
       if (cur !== val) metaUpdates.push({range: `${t.tab}!${colLetter(ci)}${existing.row1}`, value: val})
     }
-    // Refresh the current-year formula for api companies (the reconciler owns it),
-    // so the new bare-ticker + separate-exchange format reaches existing rows.
-    if (wantsGfFormula(c) && curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
-      formulaUpdates.push({
-        range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`,
-        value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1),
-      })
+    if (curYearCol >= 0) {
+      const curCell = (existing.cells[curYearCol] ?? '').trim()
+      if (wantsGfFormula(c) && col.ticker >= 0 && col.fx >= 0) {
+        // Refresh the current-year formula for api companies (reconciler owns it).
+        formulaUpdates.push({
+          range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`,
+          value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1),
+        })
+      } else if (curCell.startsWith('=')) {
+        // Company is manual/private now → clear the stale GF formula so the cell is
+        // ready for hand entry (never clears an existing hand-entered number).
+        formulaUpdates.push({range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`, value: ''})
+      }
     }
   }
 
