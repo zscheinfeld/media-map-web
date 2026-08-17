@@ -54,11 +54,39 @@ const findCol = (headerLower: string[], ...names: string[]): number => {
   return -1
 }
 
-/** Sanity company → the managed metadata each column should hold (by col-key). */
-function managedValues(c: Company): Record<string, string> {
+/** Read slug → exchange from the old FMP sheet (which has the exchange FMP's
+ *  profile reported, e.g. NASDAQ/NYSE) as a supplement, since Sanity doesn't
+ *  carry it. Empty map if the sheet is unset/unreadable. */
+async function readFmpExchanges(sheets: SheetTarget['sheets'], id: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  try {
+    const meta = await sheets.spreadsheets.get({spreadsheetId: id})
+    const tab = meta.data.sheets?.[0]?.properties?.title ?? 'Sheet1'
+    const resp = await sheets.spreadsheets.values.get({spreadsheetId: id, range: tab})
+    const rows = resp.data.values ?? []
+    const HH = (rows[0] ?? []).map((h) => String(h).trim().toLowerCase())
+    const si = HH.indexOf('slug')
+    const ei = HH.indexOf('exchange')
+    if (si < 0 || ei < 0) return out
+    for (let r = 1; r < rows.length; r++) {
+      const slug = String(rows[r]?.[si] ?? '').trim()
+      const ex = String(rows[r]?.[ei] ?? '').trim()
+      if (slug && ex && ex.toUpperCase() !== 'NA') out.set(slug, ex)
+    }
+  } catch {
+    /* old sheet gone/unshared → no supplement */
+  }
+  return out
+}
+
+/** Sanity company → the managed metadata each column should hold (by col-key).
+ *  Exchange: the GF ticker's prefix when present, else the FMP-sheet value. */
+function managedValues(c: Company, fmpExchange: Map<string, string>): Record<string, string> {
   const r = resolveGf(c.ticker ?? '')
   const gfTicker = r.gfTicker || (c.ticker ?? '')
-  const exchange = gfTicker.includes(':') ? gfTicker.slice(0, gfTicker.indexOf(':')) : ''
+  const exchange = gfTicker.includes(':')
+    ? gfTicker.slice(0, gfTicker.indexOf(':'))
+    : (fmpExchange.get(c.slug ?? '') ?? '')
   return {
     slug: c.slug ?? '',
     name: c.name ?? '',
@@ -81,6 +109,10 @@ function wantsGfFormula(c: Company): boolean {
 async function main() {
   const t = await openSheet()
   const roster = await fetchRoster(sanityClient())
+  // Supplement blank exchanges (bare US tickers) from the old FMP sheet.
+  const fmpExchange = process.env.SHEET_ID
+    ? await readFmpExchanges(t.sheets, process.env.SHEET_ID)
+    : new Map<string, string>()
 
   const resp = await t.sheets.spreadsheets.values.get({spreadsheetId: t.spreadsheetId, range: t.tab})
   const rows = resp.data.values ?? []
@@ -106,13 +138,17 @@ async function main() {
   const currentYear = new Date().getFullYear()
   const curYearCol = yearCols.find((y) => y.h === String(currentYear))?.i ?? -1
 
-  // Existing rows by slug (+ duplicate detection).
+  // Existing rows by slug (+ duplicate detection). Track the last row that
+  // actually has a slug so appends land right after the real data, not after any
+  // trailing empty grid rows Sheets may return.
   const bySlug = new Map<string, {row1: number; cells: string[]}>()
   const dupSlugs: string[] = []
+  let lastSlugRow = 1 // header
   for (let r = 1; r < rows.length; r++) {
     const cells = (rows[r] ?? []).map((c) => String(c ?? ''))
     const slug = (cells[col.slug] ?? '').trim()
     if (!slug) continue
+    lastSlugRow = r + 1
     if (bySlug.has(slug)) dupSlugs.push(slug)
     else bySlug.set(slug, {row1: r + 1, cells})
   }
@@ -136,7 +172,7 @@ async function main() {
     if (r.review && wantsGfFormula(c)) {
       review.push(`  ${c.slug}: ${r.review} (${c.ticker})`)
     }
-    const managed = managedValues(c)
+    const managed = managedValues(c, fmpExchange)
     const existing = bySlug.get(c.slug)
     if (!existing) {
       toAdd.push(c)
@@ -152,10 +188,10 @@ async function main() {
 
   // Build the new-company rows (with correct row numbers so per-row formulas
   // reference the right cells). Appended right after the last existing row.
-  const startRow1 = rows.length + 1
+  const startRow1 = lastSlugRow + 1
   const newRows: (string | number)[][] = toAdd.map((c, k) => {
     const row1 = startRow1 + k
-    const managed = managedValues(c)
+    const managed = managedValues(c, fmpExchange)
     const cells: (string | number)[] = new Array(header.length).fill('')
     for (const [key, val] of Object.entries(managed)) {
       if (col[key] >= 0) cells[col[key]] = val
