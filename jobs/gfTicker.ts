@@ -107,11 +107,14 @@ export function fxFormula(currencyCol: number, row1: number): string {
   return `=IF(${c}="USD",1,IFERROR(GOOGLEFINANCE("CURRENCY:"&${c}&"USD"),""))`
 }
 
-/** Current-year cell formula: market cap × FX ÷ 1e9 (billions USD), referencing
- *  the row's ticker + FX_to_USD cells. Blank when there's no GF ticker. */
-export function marketCapFormula(hasGfTicker: boolean, tickerCol: number, fxCol: number, row1: number): string {
-  if (!hasGfTicker) return ''
+/** Current-year cell formula: market cap × FX ÷ 1e9 (billions USD). The sheet
+ *  keeps Ticker BARE (e.g. AAPL) and Exchange separate (NASDAQ), so the GF symbol
+ *  is built inline: EXCH:TICKER when an exchange is present, else the bare ticker.
+ *  References the row's exchange + ticker + FX_to_USD cells. */
+export function marketCapFormula(exchangeCol: number, tickerCol: number, fxCol: number, row1: number): string {
   const t = `${colLetter(tickerCol)}${row1}`
   const fx = `${colLetter(fxCol)}${row1}`
-  return `=IFERROR(GOOGLEFINANCE(${t},"marketcap")*${fx}/1e9,"")`
+  const ex = exchangeCol >= 0 ? `${colLetter(exchangeCol)}${row1}` : ''
+  const sym = ex ? `IF(${ex}="",${t},${ex}&":"&${t})` : t
+  return `=IFERROR(GOOGLEFINANCE(${sym},"marketcap")*${fx}/1e9,"")`
 }

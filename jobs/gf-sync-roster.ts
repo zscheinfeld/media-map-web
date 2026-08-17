@@ -80,25 +80,26 @@ async function readFmpExchanges(sheets: SheetTarget['sheets'], id: string): Prom
 }
 
 /** Sanity company → the managed metadata each column should hold (by col-key).
- *  Exchange: the GF ticker's prefix when present, else the FMP-sheet value. */
+ *  Ticker column is kept BARE (symbol only); Exchange is its own column. If the
+ *  Sanity ticker is still a combined "EXCH:SYMBOL", it's split here so the sheet
+ *  stays consistent. */
 function managedValues(c: Company, fmpExchange: Map<string, string>): Record<string, string> {
-  const s = gfSymbolFor(c.ticker ?? '', c.exchange)
-  const gfTicker = s.gfTicker || (c.ticker ?? '')
-  // Prefer the Sanity `exchange` field; else the GF symbol's prefix; else the
-  // FMP-sheet bridge (for companies not yet backfilled).
+  const raw = (c.ticker ?? '').trim()
+  const bareTicker = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1) : raw
+  const prefixFromTicker = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toUpperCase() : ''
+  // Prefer the Sanity `exchange` field; else a prefix embedded in the ticker;
+  // else the FMP-sheet bridge (for companies not yet backfilled).
   const exchange =
-    (c.exchange ?? '').trim().toUpperCase() ||
-    (gfTicker.includes(':') ? gfTicker.slice(0, gfTicker.indexOf(':')) : '') ||
-    (fmpExchange.get(c.slug ?? '') ?? '')
+    (c.exchange ?? '').trim().toUpperCase() || prefixFromTicker || (fmpExchange.get(c.slug ?? '') ?? '')
   return {
     slug: c.slug ?? '',
     name: c.name ?? '',
     sector: c.sector ?? '',
     type: c.valuation_type ?? 'market_cap',
     source: c.dataSourceName ?? '',
-    ticker: gfTicker,
+    ticker: bareTicker,
     exchange,
-    currency: s.currency,
+    currency: gfSymbolFor(bareTicker, exchange).currency,
   }
 }
 
@@ -161,6 +162,7 @@ async function main() {
   // Classify: new companies to add, metadata cells to update, needs-review.
   const toAdd: Company[] = []
   const metaUpdates: {range: string; value: string}[] = []
+  const formulaUpdates: {range: string; value: string}[] = [] // current-year formula (USER_ENTERED)
   const review: string[] = []
   const rosterSeen = new Set<string>()
   const rosterDups: string[] = []
@@ -187,6 +189,14 @@ async function main() {
       const cur = (existing.cells[ci] ?? '').trim()
       if (cur !== val) metaUpdates.push({range: `${t.tab}!${colLetter(ci)}${existing.row1}`, value: val})
     }
+    // Refresh the current-year formula for api companies (the reconciler owns it),
+    // so the new bare-ticker + separate-exchange format reaches existing rows.
+    if (wantsGfFormula(c) && curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
+      formulaUpdates.push({
+        range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`,
+        value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1),
+      })
+    }
   }
 
   // Build the new-company rows (with correct row numbers so per-row formulas
@@ -200,8 +210,8 @@ async function main() {
       if (col[key] >= 0) cells[col[key]] = val
     }
     if (col.currency >= 0 && col.fx >= 0) cells[col.fx] = fxFormula(col.currency, row1)
-    if (curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
-      cells[curYearCol] = marketCapFormula(wantsGfFormula(c), col.ticker, col.fx, row1)
+    if (wantsGfFormula(c) && curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
+      cells[curYearCol] = marketCapFormula(col.exchange, col.ticker, col.fx, row1)
     }
     return cells
   })
@@ -215,7 +225,7 @@ async function main() {
   }
   console.log(`\n+ Add ${toAdd.length} new companies:`)
   for (const c of toAdd) console.log(`  ${c.slug}  (${gfSymbolFor(c.ticker ?? '', c.exchange).gfTicker || c.ticker || 'no ticker'})`)
-  console.log(`\n~ ${metaUpdates.length} metadata cell updates on existing rows.`)
+  console.log(`\n~ ${metaUpdates.length} metadata + ${formulaUpdates.length} current-year formula updates on existing rows.`)
   if (rosterDups.length) console.log(`\n⚠ Duplicate slugs in Sanity (only the first is added — fix in Studio): ${[...new Set(rosterDups)].join(', ')}`)
   if (dupSlugs.length) console.log(`\n⚠ Duplicate slugs in the sheet (fix manually): ${[...new Set(dupSlugs)].join(', ')}`)
   if (orphans.length) console.log(`\n⚠ Orphan rows (slug not in Sanity — left as-is): ${orphans.join(', ')}`)
@@ -244,7 +254,16 @@ async function main() {
       },
     })
   }
-  console.log(`\n✓ Wrote ${newRows.length} new rows + ${metaUpdates.length} metadata updates. Year values, vetting, and notes untouched.`)
+  if (formulaUpdates.length) {
+    await t.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: t.spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED', // formulas
+        data: formulaUpdates.map((u) => ({range: u.range, values: [[u.value]]})),
+      },
+    })
+  }
+  console.log(`\n✓ Wrote ${newRows.length} new rows + ${metaUpdates.length} metadata + ${formulaUpdates.length} formula updates. Past years, vetting, and notes untouched.`)
 }
 
 main().catch((e) => {
