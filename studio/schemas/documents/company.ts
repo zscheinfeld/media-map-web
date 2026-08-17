@@ -153,6 +153,24 @@ export const company = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'manual_source',
+      title: 'Manual source detail',
+      type: 'object',
+      group: 'valuation',
+      description:
+        'For hand-entered valuations: where the number came from — e.g. an article, filing, or report. ' +
+        'Free-form, so you are not limited to the Data source dropdown. Use when Data source is "Manual entry".',
+      fields: [
+        defineField({
+          name: 'label',
+          title: 'Source',
+          type: 'string',
+          description: 'e.g. "Bloomberg article", "Q3 press release", "analyst estimate".',
+        }),
+        defineField({name: 'url', title: 'Link (optional)', type: 'url'}),
+      ],
+    }),
+    defineField({
       name: 'ticker',
       title: 'Ticker',
       type: 'string',
