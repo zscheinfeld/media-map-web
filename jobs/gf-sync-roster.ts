@@ -71,6 +71,13 @@ function managedValues(c: Company): Record<string, string> {
   }
 }
 
+/** A company gets a live GOOGLEFINANCE formula only when its data source is NOT
+ *  manual (manual = human-entered value), it's a market-cap company, and it has a
+ *  ticker. Matches the old FMP ingest, which fetched everything except `manual`. */
+function wantsGfFormula(c: Company): boolean {
+  return c.dataSourceType !== 'manual' && (c.valuation_type ?? 'market_cap') === 'market_cap' && !!c.ticker
+}
+
 async function main() {
   const t = await openSheet()
   const roster = await fetchRoster(sanityClient())
@@ -126,7 +133,7 @@ async function main() {
     }
     rosterSeen.add(c.slug)
     const r = resolveGf(c.ticker ?? '')
-    if (r.review && (c.valuation_type ?? 'market_cap') === 'market_cap' && c.ticker) {
+    if (r.review && wantsGfFormula(c)) {
       review.push(`  ${c.slug}: ${r.review} (${c.ticker})`)
     }
     const managed = managedValues(c)
@@ -154,9 +161,8 @@ async function main() {
       if (col[key] >= 0) cells[col[key]] = val
     }
     if (col.currency >= 0 && col.fx >= 0) cells[col.fx] = fxFormula(col.currency, row1)
-    const isMarketCap = (c.valuation_type ?? 'market_cap') === 'market_cap' && !!c.ticker
     if (curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
-      cells[curYearCol] = marketCapFormula(isMarketCap, col.ticker, col.fx, row1)
+      cells[curYearCol] = marketCapFormula(wantsGfFormula(c), col.ticker, col.fx, row1)
     }
     return cells
   })
