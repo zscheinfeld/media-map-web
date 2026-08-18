@@ -49,6 +49,27 @@ Edit structure in **Sanity**. Edit numbers in **the sheet**.
    `$`, `B`, or other letters — a value like `$1.2B` is read as invalid and gets
    **erased on the next nightly run**. Just the number.
 
+## Retiring a company (acquired, went private, shut down)
+
+When a company **stops existing** as a standalone (e.g. Twitter → taken private in
+2022, or one company absorbed by another), you usually want it to **keep showing on
+the old-year maps at its historical market cap, but disappear from recent years**.
+That takes **two steps, in two places**:
+
+1. **In the sheet — keep its history, blank the years after.** Fill the year
+   columns for the years it existed (each past year = that year's value), and leave
+   every year *after* it retired **blank**. (Set its `data source` to **Manual
+   entry** in Sanity first, so the automation stops trying to fetch a live value.)
+
+2. **In Sanity — add an Appearance Window.** On that company, add an **Appearance
+   window** with **start_year** = its first year on the map and **end_year** = the
+   **last year it existed**. Example for Twitter: start `2015`, end `2022`.
+
+**Both steps are required.** The window controls *which years it shows on*; the
+sheet columns control *how big it is each year*. ⚠️ Blanking the later cells alone
+is **not** enough — a company with no Appearance Window is treated as *always
+visible*, so without the window it would still (wrongly) appear on the current map.
+
 ## How to tell a manual company from an FMP company
 
 Look at the **`data source`** column:
