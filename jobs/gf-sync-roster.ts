@@ -87,12 +87,15 @@ function managedValues(c: Company, fmpExchange: Map<string, string>): Record<str
   const raw = (c.ticker ?? '').trim()
   const bareTicker = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1) : raw
   const prefixFromTicker = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toUpperCase() : ''
-  // Exchange is only meaningful with a ticker. No ticker (private/manual) → blank,
-  // so the FMP bridge / a leftover Sanity value doesn't keep a stale exchange.
-  // Otherwise: Sanity `exchange` field → prefix embedded in the ticker → FMP bridge.
+  // Exchange is only meaningful with a ticker. No ticker (private/manual) → blank.
+  // For manual companies the exchange mirrors Sanity exactly (no auto-fill), so a
+  // deliberately-cleared exchange stays cleared. The FMP bridge only helps api
+  // companies, whose GF formula needs an exchange when Sanity hasn't set one.
+  // Order: Sanity `exchange` field → prefix embedded in the ticker → FMP bridge.
+  const fmpBridge = c.dataSourceType !== 'manual' ? (fmpExchange.get(c.slug ?? '') ?? '') : ''
   const exchange = !bareTicker
     ? ''
-    : (c.exchange ?? '').trim().toUpperCase() || prefixFromTicker || (fmpExchange.get(c.slug ?? '') ?? '')
+    : (c.exchange ?? '').trim().toUpperCase() || prefixFromTicker || fmpBridge
   return {
     slug: c.slug ?? '',
     name: c.name ?? '',
