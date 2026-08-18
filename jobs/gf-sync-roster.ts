@@ -214,6 +214,14 @@ async function main() {
           range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`,
           value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1),
         })
+        // Also refresh the FX_to_USD formula so it always matches the currency and
+        // self-heals any stale/corrupt cell (e.g. a literal "USD" left in the cell).
+        if (col.currency >= 0) {
+          formulaUpdates.push({
+            range: `${t.tab}!${colLetter(col.fx)}${existing.row1}`,
+            value: fxFormula(col.currency, existing.row1),
+          })
+        }
       } else if (curCell.startsWith('=')) {
         // Company is manual/private now → clear the stale GF formula so the cell is
         // ready for hand entry (never clears an existing hand-entered number).
