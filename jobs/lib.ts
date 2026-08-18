@@ -29,6 +29,9 @@ export type Company = {
   ticker?: string
   /** GOOGLEFINANCE exchange code (NASDAQ/NSE/…); combined with `ticker`. */
   exchange?: string
+  /** Listing-currency override (ISO, e.g. JPY). Set only when the exchange can't
+   *  imply it — OTCMKTS listings + foreign ADRs on US exchanges. Else derived. */
+  currency?: string
   is_public?: boolean
   valuation_type?: ValuationType
   sector?: string
@@ -46,7 +49,7 @@ export type Company = {
  *  phantom extra row to the sheet. The sheet mirrors live/published data only. */
 export async function fetchRoster(client: SanityClient): Promise<Company[]> {
   return client.fetch<Company[]>(
-    `*[_type == "company" && !(_id in path("drafts.**"))]{_id, name, "slug": slug.current, ticker, exchange, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
+    `*[_type == "company" && !(_id in path("drafts.**"))]{_id, name, "slug": slug.current, ticker, exchange, currency, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
   )
 }
 

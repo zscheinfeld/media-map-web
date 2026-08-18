@@ -197,9 +197,21 @@ export const company = defineType({
       type: 'string',
       group: 'valuation',
       description:
-        'GOOGLEFINANCE exchange code — e.g. NASDAQ, NYSE, NSE, HKG, TYO, LON, EPA, ETR, KRX. ' +
+        'GOOGLEFINANCE exchange code — e.g. NASDAQ, NYSE, NSE, HKG, LON, EPA, ETR, KRX, OTCMKTS. ' +
         'Combined with the (bare) Ticker to build the GF symbol, e.g. NASDAQ + AAPL → NASDAQ:AAPL. ' +
-        'Leave blank for a plain US ticker that GOOGLEFINANCE resolves on its own.',
+        'Leave blank for a plain US ticker that GOOGLEFINANCE resolves on its own. ' +
+        'Note: GF has no data for TYO/SHA/JSE/STO/OSL — Japanese names use OTCMKTS + their US OTC ticker instead.',
+    }),
+    defineField({
+      name: 'currency',
+      title: 'Currency (override)',
+      type: 'string',
+      group: 'valuation',
+      description:
+        'Usually leave blank — the currency is inferred from the Exchange (NASDAQ→USD, NSE→INR, …). ' +
+        'Set it only when GF reports the market cap in a currency the exchange does not imply: ' +
+        'OTCMKTS listings (e.g. Dentsu OTCMKTS:DNTUF → JPY) and foreign ADRs on US exchanges ' +
+        '(e.g. Sony NYSE:SONY → JPY). ISO code, e.g. JPY, EUR, GBP.',
     }),
     defineField({
       name: 'last_synced',

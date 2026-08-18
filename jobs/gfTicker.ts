@@ -84,6 +84,9 @@ export function gfSymbolFor(ticker: string, exchange?: string): GfResolved {
   if (!t || t.toUpperCase() === 'NA') return {gfTicker: '', currency: '', review: 'no ticker'}
   if (t.includes(':')) return resolveGf(t) // already a full GF symbol (not yet split)
   if (ex) {
+    // OTCMKTS (US over-the-counter) is a valid GF prefix but spans every country,
+    // so its currency can't be inferred — it comes from the Sanity override.
+    if (ex === 'OTCMKTS' || ex === 'OTC') return {gfTicker: `${ex}:${t}`, currency: '', review: ''}
     const ccy = GX_CCY[ex] ?? ''
     return {gfTicker: `${ex}:${t}`, currency: ccy, review: ccy ? '' : `unknown exchange ${ex}`}
   }

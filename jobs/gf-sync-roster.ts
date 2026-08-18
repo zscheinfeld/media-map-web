@@ -105,7 +105,10 @@ function managedValues(c: Company, fmpExchange: Map<string, string>): Record<str
   const exchange = !bareTicker
     ? ''
     : (c.exchange ?? '').trim().toUpperCase() || prefixFromTicker || (fmpExchange.get(c.slug ?? '') ?? '')
-  return {...base, ticker: bareTicker, exchange, currency: gfSymbolFor(bareTicker, exchange).currency}
+  // Currency: prefer the explicit Sanity override (needed for OTCMKTS + foreign
+  // ADRs, whose exchange doesn't imply a currency); else derive from the exchange.
+  const currency = (c.currency ?? '').trim().toUpperCase() || gfSymbolFor(bareTicker, exchange).currency
+  return {...base, ticker: bareTicker, exchange, currency}
 }
 
 /** A company gets a live GOOGLEFINANCE formula only when its data source is NOT
