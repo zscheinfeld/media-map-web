@@ -40,10 +40,13 @@ export type Company = {
   dataSourceName?: string
 }
 
-/** Every company in Sanity, with the fields the jobs care about. */
+/** Every PUBLISHED company in Sanity, with the fields the jobs care about.
+ *  Excludes drafts (`drafts.**`): a token-authed client sees published + draft
+ *  copies of edited docs, and an unpublished slug change would otherwise write a
+ *  phantom extra row to the sheet. The sheet mirrors live/published data only. */
 export async function fetchRoster(client: SanityClient): Promise<Company[]> {
   return client.fetch<Company[]>(
-    `*[_type == "company"]{_id, name, "slug": slug.current, ticker, exchange, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
+    `*[_type == "company" && !(_id in path("drafts.**"))]{_id, name, "slug": slug.current, ticker, exchange, is_public, valuation_type, "sector": sector->name, "dataSourceType": data_source->type, "dataSourceName": data_source->name} | order(name asc)`,
   )
 }
 
