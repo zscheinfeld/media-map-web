@@ -80,9 +80,12 @@ export async function loadValuations(): Promise<ValuationLoad> {
 
   // Normalize headers: drop emoji / marker symbols (🔒 ✏️ …) so the sheet can
   // annotate headers ("Slug 🔒", "2026 ✏️") without breaking column detection.
-  const header = rows[0].map((h) =>
-    h.replace(/[^\p{L}\p{N}_ ]+/gu, " ").replace(/\s+/g, " ").trim().toLowerCase(),
-  )
+  const norm = (h: string) =>
+    h.replace(/[^\p{L}\p{N}_ ]+/gu, " ").replace(/\s+/g, " ").trim().toLowerCase()
+  // Find the header row (first row with a `slug` cell), so a legend/key row above
+  // it isn't mistaken for the header. Falls back to row 0.
+  const headerRow = Math.max(0, rows.findIndex((row) => row.map(norm).includes("slug")))
+  const header = rows[headerRow].map(norm)
   const slugIdx = header.indexOf("slug")
   if (slugIdx < 0) return {values, lastUpdated}
   const updatedIdx = header.indexOf("last updated") >= 0 ? header.indexOf("last updated") : header.indexOf("last_updated")
@@ -91,7 +94,7 @@ export async function loadValuations(): Promise<ValuationLoad> {
     .map((h, i) => ({i, h}))
     .filter(({h}) => /^\d{4}$/.test(h))
 
-  for (let r = 1; r < rows.length; r++) {
+  for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r]
     const slug = (row[slugIdx] ?? "").trim()
     if (!slug) continue

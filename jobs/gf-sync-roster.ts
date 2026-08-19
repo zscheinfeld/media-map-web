@@ -148,7 +148,10 @@ async function main() {
   if (rows.length === 0) {
     throw new Error('Sheet is empty — add the header row first (see docs/GOOGLE_FINANCE.md → New-sheet schema).')
   }
-  const header = rows[0].map((h) => String(h ?? ''))
+  // Find the header row (first row that has a `slug` cell), so a legend/key row
+  // above it doesn't get mistaken for the header. Falls back to row 0.
+  const hdrIdx = Math.max(0, rows.findIndex((row) => (row ?? []).map(normHeader).includes('slug')))
+  const header = (rows[hdrIdx] ?? []).map((h) => String(h ?? ''))
   const H = header.map(normHeader)
   const col: Record<string, number> = {
     slug: findCol(H, 'slug'),
@@ -172,8 +175,8 @@ async function main() {
   // trailing empty grid rows Sheets may return.
   const bySlug = new Map<string, {row1: number; cells: string[]}>()
   const dupSlugs: string[] = []
-  let lastSlugRow = 1 // header
-  for (let r = 1; r < rows.length; r++) {
+  let lastSlugRow = hdrIdx + 1 // 1-based header row
+  for (let r = hdrIdx + 1; r < rows.length; r++) {
     const cells = (rows[r] ?? []).map((c) => String(c ?? ''))
     const slug = (cells[col.slug] ?? '').trim()
     if (!slug) continue
