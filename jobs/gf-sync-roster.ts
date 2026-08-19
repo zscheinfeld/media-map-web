@@ -46,6 +46,16 @@ async function openSheet(): Promise<SheetTarget> {
   return {sheets, spreadsheetId, tab}
 }
 
+/** Normalize a header for matching: drop emoji / marker symbols (🔒 ✏️ ⏱️ …),
+ *  keep letters/digits/underscore, collapse whitespace, lowercase. Lets users
+ *  annotate headers ("Ticker 🔒", "Notes ✏️") without breaking column detection. */
+const normHeader = (h: unknown): string =>
+  String(h ?? '')
+    .replace(/[^\p{L}\p{N}_ ]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+
 const findCol = (headerLower: string[], ...names: string[]): number => {
   for (const n of names) {
     const i = headerLower.indexOf(n)
@@ -64,7 +74,7 @@ async function readFmpExchanges(sheets: SheetTarget['sheets'], id: string): Prom
     const tab = meta.data.sheets?.[0]?.properties?.title ?? 'Sheet1'
     const resp = await sheets.spreadsheets.values.get({spreadsheetId: id, range: tab})
     const rows = resp.data.values ?? []
-    const HH = (rows[0] ?? []).map((h) => String(h).trim().toLowerCase())
+    const HH = (rows[0] ?? []).map(normHeader)
     const si = HH.indexOf('slug')
     const ei = HH.indexOf('exchange')
     if (si < 0 || ei < 0) return out
@@ -139,7 +149,7 @@ async function main() {
     throw new Error('Sheet is empty — add the header row first (see docs/GOOGLE_FINANCE.md → New-sheet schema).')
   }
   const header = rows[0].map((h) => String(h ?? ''))
-  const H = header.map((h) => h.trim().toLowerCase())
+  const H = header.map(normHeader)
   const col: Record<string, number> = {
     slug: findCol(H, 'slug'),
     name: findCol(H, 'name'),

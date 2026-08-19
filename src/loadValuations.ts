@@ -78,10 +78,14 @@ export async function loadValuations(): Promise<ValuationLoad> {
   const rows = parseCsv(await res.text())
   if (rows.length < 2) return {values, lastUpdated}
 
-  const header = rows[0].map((h) => h.trim().toLowerCase())
+  // Normalize headers: drop emoji / marker symbols (🔒 ✏️ …) so the sheet can
+  // annotate headers ("Slug 🔒", "2026 ✏️") without breaking column detection.
+  const header = rows[0].map((h) =>
+    h.replace(/[^\p{L}\p{N}_ ]+/gu, " ").replace(/\s+/g, " ").trim().toLowerCase(),
+  )
   const slugIdx = header.indexOf("slug")
   if (slugIdx < 0) return {values, lastUpdated}
-  const updatedIdx = header.indexOf("last_updated")
+  const updatedIdx = header.indexOf("last updated") >= 0 ? header.indexOf("last updated") : header.indexOf("last_updated")
   // Year columns are any header shaped "YYYY".
   const yearCols = header
     .map((h, i) => ({i, h}))
