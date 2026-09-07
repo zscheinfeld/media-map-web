@@ -18,6 +18,8 @@ const CSV_URL = process.env.SANITY_STUDIO_VALUATIONS_CSV_URL as string | undefin
 
 /** slug → (year "YYYY" → value in billions USD). */
 export type ValuationData = Map<string, Map<string, number>>
+/** slug → set of years ("YYYY") the sheet explicitly hid via a "-" cell. */
+export type HiddenData = Map<string, Set<string>>
 
 export function isLiveValuationsConfigured(): boolean {
   return !!CSV_URL
@@ -66,10 +68,11 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
-function parseValuations(csv: string): ValuationData {
+function parseValuations(csv: string): {values: ValuationData; hidden: HiddenData} {
   const values: ValuationData = new Map()
+  const hidden: HiddenData = new Map()
   const rows = parseCsv(csv)
-  if (rows.length < 2) return values
+  if (rows.length < 2) return {values, hidden}
   // Normalize headers (drop emoji markers like 🔒 / ✏️) and find the header row by
   // locating `slug`, so a KEY/legend row on top doesn't get read as the header.
   const norm = (h: string) =>
@@ -77,7 +80,7 @@ function parseValuations(csv: string): ValuationData {
   const headerRow = Math.max(0, rows.findIndex((row) => row.map(norm).includes('slug')))
   const header = rows[headerRow].map(norm)
   const slugIdx = header.indexOf('slug')
-  if (slugIdx < 0) return values
+  if (slugIdx < 0) return {values, hidden}
   // Year columns are any header shaped "YYYY".
   const yearCols = header.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}$/.test(h))
   for (let r = headerRow + 1; r < rows.length; r++) {
@@ -87,13 +90,24 @@ function parseValuations(csv: string): ValuationData {
     const years = new Map<string, number>()
     for (const {i, h} of yearCols) {
       const raw = (row[i] ?? '').trim()
+      if (raw === '-') {
+        // Explicit "omit this company from this year's map".
+        ;(hidden.get(slug) ?? hidden.set(slug, new Set()).get(slug)!).add(h)
+        continue
+      }
       if (!raw || raw.toUpperCase() === 'NA') continue // blank = manual TBD, NA = not on plan
       const n = Number(raw.replace(/[$,\s]/g, ''))
       if (Number.isFinite(n) && n > 0) years.set(h, n)
     }
     values.set(slug, years)
   }
-  return values
+  return {values, hidden}
+}
+
+/** True if the sheet explicitly hid this company for the given year (a "-" cell). */
+export function isHiddenAt(hidden: HiddenData, slug: string | undefined, year: string): boolean {
+  if (!slug) return false
+  return hidden.get(slug)?.has(year) ?? false
 }
 
 /** Value (billions) for a company in a year ("YYYY"), or undefined if missing/NA/blank. */
@@ -112,8 +126,9 @@ export function valuationAt(
  * before the first layout — like sheetValuations, this keeps planet sizes correct
  * from frame one. When unconfigured, `loaded` is true immediately (empty data).
  */
-export function useLiveValuations(): {data: ValuationData; loaded: boolean} {
+export function useLiveValuations(): {data: ValuationData; hidden: HiddenData; loaded: boolean} {
   const [data, setData] = useState<ValuationData>(() => new Map())
+  const [hidden, setHidden] = useState<HiddenData>(() => new Map())
   const [loaded, setLoaded] = useState(!isLiveValuationsConfigured())
   useEffect(() => {
     if (!CSV_URL) return
@@ -121,7 +136,11 @@ export function useLiveValuations(): {data: ValuationData; loaded: boolean} {
     fetch(CSV_URL)
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`Valuations sheet ${r.status}`))))
       .then((csv) => {
-        if (!cancelled) setData(parseValuations(csv))
+        if (!cancelled) {
+          const parsed = parseValuations(csv)
+          setData(parsed.values)
+          setHidden(parsed.hidden)
+        }
       })
       .catch(() => {
         /* leave empty → editor falls back to manual / legacy values */
@@ -133,5 +152,5 @@ export function useLiveValuations(): {data: ValuationData; loaded: boolean} {
       cancelled = true
     }
   }, [])
-  return {data, loaded}
+  return {data, hidden, loaded}
 }

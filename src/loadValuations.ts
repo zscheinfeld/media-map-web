@@ -63,20 +63,26 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
+/** slug → set of years ("YYYY") the sheet explicitly hid via a "-" cell. */
+export type HiddenData = Map<string, Set<string>>
+
 export type ValuationLoad = {
   values: ValuationData
+  /** Years a company is explicitly omitted from ("-" in the cell). */
+  hidden: HiddenData
   /** slug → the date ("YYYY-MM-DD") the ingest last refreshed that company. */
   lastUpdated: Map<string, string>
 }
 
 export async function loadValuations(): Promise<ValuationLoad> {
   const values: ValuationData = new Map()
+  const hidden: HiddenData = new Map()
   const lastUpdated = new Map<string, string>()
-  if (!CSV_URL) return {values, lastUpdated}
+  if (!CSV_URL) return {values, hidden, lastUpdated}
   const res = await fetch(CSV_URL)
   if (!res.ok) throw new Error(`Valuations sheet fetch failed: ${res.status}`)
   const rows = parseCsv(await res.text())
-  if (rows.length < 2) return {values, lastUpdated}
+  if (rows.length < 2) return {values, hidden, lastUpdated}
 
   // Normalize headers: drop emoji / marker symbols (🔒 ✏️ …) so the sheet can
   // annotate headers ("Slug 🔒", "2026 ✏️") without breaking column detection.
@@ -87,7 +93,7 @@ export async function loadValuations(): Promise<ValuationLoad> {
   const headerRow = Math.max(0, rows.findIndex((row) => row.map(norm).includes("slug")))
   const header = rows[headerRow].map(norm)
   const slugIdx = header.indexOf("slug")
-  if (slugIdx < 0) return {values, lastUpdated}
+  if (slugIdx < 0) return {values, hidden, lastUpdated}
   const updatedIdx = header.indexOf("last updated") >= 0 ? header.indexOf("last updated") : header.indexOf("last_updated")
   // Year columns are any header shaped "YYYY".
   const yearCols = header
@@ -101,6 +107,11 @@ export async function loadValuations(): Promise<ValuationLoad> {
     const years = new Map<string, number>()
     for (const {i, h} of yearCols) {
       const cell = (row[i] ?? "").trim()
+      if (cell === "-") {
+        // Explicit "omit this company from this year's map".
+        ;(hidden.get(slug) ?? hidden.set(slug, new Set()).get(slug)!).add(h)
+        continue
+      }
       if (!cell || cell.toUpperCase() === "NA") continue // blank = manual TBD, NA = not on plan
       const n = Number(cell.replace(/[$,\s]/g, ""))
       if (Number.isFinite(n) && n > 0) years.set(h, n)
@@ -109,7 +120,13 @@ export async function loadValuations(): Promise<ValuationLoad> {
     const lu = updatedIdx >= 0 ? (row[updatedIdx] ?? "").trim() : ""
     if (lu) lastUpdated.set(slug, lu)
   }
-  return {values, lastUpdated}
+  return {values, hidden, lastUpdated}
+}
+
+/** True if the sheet explicitly hid this company for the given year (a "-" cell). */
+export function isHiddenAt(hidden: HiddenData, slug: string | undefined, year: string): boolean {
+  if (!slug) return false
+  return hidden.get(slug)?.has(year) ?? false
 }
 
 /** Value (billions) for a company in a year ("YYYY"), or undefined if missing/NA/blank. */
@@ -138,8 +155,9 @@ export function latestUpdated(lastUpdated: Map<string, string>): {year: number; 
 }
 
 /** Load the valuation sheet once on mount. Empty maps until loaded / if unconfigured. */
-export function useValuations(): {data: ValuationData; lastUpdated: Map<string, string>; loading: boolean} {
+export function useValuations(): {data: ValuationData; hidden: HiddenData; lastUpdated: Map<string, string>; loading: boolean} {
   const [data, setData] = useState<ValuationData>(() => new Map())
+  const [hidden, setHidden] = useState<HiddenData>(() => new Map())
   const [lastUpdated, setLastUpdated] = useState<Map<string, string>>(() => new Map())
   const [loading, setLoading] = useState(isValuationsConfigured())
 
@@ -150,6 +168,7 @@ export function useValuations(): {data: ValuationData; lastUpdated: Map<string, 
       .then((res) => {
         if (!cancelled) {
           setData(res.values)
+          setHidden(res.hidden)
           setLastUpdated(res.lastUpdated)
           setLoading(false)
         }
@@ -163,5 +182,5 @@ export function useValuations(): {data: ValuationData; lastUpdated: Map<string, 
     }
   }, [])
 
-  return {data, lastUpdated, loading}
+  return {data, hidden, lastUpdated, loading}
 }

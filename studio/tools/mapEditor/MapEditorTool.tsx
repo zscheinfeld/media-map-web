@@ -18,7 +18,7 @@ import {
   type EditorEntity,
 } from './sanityMapData'
 import {useSheetValuations} from './sheetValuations'
-import {useLiveValuations, valuationAt as liveValuationAt} from './liveValuations'
+import {useLiveValuations, valuationAt as liveValuationAt, isHiddenAt} from './liveValuations'
 import {computeLabelRadii} from './labelRadii'
 import {PlanetInspector} from './PlanetInspector'
 import {ConnectionInspector} from './ConnectionInspector'
@@ -111,7 +111,7 @@ export function MapEditorTool() {
   // Live valuations (slug × year) — the same published sheet the public map uses,
   // so editor planet sizes match production AND resize as the year is scrubbed.
   // The legacy name-matched sheet stays as the final fallback for uncovered rows.
-  const {data: liveValuations, loaded: liveValuationsLoaded} = useLiveValuations()
+  const {data: liveValuations, hidden: hiddenValuations, loaded: liveValuationsLoaded} = useLiveValuations()
   const {valuations: sheetValuations, loaded: sheetValuationsLoaded} = useSheetValuations()
   const valuationsLoaded = liveValuationsLoaded && sheetValuationsLoaded
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -272,7 +272,12 @@ export function MapEditorTool() {
     // Only companies whose appearance windows cover the current moment are laid
     // out (no windows = always visible), mirroring the entity rule below.
     const companyInputs = data.inputs
-      .filter((i) => appearanceActiveAt(data.companiesByName[i.name]?.appearanceWindows ?? [], moment))
+      .filter((i) => {
+        const c = data.companiesByName[i.name]
+        // Hidden if outside its appearance windows, or the sheet omitted it this
+        // year with a "-" cell — mirrors the public map.
+        return appearanceActiveAt(c?.appearanceWindows ?? [], moment) && !isHiddenAt(hiddenValuations, c?.slug, viewedYear)
+      })
       .map((i) => {
         const comp = data.companiesByName[i.name]
         // i.valuation_b already carries manual-or-default; explicit precedence:
@@ -300,7 +305,7 @@ export function MapEditorTool() {
         style: null,
       }))
     return [...companyInputs, ...entityInputs]
-  }, [data, valuationsLoaded, liveValuations, sheetValuations, viewedYear, containerW, resolvedSectorCenters, moment])
+  }, [data, valuationsLoaded, liveValuations, hiddenValuations, sheetValuations, viewedYear, containerW, resolvedSectorCenters, moment])
 
   // Companies + entities share the {id, name, positionOverrides} shape, so the
   // drag/pin/inspector/connect pipeline treats them uniformly. Keyed by name.

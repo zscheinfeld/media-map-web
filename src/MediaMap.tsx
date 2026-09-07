@@ -44,7 +44,7 @@ import {
   valuationForDate,
   type MapDate,
 } from "./historical";
-import { useValuations, valuationAt, latestYear, latestUpdated, type ValuationData } from "./loadValuations";
+import { useValuations, valuationAt, isHiddenAt, latestYear, latestUpdated, type ValuationData } from "./loadValuations";
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -3242,7 +3242,7 @@ export default function MediaMap() {
   }, [sanityError]);
   // Real market caps from the valuation Google Sheet (Phase 4c), indexed by
   // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
-  const { data: valData, lastUpdated: lastUpdatedBySlug } = useValuations();
+  const { data: valData, hidden: hiddenByYear, lastUpdated: lastUpdatedBySlug } = useValuations();
   // The map's "current" view = the newest YEAR column in the valuation sheet (so
   // the view advances when a year rolls over), with its MONTH derived from the
   // newest ingest "last_updated" (decision #3). Falls back to the calendar date
@@ -3435,17 +3435,23 @@ export default function MediaMap() {
 
   const displayedCompanies = useMemo(
     () => {
-      // Hide companies whose appearance windows don't cover the viewed year (the
-      // map, list + linear views all read this; the aggregate keeps every company
-      // and windows per-year instead).
+      // Hide companies whose appearance windows don't cover the viewed year, or
+      // that the sheet explicitly omitted for this year (a "-" cell). The map,
+      // list + linear views all read this; the aggregate keeps every company and
+      // windows per-year instead.
       const activeMoment = makeMoment(activeDate.year, activeDate.month);
-      const visible = baseCompanies.filter((c) => yearWindowsActiveAt(windowsFor(c.name), activeMoment));
+      const activeYearKey = String(activeDate.year);
+      const visible = baseCompanies.filter(
+        (c) =>
+          yearWindowsActiveAt(windowsFor(c.name), activeMoment) &&
+          !isHiddenAt(hiddenByYear, c.slug, activeYearKey),
+      );
       return sameDate(activeDate, currentDate)
         ? visible
         : visible.map((c) => ({ ...c, valuation_b: valAt(c, activeDate) }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseCompanies, activeDate, currentDate, valData, sanity],
+    [baseCompanies, activeDate, currentDate, valData, hiddenByYear, sanity],
   );
 
   // Aggregate view: every company's valuation across the whole timeline, ordered
@@ -3462,7 +3468,10 @@ export default function MediaMap() {
       // (empty = all years); outside the window its value is 0 (no bar).
       const windows = windowsFor(c.name);
       const values = dateRange.map((d) =>
-        yearWindowsActiveAt(windows, makeMoment(d.year, d.month)) ? Math.max(0, valAt(c, d)) : 0,
+        yearWindowsActiveAt(windows, makeMoment(d.year, d.month)) &&
+        !isHiddenAt(hiddenByYear, c.slug, String(d.year))
+          ? Math.max(0, valAt(c, d))
+          : 0,
       );
       return { name: c.name, sector: c.sector, color, values };
     });
@@ -3476,7 +3485,7 @@ export default function MediaMap() {
     }
     return { dates: dateRange, bands, maxTotal };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseCompanies, dateRange, valData, sanity]);
+  }, [baseCompanies, dateRange, valData, hiddenByYear, sanity]);
 
   // All-time high / low (with the date each occurred) for every company,
   // swept across the full timeline. Independent of the active date, so this
@@ -3489,7 +3498,8 @@ export default function MediaMap() {
       let ath = -Infinity, atl = Infinity;
       let athDate = dateRange[0], atlDate = dateRange[0];
       for (const d of dateRange) {
-        if (!yearWindowsActiveAt(windows, makeMoment(d.year, d.month))) continue; // outside its window
+        // outside its window, or explicitly hidden that year ("-")
+        if (!yearWindowsActiveAt(windows, makeMoment(d.year, d.month)) || isHiddenAt(hiddenByYear, c.slug, String(d.year))) continue;
         const v = valAt(c, d);
         if (v > ath) { ath = v; athDate = d; }
         if (v < atl) { atl = v; atlDate = d; }
@@ -3500,7 +3510,7 @@ export default function MediaMap() {
     }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseCompanies, dateRange, valData]);
+  }, [baseCompanies, dateRange, valData, hiddenByYear]);
 
   // Rows for the list view: enabled sectors only (so the sidebar filter still
   // applies), valuation at the active date, ATH/ATL across all time, sorted by
