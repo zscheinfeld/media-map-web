@@ -109,7 +109,7 @@ Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet 
 ### Interaction details worth knowing
 
 - `didDragRef` in MediaMap.tsx tracks whether a mouse-down → mouse-up exceeded a 4px movement threshold. The planet's `onClick` short-circuits if true so drag-pan doesn't accidentally trigger focus-zoom on a planet under the cursor.
-- There are **no touch handlers** — `onMouseDown/Move/Up` only. Mobile users can't drag-pan or pinch-zoom the map.
+- **Touch is supported** — `onTouchStart/Move/End` on the SVG handle one-finger **pan** and two-finger **pinch-zoom** (`beginPinch`), running in parallel with the mouse (`onMouseDown/Move/Up`) handlers. A `TOUCH_DRAG_THRESHOLD_PX` guard (via `didDragRef`) means a tap that doesn't drag still triggers focus-zoom. One gap: **edit-mode planet dragging starts from `onMouseDown`**, so hand-positioning planets on a touch device may not work (desktop authoring is fine).
 - Zoom + pan are unified through `animateView(targetZoom, targetPan, duration)` (easeInOutCubic). `focusOnPlanet` and `focusOnSector` both use it.
 - Planet positions in the carousel thumbnails reuse the active simulation's coords — only sizes change per-month. Don't try to run a second simulation for the thumbnails.
 - **Labels are always rendered** (threshold is 0). The label `<foreignObject>` is sized `max(planet diameter, 130×52px in screen units)`, so for small planets the text visually overflows the circle. This is intentional and matches the reference design; the bumped collide padding compensates. There is no label-aware spacing yet — neighboring labels can overlap when planets cluster. The planned fix is a Canvas `measureText`-derived "effective radius" fed into `liveCollide`.
