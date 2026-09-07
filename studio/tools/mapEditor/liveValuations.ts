@@ -70,12 +70,17 @@ function parseValuations(csv: string): ValuationData {
   const values: ValuationData = new Map()
   const rows = parseCsv(csv)
   if (rows.length < 2) return values
-  const header = rows[0].map((h) => h.trim().toLowerCase())
+  // Normalize headers (drop emoji markers like 🔒 / ✏️) and find the header row by
+  // locating `slug`, so a KEY/legend row on top doesn't get read as the header.
+  const norm = (h: string) =>
+    h.replace(/[^\p{L}\p{N}_ ]+/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  const headerRow = Math.max(0, rows.findIndex((row) => row.map(norm).includes('slug')))
+  const header = rows[headerRow].map(norm)
   const slugIdx = header.indexOf('slug')
   if (slugIdx < 0) return values
   // Year columns are any header shaped "YYYY".
   const yearCols = header.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}$/.test(h))
-  for (let r = 1; r < rows.length; r++) {
+  for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r]
     const slug = (row[slugIdx] ?? '').trim()
     if (!slug) continue
