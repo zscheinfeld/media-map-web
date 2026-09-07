@@ -283,8 +283,19 @@ export const company = defineType({
       type: 'array',
       group: 'position',
       description:
-        'Optional fixed positions for this planet. Modeled as a list so a planet can be placed differently across ' +
-        'the timeline — each entry has its own date range. With no entries, the planet floats within its sector.',
+        'Optional fixed positions for this planet on the DESKTOP (16:9) map. Modeled as a list so a planet can be ' +
+        'placed differently across the timeline — each entry has its own date range. With no entries, the planet ' +
+        'floats within its sector.',
+      of: [{type: 'positionOverride'}],
+    }),
+    defineField({
+      name: 'mobile_position_overrides',
+      title: 'Mobile position overrides (square)',
+      type: 'array',
+      group: 'position',
+      description:
+        'Same as position overrides, but for the SQUARE (mobile) map only. Authored in the Map Editor’s Square ' +
+        'aspect-ratio mode. With no entries, the planet floats within its sector’s mobile center via physics.',
       of: [{type: 'positionOverride'}],
     }),
 
