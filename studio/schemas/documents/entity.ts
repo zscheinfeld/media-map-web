@@ -65,9 +65,19 @@ export const entity = defineType({
       group: 'position',
       of: [{type: 'positionOverride'}],
       description:
-        'Optional fixed positions for this entity (same model as a company). Modeled as a list ' +
-        'so it can be placed differently across the timeline. With no entries, it floats within ' +
-        'its sector. Usually authored by dragging in the Map Editor.',
+        'Optional fixed positions for this entity on the DESKTOP map (same model as a company). ' +
+        'Modeled as a list so it can be placed differently across the timeline. With no entries, ' +
+        'it floats within its sector. Usually authored by dragging in the Map Editor.',
+    }),
+    defineField({
+      name: 'mobile_position_overrides',
+      title: 'Mobile position overrides (square)',
+      type: 'array',
+      group: 'position',
+      of: [{type: 'positionOverride'}],
+      description:
+        'Same as position overrides, but for the SQUARE (mobile) map only — authored in the Map ' +
+        'Editor’s Square aspect-ratio mode.',
     }),
   ],
 
