@@ -10,7 +10,7 @@ The site is **already live** (public app + hosted Studio + nightly ingest) on th
 
 - [ ] **Finish the last tickers** — Manual holdouts (Schibsted, MultiChoice, NHL, Bertelsmann) + the 4 "verify" ones (EchoStar, Optimum, Angel, eSports).
 - [ ] **Enter historical (past-year) values** in the sheet — GF has no history, so 2015–2025 are hand-entered. *Big data-entry lift; drives the whole Time Machine.* Convention: a **`-`** in a year cell means *omit that company from that year's map*.
-- [ ] **Implement the `-` = hide convention in the app** — NOT yet honored. Today a `-` is read as "no value," so the company falls back to a computed size and still appears. Needs a change in [loadValuations.ts](../src/loadValuations.ts) (capture `-` as an explicit "hidden that year") + the per-year visibility filter in [MediaMap.tsx](../src/MediaMap.tsx).
+- [x] **`-` = hide convention** — done (`1344e05`). A `-` cell omits the company from that year's map (public map/list/linear/aggregate/ATH-ATL + the Studio Map Editor all honor it). Takes effect on the app once cut over to the GF sheet; in the hosted editor on the next Studio deploy.
 - [x] **Redeploy Studio** — done 2026-09-07; `exchange` / `currency` / `manual_source` are now real fields, and the Map Editor's `SANITY_STUDIO_VALUATIONS_CSV_URL` was repointed at the GF sheet (+ parser fixed for the key row / emoji headers) so the editor sizes planets from GF data.
 - [ ] **Install the Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) — paste + add the daily trigger.
 - [ ] **Publish the GF sheet to web → CSV** (File → Share → Publish to web → CSV) and grab that URL.
