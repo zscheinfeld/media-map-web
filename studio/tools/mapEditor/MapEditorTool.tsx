@@ -134,6 +134,27 @@ export function MapEditorTool() {
   // Master collapse for the connected left-hand control panel (get it out of the
   // way to see the map); individual sections collapse independently within it.
   const [controlsOpen, setControlsOpen] = useState(true)
+  // Draggable position of the control panel (top-left offset in px). The header
+  // acts as the drag handle; a small move threshold distinguishes drag from the
+  // collapse click.
+  const [panelPos, setPanelPos] = useState({x: 12, y: 12})
+  const panelDragRef = useRef<{sx: number; sy: number; x0: number; y0: number; moved: boolean} | null>(null)
+  const onPanelHeaderMouseDown = (e: React.MouseEvent) => {
+    const start = {sx: e.clientX, sy: e.clientY, x0: panelPos.x, y0: panelPos.y, moved: false}
+    panelDragRef.current = start
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - start.sx
+      const dy = ev.clientY - start.sy
+      if (!start.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) start.moved = true
+      if (start.moved) setPanelPos({x: start.x0 + dx, y: start.y0 + dy})
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
   const panDragRef = useRef<{
     startScreenX: number
     startScreenY: number
@@ -780,6 +801,21 @@ export function MapEditorTool() {
           style={{display: 'block'}}
           onMouseDown={onCanvasMouseDown}
         >
+          {/* Thin white dotted frame at the canvas edge — a visual reference for
+              where the map border sits. Stroke/dash scale with zoom so they stay
+              a constant on-screen thickness. Non-interactive. */}
+          <rect
+            x={CANVAS.x}
+            y={CANVAS.y}
+            width={CANVAS.w}
+            height={CANVAS.h}
+            fill="none"
+            stroke="rgba(255,255,255,0.6)"
+            strokeWidth={1.5 * slideUnitsPerPx}
+            strokeDasharray={`${9 * slideUnitsPerPx} ${7 * slideUnitsPerPx}`}
+            pointerEvents="none"
+          />
+
           {/* Connection lines beneath the planets. Endpoints follow live drag.
               Filtered to those active at the current moment so the canvas
               reflects the "map as of T" semantics. */}
@@ -937,8 +973,8 @@ export function MapEditorTool() {
           shadow={2}
           style={{
             position: 'absolute',
-            top: 12,
-            left: 12,
+            top: panelPos.y,
+            left: panelPos.x,
             width: 280,
             maxHeight: 'calc(100% - 24px)',
             display: 'flex',
@@ -950,9 +986,13 @@ export function MapEditorTool() {
           <Flex
             align="center"
             justify="space-between"
-            onClick={() => setControlsOpen((o) => !o)}
+            onMouseDown={onPanelHeaderMouseDown}
+            onClick={() => {
+              // Ignore the click that ends a drag; only a genuine tap toggles.
+              if (!panelDragRef.current?.moved) setControlsOpen((o) => !o)
+            }}
             style={{
-              cursor: 'pointer',
+              cursor: 'move',
               userSelect: 'none',
               padding: '10px 12px',
               borderBottom: controlsOpen ? '1px solid rgba(255,255,255,0.12)' : undefined,
