@@ -8,16 +8,15 @@ The site is **already live** (public app + hosted Studio + nightly ingest) on th
 
 ## 1. Google Finance cut-over — *makes non-US companies work* (they show "NA" on live FMP today)
 
-- [ ] **Finish the last tickers** — Manual holdouts (Schibsted, MultiChoice, NHL, Bertelsmann) + the 4 "verify" ones (EchoStar, Optimum, Angel, eSports).
-- [ ] **Enter historical (past-year) values** in the sheet — GF has no history, so 2015–2025 are hand-entered. *Big data-entry lift; drives the whole Time Machine.* Convention: a **`-`** in a year cell means *omit that company from that year's map*.
-- [x] **`-` = hide convention** — done (`1344e05`). A `-` cell omits the company from that year's map (public map/list/linear/aggregate/ATH-ATL + the Studio Map Editor all honor it). Takes effect on the app once cut over to the GF sheet; in the hosted editor on the next Studio deploy.
-- [x] **Redeploy Studio** — done 2026-09-07; `exchange` / `currency` / `manual_source` are now real fields, and the Map Editor's `SANITY_STUDIO_VALUATIONS_CSV_URL` was repointed at the GF sheet (+ parser fixed for the key row / emoji headers) so the editor sizes planets from GF data.
-- [ ] **Install the Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) — paste + add the daily trigger.
-- [ ] **Publish the GF sheet to web → CSV** (File → Share → Publish to web → CSV) and grab that URL.
-- [ ] **Verify on dev** — point local `.env.local` `VITE_VALUATIONS_CSV_URL` at the GF CSV, `npm run dev`, compare to FMP.
-- [ ] **Merge `google-finance-alternative` → main + deploy** *(required before live cut-over — main lacks the key-row + emoji-header handling this sheet needs).*
-- [ ] **Wire automation** — add the `GF_SHEET_ID` GitHub secret + the Sanity publish webhook.
-- [ ] **Cut over** — set Netlify `VITE_VALUATIONS_CSV_URL` to the GF CSV; redeploy. (Rollback = flip back to the FMP URL.)
+- [x] **Re-ticker the roster** — Japanese via OTCMKTS+JPY, non-US primary listings, Currency override field. A few genuine Manual holdouts remain (Schibsted, MultiChoice, NHL, Bertelsmann) + verify (EchoStar, Optimum, Angel, eSports) — enter as you confirm. See [[gf-exchange-support]].
+- [x] **Historical values** filled (~123–169/year, 2015→2026) → the Time Machine survives the cut-over.
+- [x] **`-` = hide convention** — a `-` cell omits the company from that year's map (app + editor).
+- [x] **Redeploy Studio** — `exchange`/`currency`/`manual_source` + Square-mode mobile-position authoring are live; editor reads the GF sheet.
+- [x] **Publish GF sheet → CSV** + **verify on dev** — done (non-US now populate).
+- [x] **Merge `google-finance-alternative` → main** — done (`d4f3af8`); deployed (app still reads FMP until the env var flips).
+- [x] **Automation** — 4 GitHub secrets set; `workflow_dispatch` test green (nightly cron + manual live). ⏳ remaining: the **Sanity webhook** for instant-on-publish (see [GOOGLE_FINANCE.md → Phase 4](GOOGLE_FINANCE.md)).
+- [ ] **Cut over** — set Netlify `VITE_VALUATIONS_CSV_URL` to the GF CSV (`2PACX-1vQ6iO…`) → deploy. Rollback = flip back to FMP.
+- [ ] *(Optional)* **Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) — paste + add the daily trigger.
 - [ ] **Retire FMP** (once confident) — disable the `ingest-valuations` Action.
 
 ## 2. Mobile + touch — ✅ mostly done (correction to old docs)
@@ -28,8 +27,8 @@ Touch is implemented: **one-finger pan, two-finger pinch-zoom, tap-to-focus**, g
 
 ## 3. Historical-map editing — ✅ available; QA remaining
 
-The Studio Map Editor's **year picker** scopes appearance windows, connections, and (via the sheet) valuations; both desktop and mobile renderings honor the same time-scoped data. Sector centers are tunable per-view (`mobile_center`). Note: **per-company fine positions are authored once (desktop); mobile auto-lays-out within its own sector centers** via physics — see open question #4.
-- [ ] Client QA pass: step through each year, confirm the right companies/connections/sizes render on both desktop and mobile.
+The Studio Map Editor's **year picker** scopes appearance windows, connections, and (via the sheet) valuations. An **Aspect ratio dropdown (Desktop / Square)** now lets you author **both** layouts: Square mode swaps to the square canvas + sector `mobile_center` + per-planet `mobile_position_overrides`, and dragging saves to the mobile field (desktop drags still save the desktop field). The square layout was migrated out of code (`MOBILE_LAYOUTS.square`) into Sanity — company + entity `mobile_position_overrides` and sector `mobile_center`. The app's square view reads those (falling back to code) once cut over/deployed.
+- [ ] Client QA pass: step through each year in both Desktop and Square modes; confirm the right companies/connections/sizes/positions render.
 
 ## 4. Front-end polish
 - [ ] Restyle toward the light mockup; loading-moment animation; final responsive passes.

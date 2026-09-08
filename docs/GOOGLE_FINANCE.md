@@ -66,29 +66,31 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
 - [x] `.github/workflows/gf-sync-roster.yml` — nightly + `workflow_dispatch` + `repository_dispatch` (webhook), `--apply`, targets `GF_SHEET_ID`.
 - [ ] *Follow-up:* automate the year rollover (freeze prior year + insert new column) inside the reconciler.
 
-### Phase 2 — Create & populate the new sheet (🧑)
-- [ ] Create a **new Google Sheet** (e.g. "Media Map — valuations (Google Finance)").
-- [ ] Add **one header row** with the schema columns (see *New-sheet schema* below): `slug · name · sector · data type · data source · ticker · exchange · Currency · FX_to_USD · vetting_status · Notes · last_updated · 2026 … 2015`.
-- [ ] **Share the sheet (Editor) with the service-account email** (`client_email` in `GOOGLE_SERVICE_ACCOUNT_JSON`).
-- [ ] Locally: set `GF_SHEET_ID` + the service-account creds in `jobs/.env`, then `npm run gf-sync-roster` (dry run) → review → `npm run gf-sync-roster -- --apply` to fill every company.
-- [ ] **Re-ticker** the `needs_review` companies **in Sanity** (OTC/ADR → primary listings / major US ADRs — table below); re-run the reconciler (the formulas self-heal).
-- [ ] Fill past-year values manually, then **Publish to web → CSV**.
+### Phase 2 — Create & populate the new sheet (🧑) ✅ done
+- [x] New Google Sheet created (`GF_SHEET_ID` = `1hDi6Kw55yGSDk5f0FWNDLW7JNbwiVb9TZrJzd4pZMZE`), shared Editor with the service account, header row set. Note: a **KEY/legend row sits above the header** and headers carry **🔒/✏️ emoji markers** — all tooling normalizes emoji and finds the header row by locating `slug`.
+- [x] Reconciler run + re-tickered the roster in Sanity. Key findings (in [[gf-exchange-support]] memory): GOOGLEFINANCE has **no data for TYO/SHA** → Japanese names use `OTCMKTS:<US OTC ticker>` reporting in JPY; Sony uses `NYSE:SONY` (JPY). A **Currency override** field on the company (+ entity) handles OTCMKTS/ADR cases; KRX (Samsung/LG) verified real via implied-share-count. Non-US primary listings work on HKG/LON/NSE/EPA/ETR/AMS/TSE/SHE/ASX/BIT/BME/STO/KRX.
+- [x] Past-year history filled (~123–169 companies per year, 2015→2026).
+- [x] Sheet **Published to web → CSV**.
 
-### Phase 3 — Verify on dev (🧑 + 🤖)
-- [ ] Point **local** `.env.local` `VITE_VALUATIONS_CSV_URL` at the new sheet's CSV.
-- [ ] Compare the dev map against the old (FMP) map — spot-check US names (should match) and each re-tickered non-US name. Fix formulas/tickers until it's right.
+### Phase 3 — Verify on dev (🧑 + 🤖) ✅ done
+- [x] `.env.local` `VITE_VALUATIONS_CSV_URL` pointed at the GF CSV; dev map verified (non-US now populated; US matches).
 
-### Phase 4 — Wire the reconciler (🧑)
-- [ ] Add the **`GF_SHEET_ID`** GitHub secret (the new sheet's ID).
-- [ ] Run `gf-sync-roster` once via **workflow_dispatch**; confirm it adds any missing companies and reports no duplicates. Then let the weekly schedule take over.
+### Phase 4 — Wire the reconciler (🧑) ✅ done (webhook pending)
+- [x] Branch merged to `main` so the workflow is on the default branch.
+- [x] **GitHub secrets set** (`gh secret set`, repo `zscheinfeld/media-map-web`): `GF_SHEET_ID`, `SANITY_PROJECT_ID` (`haxcsjkn`), `SANITY_AUTH_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON` (contents of the service-account key file). `SANITY_DATASET` is hardcoded `production` in the workflow.
+- [x] `workflow_dispatch` test run **succeeded** (5 metadata + formula updates, 0 new).
+- [ ] **Sanity webhook** for instant-on-publish (nightly cron + manual already work). Create a GitHub **classic PAT** (`repo` scope), then in manage.sanity.io → project `haxcsjkn` → API → Webhooks:
+  - URL `https://api.github.com/repos/zscheinfeld/media-map-web/dispatches`; POST; trigger Create/Update/Delete; **filter** `_type == "company"`.
+  - Headers: `Authorization: Bearer <PAT>`, `Accept: application/vnd.github+json`.
+  - Body: `{"event_type":"sanity-company-change"}` (matches `repository_dispatch.types`).
 
-### Phase 5 — Production cut-over (🧑)
-- [ ] Change `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the new sheet's CSV; redeploy.
-- [ ] Verify the live map. **Rollback = flip the env var back to the old URL.**
+### Phase 5 — Production cut-over (🧑) ← the remaining step
+- [ ] Set `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the GF published CSV (`2PACX-1vQ6iO…`); trigger a deploy. *(Vite bakes env at build time — set it, then deploy.)*
+- [ ] Verify the live map. **Rollback = flip the env var back to the FMP URL + redeploy.**
 
 ### Phase 6 — Retire FMP (🧑, once confident)
-- [ ] Disable the old **`ingest-valuations`** Action (GitHub → Actions → Disable), or leave it running to keep the reference sheet fresh — your call.
-- [ ] Later: drop the `FMP_API_KEY` secret and retire `jobs/ingest-valuations.ts`.
+- [ ] Disable the old **`ingest-valuations`** Action, or leave it refreshing the reference sheet — your call.
+- [ ] Later: drop `FMP_API_KEY` and retire `jobs/ingest-valuations.ts`.
 
 **Where things can go wrong:** OTC re-tickering (Phase 2) is the real work; London pence + non-US share-count accuracy need spot-checks (Phase 3); the reconciler must stay append/metadata-only (Phase 1) or it'll clobber formulas.
 
