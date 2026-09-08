@@ -91,9 +91,13 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
 - [x] Set `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the GF published CSV (`2PACX-1vQ6iO…`); triggered a deploy. *(Vite bakes env at build time — set it, then deploy.)*
 - [x] Verified the live map (non-US companies populate). **Rollback = set the env var back to the FMP URL + redeploy.**
 
-### Phase 6 — Retire FMP (🧑, once confident)
-- [ ] Disable the old **`ingest-valuations`** Action, or leave it refreshing the reference sheet — your call.
-- [ ] Later: drop `FMP_API_KEY` and retire `jobs/ingest-valuations.ts`.
+### Phase 6 — Retire FMP (🧑) ✅ done (2026-09-08, kept as rollback)
+- [x] **`ingest-valuations` nightly schedule disabled** — the cron in [.github/workflows/ingest-valuations.yml](../.github/workflows/ingest-valuations.yml) is commented out; the workflow stays **manually runnable** (`workflow_dispatch`) so the FMP sheet can be freshened if we ever roll back.
+- [ ] *Fully retire later:* delete the workflow file + `jobs/ingest-valuations.ts` and drop the `FMP_API_KEY` / `SHEET_ID` secrets. Not urgent — costs nothing sitting idle.
+
+**Rollback target (FMP):**
+- FMP published CSV URL: `TODO — paste from Netlify env-var history / the FMP sheet's Publish-to-web dialog`
+- To roll back: set Netlify `VITE_VALUATIONS_CSV_URL` to that URL → redeploy; optionally run the `ingest-valuations` workflow once (manual dispatch) to refresh the FMP sheet first.
 
 **Where things can go wrong:** OTC re-tickering (Phase 2) is the real work; London pence + non-US share-count accuracy need spot-checks (Phase 3); the reconciler must stay append/metadata-only (Phase 1) or it'll clobber formulas.
 

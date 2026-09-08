@@ -17,7 +17,8 @@ The site is **live on the Google Finance sheet** (public app + hosted Studio + S
 - [x] **Automation** — 4 GitHub secrets set; `workflow_dispatch` test green; **Sanity webhook live** (publish a company → `repository_dispatch` → reconciler runs in ~30s, verified end-to-end). Nightly cron + manual dispatch are backups. (See [GOOGLE_FINANCE.md → Phase 4](GOOGLE_FINANCE.md).)
 - [x] **Cut over** — Netlify `VITE_VALUATIONS_CSV_URL` set to the GF CSV (`2PACX-1vQ6iO…`) + deployed; live site verified (non-US populate). **Rollback = set the env var back to the FMP URL + redeploy.**
 - [x] **Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) installed in the sheet — `onEdit` stamps manual rows on edit; daily `stampGoogleFinanceRows` trigger stamps GF rows. (Replaced an older row-1/no-emoji version that silently no-op'd once the KEY row + emoji headers were added.) Blank manual rows backfilled with the launch date.
-- [ ] **Retire FMP** (once confident it's stable) — disable the `ingest-valuations` Action. Keep the FMP sheet + its URL around as the tested rollback target until then.
+- [x] **Retire FMP** — nightly `ingest-valuations` cron disabled (still manually runnable for rollback). Full teardown (delete workflow + `FMP_API_KEY`/`SHEET_ID`) deferred; costs nothing idle.
+- [ ] **Record the FMP rollback URL** — paste the FMP published CSV into [GOOGLE_FINANCE.md → Phase 6](GOOGLE_FINANCE.md) (currently a `TODO` placeholder). Grab it from Netlify env-var history.
 
 ## 2. Mobile + touch — ✅ mostly done (correction to old docs)
 

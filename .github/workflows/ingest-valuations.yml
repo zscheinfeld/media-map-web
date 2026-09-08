@@ -1,11 +1,14 @@
 name: Ingest valuations
 
-# Pulls FMP market caps and writes them into the valuation Google Sheet.
-# Runs daily, and on-demand via the "Run workflow" button (Actions tab) — use that
-# after adding a company in Sanity to sync the sheet immediately.
+# RETIRED 2026-09-08 — the live app moved to the Google Finance sheet + reconciler
+# (see docs/GOOGLE_FINANCE.md). This FMP ingest is kept ONLY as the rollback path:
+# the nightly schedule is disabled so it no longer auto-writes the old FMP sheet,
+# but it stays runnable via the "Run workflow" button so you can freshen that sheet
+# if you ever flip Netlify's VITE_VALUATIONS_CSV_URL back to the FMP CSV.
+# To fully retire: delete this file + the FMP_API_KEY / SHEET_ID secrets.
 on:
-  schedule:
-    - cron: "0 0 * * *" # daily at 00:00 UTC (~7-8pm US Eastern, after market close)
+  # schedule:
+  #   - cron: "0 0 * * *" # (disabled) daily at 00:00 UTC — GF sheet is now the live source
   workflow_dispatch: {}
 
 jobs:
