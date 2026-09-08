@@ -1,7 +1,9 @@
 # Google Finance transition (FMP → GOOGLEFINANCE)
 
-Status: **in progress** (branch `google-finance-alternative`). Goal: replace the
-paid FMP market-cap ingest with free Google Finance data.
+Status: **LIVE** (merged to `main`; cut over 2026-09-08). The public app reads the
+Google Finance sheet, the Sanity-webhook reconciler keeps it in sync, and FMP is
+retained only as the tested rollback target. Goal (met): replace the paid FMP
+market-cap ingest with free Google Finance data.
 
 ## The key architectural fact
 
@@ -85,9 +87,9 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
   - **Projection** (this is the request body): `{"event_type":"sanity-company-change"}` — must equal a `repository_dispatch.types` entry.
   - Debug via the webhook's **Attempts** log: `204` = accepted; `401 Bad credentials` = malformed/invalid token in the Authorization header; `422` = the Projection/`event_type` is wrong.
 
-### Phase 5 — Production cut-over (🧑) ← the remaining step
-- [ ] Set `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the GF published CSV (`2PACX-1vQ6iO…`); trigger a deploy. *(Vite bakes env at build time — set it, then deploy.)*
-- [ ] Verify the live map. **Rollback = flip the env var back to the FMP URL + redeploy.**
+### Phase 5 — Production cut-over (🧑) ✅ done (2026-09-08)
+- [x] Set `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the GF published CSV (`2PACX-1vQ6iO…`); triggered a deploy. *(Vite bakes env at build time — set it, then deploy.)*
+- [x] Verified the live map (non-US companies populate). **Rollback = set the env var back to the FMP URL + redeploy.**
 
 ### Phase 6 — Retire FMP (🧑, once confident)
 - [ ] Disable the old **`ingest-valuations`** Action, or leave it refreshing the reference sheet — your call.

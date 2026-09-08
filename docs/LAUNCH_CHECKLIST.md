@@ -1,12 +1,12 @@
 # Launch checklist — remaining steps
 
-*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-07.*
+*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-08.*
 
-The site is **already live** (public app + hosted Studio + nightly ingest) on the **old FMP sheet**. Everything below is finishing the Google-Finance switch, filling history, and the pre-launch polish/QA.
+The site is **live on the Google Finance sheet** (public app + hosted Studio + Sanity-webhook reconciler). The FMP→GF switch is **done** (§1); everything below it is polish/QA + optional cleanup.
 
 ---
 
-## 1. Google Finance cut-over — *makes non-US companies work* (they show "NA" on live FMP today)
+## 1. Google Finance cut-over — ✅ DONE (2026-09-08) — *non-US companies now populate live*
 
 - [x] **Re-ticker the roster** — Japanese via OTCMKTS+JPY, non-US primary listings, Currency override field. A few genuine Manual holdouts remain (Schibsted, MultiChoice, NHL, Bertelsmann) + verify (EchoStar, Optimum, Angel, eSports) — enter as you confirm. See [[gf-exchange-support]].
 - [x] **Historical values** filled (~123–169/year, 2015→2026) → the Time Machine survives the cut-over.
@@ -15,9 +15,9 @@ The site is **already live** (public app + hosted Studio + nightly ingest) on th
 - [x] **Publish GF sheet → CSV** + **verify on dev** — done (non-US now populate).
 - [x] **Merge `google-finance-alternative` → main** — done (`d4f3af8`); deployed (app still reads FMP until the env var flips).
 - [x] **Automation** — 4 GitHub secrets set; `workflow_dispatch` test green; **Sanity webhook live** (publish a company → `repository_dispatch` → reconciler runs in ~30s, verified end-to-end). Nightly cron + manual dispatch are backups. (See [GOOGLE_FINANCE.md → Phase 4](GOOGLE_FINANCE.md).)
-- [ ] **Cut over** — set Netlify `VITE_VALUATIONS_CSV_URL` to the GF CSV (`2PACX-1vQ6iO…`) → deploy. Rollback = flip back to FMP.
+- [x] **Cut over** — Netlify `VITE_VALUATIONS_CSV_URL` set to the GF CSV (`2PACX-1vQ6iO…`) + deployed; live site verified (non-US populate). **Rollback = set the env var back to the FMP URL + redeploy.**
 - [ ] *(Optional)* **Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) — paste + add the daily trigger.
-- [ ] **Retire FMP** (once confident) — disable the `ingest-valuations` Action.
+- [ ] **Retire FMP** (once confident it's stable) — disable the `ingest-valuations` Action. Keep the FMP sheet + its URL around as the tested rollback target until then.
 
 ## 2. Mobile + touch — ✅ mostly done (correction to old docs)
 
