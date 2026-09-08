@@ -34,6 +34,21 @@ The Studio Map Editor's **year picker** scopes appearance windows, connections, 
 ## 4. Front-end polish
 - [ ] Restyle toward the light mockup; loading-moment animation; final responsive passes.
 
+## 4b. Launch features (targeted for launch — short plans)
+
+Each is grounded in existing code, not a from-scratch build. Rough effort in brackets.
+
+- [ ] **About page** *(few hrs)*. No router exists — the app is one SVG scene. Add a lightweight **overlay/modal** toggled by a header button (optionally a `?about=1` URL). Copy from a small Sanity singleton (model on the existing `mapSettings` singleton) so Evan edits it without a deploy; hard-coded copy is the fallback.
+- [ ] **Search (highlight-on-map)** *(½–1 day)*. Reuse what's already there: a text input filters the `nodes` list by company name; matches stay full-opacity while non-matches fade to `opacity: 0.12` — the **exact pattern already used for sector hover** ([MediaMap.tsx](../src/MediaMap.tsx) ~L2786/L4955). Single match → optional `focusOnPlanet()` zoom (already exists). No new data or deps. Scope is deliberately minimal: highlight only, no autocomplete.
+- [ ] **Dynamic news feed** *(~1 day + tuning + one decision)*. The schema + side-panel rendering already exist (`external_articles[]` / `eshap_content[]` per company, rendered at [MediaMap.tsx](../src/MediaMap.tsx) ~L1143). "Dynamic" = a nightly GitHub Action (same pattern as `gf-sync-roster`) that pulls **free RSS → writes Sanity `external_articles`**:
+  - Public cos → **Yahoo Finance RSS** (`feeds.finance.yahoo.com/rss/2.0/headline?s=<TICKER>`, ticker-keyed); private / no-ticker → **Google News RSS** (`news.google.com/rss/search?q=<name>`) fallback. Both free, no key. Cap ~5 recent, dedup by URL.
+  - **Eshap content stays manual** (LinkedIn has no public API; Substack/podcast RSS isn't per-company — Evan curating 2–3 links per company is better UX). Optional later: a **global "Latest from Eshap"** strip pulled from his Substack/podcast RSS.
+  - ⚠️ **Open decisions before building:** (a) approval gate? — write auto-pulled articles in an *unapproved* state (mirroring `vetting_status`) and show only approved, vs. show-all-and-delete-junk; (b) accept unofficial-RSS fragility, or pay for a sturdier API (Finnhub/NewsAPI) later; (c) global Eshap feed — yes/no.
+- [ ] **Download: consistent framing + branding** *(½–1 day)*. Two parts:
+  - **Zoom-independent framing (main issue).** `downloadMapImage` ([MediaMap.tsx](../src/MediaMap.tsx) ~L4486) currently derives the export viewBox from `view` (the live pan/zoom), so the PNG looks different depending on how the user is zoomed. Fix: **always export a fixed canonical frame** — the full active canvas (`CANVAS_DESKTOP`/`CANVAS_MOBILE` from [sectors.ts](../src/sectors.ts)), padded to 16:9 — regardless of current pan/zoom. Result: every download of a given year/mode looks identical.
+  - **Add ESHAP logo + QR code** to the exported image. Composite both onto the canvas after `drawImage` (fixed corners, sized in output px): the ESHAP logo (already at `/ESHAP logo.png`, inline as a data URI for the detached render) and a **QR code** (generate with a small lib like `qrcode`, or pre-render a static PNG) pointing at the site URL. Decide placement (e.g. logo bottom-left, QR bottom-right) + whether the QR is static (site home) or deep-links to the current year/view.
+  - *(Secondary, only if labels still look off:)* gate rasterization on `document.fonts.ready` so labels don't fall back to Arial, and settle physics before capture.
+
 ## 5. QA → launch
 - [ ] Full QA pass + bug bash against the checklist.
 - [ ] **Confirm the paid-gating decision** (freemium Time-Machine paywall) — launch requirement or post-launch? (Not started.)
@@ -41,5 +56,6 @@ The Studio Map Editor's **year picker** scopes appearance windows, connections, 
 ---
 
 ## Post-launch / not blocking
-- Dynamic feeds (auto-pull articles + Eshap content).
+- Global "Latest from Eshap" feed (Substack/podcast RSS) — the per-company Eshap content stays manual (see §4b).
+- Search autocomplete / fuzzy matching (launch ships highlight-only, §4b).
 - Legacy cleanup (`loadCompanies.ts` / `historical.ts` mock; trim redundant Sanity `manual_valuations`).
