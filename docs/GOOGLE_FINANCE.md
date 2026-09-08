@@ -96,8 +96,9 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
 - [ ] *Fully retire later:* delete the workflow file + `jobs/ingest-valuations.ts` and drop the `FMP_API_KEY` / `SHEET_ID` secrets. Not urgent — costs nothing sitting idle.
 
 **Rollback target (FMP):**
-- FMP published CSV URL: `TODO — paste from Netlify env-var history / the FMP sheet's Publish-to-web dialog`
-- To roll back: set Netlify `VITE_VALUATIONS_CSV_URL` to that URL → redeploy; optionally run the `ingest-valuations` workflow once (manual dispatch) to refresh the FMP sheet first.
+- FMP published CSV URL (verified 2026-09-08 — non-US primary listings show `NA`, the pre-GF state):
+  `https://docs.google.com/spreadsheets/d/e/2PACX-1vS9BZhbZLqumuFYBcEzqp33tZXaoaRjP9onsu9tgzJ2QeuE5yPxjk_6Og4JmK3FFewoj0JGIwDstPMc/pub?output=csv`
+- To roll back: set Netlify `VITE_VALUATIONS_CSV_URL` to that URL → redeploy; optionally run the `ingest-valuations` workflow once (manual dispatch) to refresh the FMP sheet first. Note: rolling back re-introduces `NA` for all non-US primary listings — that's expected (it's why we moved to GF).
 
 **Where things can go wrong:** OTC re-tickering (Phase 2) is the real work; London pence + non-US share-count accuracy need spot-checks (Phase 3); the reconciler must stay append/metadata-only (Phase 1) or it'll clobber formulas.
 
