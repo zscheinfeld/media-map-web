@@ -49,6 +49,14 @@ Each is grounded in existing code, not a from-scratch build. Rough effort in bra
   - **Add ESHAP logo + QR code** to the exported image. Composite both onto the canvas after `drawImage` (fixed corners, sized in output px): the ESHAP logo (already at `/ESHAP logo.png`, inline as a data URI for the detached render) and a **QR code** (generate with a small lib like `qrcode`, or pre-render a static PNG) pointing at the site URL. Decide placement (e.g. logo bottom-left, QR bottom-right) + whether the QR is static (site home) or deep-links to the current year/view.
   - *(Secondary, only if labels still look off:)* gate rasterization on `document.fonts.ready` so labels don't fall back to Arial, and settle physics before capture.
 
+## 4c. Launch infra / SEO / analytics
+
+- [ ] **Custom domain** — point the real launch URL at Netlify: add it in Netlify → Domain management, set the registrar DNS (CNAME/ALIAS or A records), let Netlify provision HTTPS (Let's Encrypt). **Do this early** — the OG tags (§4c) and the download QR code (§4b) both bake in the final URL. *(Need: the domain name.)*
+- [ ] **Fix `<title>`** — [index.html](../index.html) still says `media-map-web` (the repo name); set it to the real product name (e.g. "Media Universe", matching `apple-mobile-web-app-title`). One-liner; also seeds the default OG/tab title.
+- [ ] **Proper favicon set** — a placeholder `/favicon.svg` exists; add a branded `favicon.svg` + a `favicon.ico` fallback (older browsers) + `apple-touch-icon.png` (180×180, iOS home screen) + optional `site.webmanifest` (PWA name/icons — the app already opts into standalone home-screen launch).
+- [ ] **OG / social share meta** — none exist. Add `og:title`, `og:description`, `og:url`, `og:image` + `twitter:card=summary_large_image` to [index.html](../index.html), and a **1200×630 OG image**. *(Synergy: the §4b download exporter already rasterizes the map to a PNG — reuse it to generate the OG image.)* Verify with the Facebook/LinkedIn/Twitter debuggers post-deploy.
+- [ ] **Analytics** — none installed. **Decision first:** Google Analytics 4 (`gtag.js` + a `G-XXXXXXX` Measurement ID) — powerful but sets cookies, so it likely needs a consent banner (GDPR/UK). Cookieless alternatives (**Plausible**, **Netlify Analytics**, Fathom) need no banner and are far simpler — worth considering for a content site. Pick one, then wire the snippet into [index.html](../index.html). *(If GA4: need the Measurement ID + a call on the consent-banner requirement.)*
+
 ## 5. QA → launch
 - [ ] Full QA pass + bug bash against the checklist.
 - [ ] **Confirm the paid-gating decision** (freemium Time-Machine paywall) — launch requirement or post-launch? (Not started.)
