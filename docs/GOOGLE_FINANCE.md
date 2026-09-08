@@ -79,10 +79,11 @@ Netlify). Ordered so the map never runs on stale data and rollback is one env fl
 - [x] Branch merged to `main` so the workflow is on the default branch.
 - [x] **GitHub secrets set** (`gh secret set`, repo `zscheinfeld/media-map-web`): `GF_SHEET_ID`, `SANITY_PROJECT_ID` (`haxcsjkn`), `SANITY_AUTH_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON` (contents of the service-account key file). `SANITY_DATASET` is hardcoded `production` in the workflow.
 - [x] `workflow_dispatch` test run **succeeded** (5 metadata + formula updates, 0 new).
-- [ ] **Sanity webhook** for instant-on-publish (nightly cron + manual already work). Create a GitHub **classic PAT** (`repo` scope), then in manage.sanity.io → project `haxcsjkn` → API → Webhooks:
+- [x] **Sanity webhook** for instant-on-publish — **live & verified** (a company publish fires `repository_dispatch` → reconciler in ~30s). A fine-grained PAT (repo `media-map-web`, **Contents: Read/write** + Metadata) is set in the webhook's `Authorization: Bearer` header. In manage.sanity.io → **project** `haxcsjkn` → API → Webhooks:
   - URL `https://api.github.com/repos/zscheinfeld/media-map-web/dispatches`; POST; trigger Create/Update/Delete; **filter** `_type == "company"`.
-  - Headers: `Authorization: Bearer <PAT>`, `Accept: application/vnd.github+json`.
-  - Body: `{"event_type":"sanity-company-change"}` (matches `repository_dispatch.types`).
+  - Headers: `Authorization: Bearer <PAT>` (name=`Authorization`, value=`Bearer <token>` — no `< >`), `Accept: application/vnd.github+json`.
+  - **Projection** (this is the request body): `{"event_type":"sanity-company-change"}` — must equal a `repository_dispatch.types` entry.
+  - Debug via the webhook's **Attempts** log: `204` = accepted; `401 Bad credentials` = malformed/invalid token in the Authorization header; `422` = the Projection/`event_type` is wrong.
 
 ### Phase 5 — Production cut-over (🧑) ← the remaining step
 - [ ] Set `VITE_VALUATIONS_CSV_URL` in **Netlify → Environment variables** to the GF published CSV (`2PACX-1vQ6iO…`); trigger a deploy. *(Vite bakes env at build time — set it, then deploy.)*

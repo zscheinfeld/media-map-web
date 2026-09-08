@@ -14,7 +14,7 @@ The site is **already live** (public app + hosted Studio + nightly ingest) on th
 - [x] **Redeploy Studio** — `exchange`/`currency`/`manual_source` + Square-mode mobile-position authoring are live; editor reads the GF sheet.
 - [x] **Publish GF sheet → CSV** + **verify on dev** — done (non-US now populate).
 - [x] **Merge `google-finance-alternative` → main** — done (`d4f3af8`); deployed (app still reads FMP until the env var flips).
-- [x] **Automation** — 4 GitHub secrets set; `workflow_dispatch` test green (nightly cron + manual live). ⏳ remaining: the **Sanity webhook** for instant-on-publish (see [GOOGLE_FINANCE.md → Phase 4](GOOGLE_FINANCE.md)).
+- [x] **Automation** — 4 GitHub secrets set; `workflow_dispatch` test green; **Sanity webhook live** (publish a company → `repository_dispatch` → reconciler runs in ~30s, verified end-to-end). Nightly cron + manual dispatch are backups. (See [GOOGLE_FINANCE.md → Phase 4](GOOGLE_FINANCE.md).)
 - [ ] **Cut over** — set Netlify `VITE_VALUATIONS_CSV_URL` to the GF CSV (`2PACX-1vQ6iO…`) → deploy. Rollback = flip back to FMP.
 - [ ] *(Optional)* **Last-Updated Apps Script** ([jobs/sheet-apps-script.gs](../jobs/sheet-apps-script.gs)) — paste + add the daily trigger.
 - [ ] **Retire FMP** (once confident) — disable the `ingest-valuations` Action.
