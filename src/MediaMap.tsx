@@ -22,7 +22,7 @@ const VALUATION_LABELS: Record<ValuationType, string> = {
   fundraising_valuation: "Fundraising Valuation",
   yearly_revenue: "Yearly Revenue",
 };
-import { MOBILE_LAYOUTS, type MobileViewType, type MobileLayout, type MobileSettings } from "./mobileLayout";
+import { MOBILE_LAYOUTS, type MobileViewType, type MobileLayout, type MobileSettings, type MobilePosition } from "./mobileLayout";
 import {
   CANVAS_DESKTOP,
   CANVAS_MOBILE_45,
@@ -3108,15 +3108,8 @@ export default function MediaMap() {
   );
   const activeLayout = mobileLayouts[activeType];
   const activeSettings = activeLayout.settings;
-  const mobilePositions = activeLayout.positions;
-  // Horizontal + square inherit full's wells as a base; their own entries override.
-  const mobileSectorCenters = useMemo(
-    () =>
-      inheritsFullLayout(activeType)
-        ? { ...mobileLayouts.full.sectorCenters, ...activeLayout.sectorCenters }
-        : activeLayout.sectorCenters,
-    [activeType, activeLayout.sectorCenters, mobileLayouts.full.sectorCenters],
-  );
+  // mobilePositions + mobileSectorCenters are defined below, after `sanity` (they
+  // layer Sanity's square positions/centers over the MOBILE_LAYOUTS code fallback).
   const [showSectorWells, setShowSectorWells] = useState(true);
   // Bump to re-settle the physics sim from current positions without changing
   // any layout settings (the editor's "Refresh physics" button).
@@ -3236,6 +3229,27 @@ export default function MediaMap() {
   // is null and the app uses the Google Sheet + local files exactly as before.
   const { docs: sanityDocs, loading: sanityLoading, error: sanityError } = useSanityMapDocs();
   const sanity = useResolvedSanityMap(sanityDocs, makeMoment(activeDate.year, activeDate.month));
+
+  // Square positions/centers live in Sanity (mobile_position_overrides + sector
+  // mobile_center, resolved at the viewed year); merge over the MOBILE_LAYOUTS.square
+  // code fallback so the Studio editor's Square-mode edits drive the live mobile map.
+  const mobilePositions = useMemo(() => {
+    if (activeType === "square" && sanity && Object.keys(sanity.mobilePositions).length) {
+      const merged: Record<string, MobilePosition> = { ...activeLayout.positions };
+      for (const [name, p] of Object.entries(sanity.mobilePositions)) merged[name] = { x: p.x, y: p.y };
+      return merged;
+    }
+    return activeLayout.positions;
+  }, [activeType, activeLayout.positions, sanity]);
+  const mobileSectorCenters = useMemo(() => {
+    const base = inheritsFullLayout(activeType)
+      ? { ...mobileLayouts.full.sectorCenters, ...activeLayout.sectorCenters }
+      : activeLayout.sectorCenters;
+    if (activeType === "square" && sanity && Object.keys(sanity.mobileCenterBySector).length) {
+      return { ...base, ...sanity.mobileCenterBySector };
+    }
+    return base;
+  }, [activeType, activeLayout.sectorCenters, mobileLayouts.full.sectorCenters, sanity]);
   // Surface a failed Sanity read (otherwise it falls back to the sheet silently).
   useEffect(() => {
     if (sanityError) console.warn("[media-map] Sanity read failed — using the sheet instead:", sanityError);

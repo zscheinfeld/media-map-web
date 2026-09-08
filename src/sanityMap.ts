@@ -57,6 +57,7 @@ export type RawExternalArticle = {_key: string; title: string; url: string; sour
 type RawSector = {
   name: string
   desktop_center?: Coord
+  mobile_center?: Coord
   desktop_center_overrides?: RawCenterOverride[]
   default_style?: SanityPlanetStyle
 }
@@ -69,6 +70,7 @@ type RawCompany = {
   sector?: RawSector | null
   planet_style?: SanityPlanetStyle
   position_overrides?: RawPositionOverride[]
+  mobile_position_overrides?: RawPositionOverride[]
   appearance_windows?: YearWindow[]
   vitals?: RawVital[]
   eshap_content?: RawEshapContent[]
@@ -81,6 +83,7 @@ type RawEntity = {
   name: string
   sector?: RawSector | null
   position_overrides?: RawPositionOverride[]
+  mobile_position_overrides?: RawPositionOverride[]
   appearance_windows?: YearWindow[]
 }
 type RawConnection = {style: "solid" | "dotted"; description?: string; start_year?: number; end_year?: number; from?: string | null; to?: string | null}
@@ -173,6 +176,10 @@ export type ResolvedSanityMap = {
   styleByName: Record<string, PlanetStyle | null>
   /** Active position override per company/entity at T (wins over sector center). */
   positions: Record<string, {x: number; y: number; pin?: boolean}>
+  /** Active SQUARE (mobile) position override per company/entity at T. */
+  mobilePositions: Record<string, {x: number; y: number; pin?: boolean}>
+  /** Sector center in the square (mobile) layout, if authored (mobile_center). */
+  mobileCenterBySector: Record<string, Coord>
   /** Connections whose [start,end] window covers T. */
   connections: ResolvedConnection[]
   /** Layout-knob values active at T (forward-propagated), or null. */
@@ -192,12 +199,15 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   const hueBySector: Record<string, number> = {}
   const styleByName: Record<string, PlanetStyle | null> = {}
   const positions: ResolvedSanityMap["positions"] = {}
+  const mobilePositions: ResolvedSanityMap["mobilePositions"] = {}
+  const mobileCenterBySector: ResolvedSanityMap["mobileCenterBySector"] = {}
   const detailByName: Record<string, CompanyDetail> = {}
 
   const noteSector = (sector: RawSector | null | undefined, name: string) => {
     if (!hueBySector[name]) hueBySector[name] = hashHue(name)
     const center = sectorCenterAt(sector, at)
     if (center && !centerBySector[name]) centerBySector[name] = center
+    if (sector?.mobile_center && !mobileCenterBySector[name]) mobileCenterBySector[name] = sector.mobile_center
   }
 
   for (const s of raw.sectors) {
@@ -216,6 +226,8 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     styleByName[c.name] = mergeStyle(toCoreStyle(c.sector?.default_style), toCoreStyle(c.planet_style))
     const activePos = activeAt(c.position_overrides ?? [], at, overrideMoment)
     if (activePos) positions[c.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+    const activeMobilePos = activeAt(c.mobile_position_overrides ?? [], at, overrideMoment)
+    if (activeMobilePos) mobilePositions[c.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
     // Latest manual valuation effective at T (forward-propagated by as_of_date).
     const activeManual = activeAt(
       c.manual_valuations ?? [],
@@ -252,6 +264,8 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     })
     const activePos = activeAt(e.position_overrides ?? [], at, overrideMoment)
     if (activePos) positions[e.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+    const activeMobilePos = activeAt(e.mobile_position_overrides ?? [], at, overrideMoment)
+    if (activeMobilePos) mobilePositions[e.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
   }
 
   const connections: ResolvedConnection[] = raw.connections
@@ -273,7 +287,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
       }
     : null
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, connections, settings, detailByName}
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, detailByName}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
@@ -291,11 +305,11 @@ const STYLE_PROJ = `{
   stroke_width_px,
   "glow": { "color": glow.color.hex, "blur_px": glow.blur_px, "spread_px": glow.spread_px }
 }`
-const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
+const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
 const COMPANIES_Q = `*[_type == "company"]{
   name, "slug": slug.current, description,
-  sector->{ name, desktop_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
-  "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date},
+  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
+  "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date},
   appearance_windows[]{start_year, end_year},
   vitals[]{_key, name, statistic, start_date, end_date},
   eshap_content[]{_key, kind, title, url, published_date},
@@ -305,8 +319,8 @@ const COMPANIES_Q = `*[_type == "company"]{
 const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_year, end_year, "from": from->name, "to": to->name }`
 const ENTITIES_Q = `*[_type == "entity"]{
   name,
-  sector->{ name, desktop_center, desktop_center_overrides[]{x, y, start_date} },
-  position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
+  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date} },
+  position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
 }`
 const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion} }`
 
