@@ -7,6 +7,9 @@ import {windowActiveAt, yearWindowsActiveAt, type Moment} from './moment'
 // Vite app's src/sectors.ts (kept in sync by hand for now — both surfaces draw
 // the same desktop layout).
 export const CANVAS = {x: -2225, y: -1253, w: 5052, h: 3279}
+// Square (mobile) canvas — mirrors the public app's CANVAS_MOBILE_SQUARE and the
+// coordinate space of MOBILE_LAYOUTS.square that was migrated into Sanity.
+export const SQUARE_CANVAS = {x: -2000, y: -2000, w: 4000, h: 4000}
 
 // Fallback planet size when a company has no manual valuations yet. Sanity
 // doesn't hold live valuations (those come from the sheet / future Supabase),
@@ -92,6 +95,7 @@ type RawCompany = {
   sector?: {_id: string; name: string; desktop_center?: Coord; default_style?: SanityPlanetStyle} | null
   planet_style?: SanityPlanetStyle
   position_overrides?: RawPositionOverride[]
+  mobile_position_overrides?: RawPositionOverride[]
   appearance_windows?: RawAppearanceWindow[]
   manual_valuations?: {value_billions_usd?: number; as_of_date?: string}[]
   vitals?: RawVital[]
@@ -139,6 +143,7 @@ type RawEntity = {
   name: string
   sector?: {_id: string; name: string; desktop_center?: Coord} | null
   position_overrides?: RawPositionOverride[]
+  mobile_position_overrides?: RawPositionOverride[]
   appearance_windows?: RawAppearanceWindow[]
 }
 
@@ -149,6 +154,8 @@ export type EditorSector = {
   name: string
   /** Baseline scalar — always-active fallback when no override applies. */
   center: Coord
+  /** Square (mobile) center, if authored. */
+  mobileCenter?: Coord
   /** Optional time-scoped overrides (forward-propagation; see docs/PROJECT.md). */
   desktopCenterOverrides: RawSectorCenterOverride[]
 }
@@ -161,6 +168,8 @@ export type EditorCompany = {
    *  live → manual → legacy valuation precedence, mirroring the public app. */
   manualValue?: number
   positionOverrides: RawPositionOverride[]
+  /** Square (mobile) position overrides — parallel to positionOverrides. */
+  mobilePositionOverrides: RawPositionOverride[]
   appearanceWindows: RawAppearanceWindow[]
   // Optional so the entity placeable (which has none of these) stays structurally
   // assignable where a company/entity union is used (e.g. the inspector).
@@ -177,6 +186,8 @@ export type EditorEntity = {
   id: string
   name: string
   positionOverrides: RawPositionOverride[]
+  /** Square (mobile) position overrides — parallel to positionOverrides. */
+  mobilePositionOverrides: RawPositionOverride[]
   appearanceWindows: RawAppearanceWindow[]
   sector: string
   center: Coord
@@ -250,6 +261,7 @@ function buildMapData(
       id: e._id,
       name: e.name,
       positionOverrides: e.position_overrides ?? [],
+      mobilePositionOverrides: e.mobile_position_overrides ?? [],
       appearanceWindows: e.appearance_windows ?? [],
       sector: sectorName,
       center: e.sector?.desktop_center ?? {x: CANVAS.x + CANVAS.w / 2, y: CANVAS.y + CANVAS.h / 2},
@@ -278,6 +290,7 @@ function buildMapData(
       slug: c.slug,
       manualValue: rawLatestValuation(c.manual_valuations),
       positionOverrides: overrides,
+      mobilePositionOverrides: c.mobile_position_overrides ?? [],
       appearanceWindows: c.appearance_windows ?? [],
       vitals: c.vitals ?? [],
       description: c.description,
@@ -309,6 +322,7 @@ function buildMapData(
       id: s._id,
       name: s.name,
       center: s.desktop_center as Coord,
+      mobileCenter: s.mobile_center,
       desktopCenterOverrides: s.desktop_center_overrides ?? [],
     }))
 
@@ -329,7 +343,7 @@ const SECTORS_Q = `*[_type == "sector"]{
 const COMPANIES_Q = `*[_type == "company"]{
   _id, name, "slug": slug.current, description,
   sector->{_id, name, desktop_center, default_style},
-  planet_style, position_overrides, appearance_windows, manual_valuations,
+  planet_style, position_overrides, mobile_position_overrides, appearance_windows, manual_valuations,
   vitals[]{_key, name, statistic, start_date, end_date},
   eshap_content[]{_key, kind, title, url, published_date},
   external_articles[]{_key, title, url, source, published_date}
@@ -342,7 +356,7 @@ const CONNECTIONS_Q = `*[_type == "connection"]{
 const ENTITIES_Q = `*[_type == "entity"]{
   _id, name,
   sector->{_id, name, desktop_center},
-  position_overrides, appearance_windows
+  position_overrides, mobile_position_overrides, appearance_windows
 }`
 const SETTINGS_Q = `*[_id == "mapSettings"][0]{
   overrides[]{

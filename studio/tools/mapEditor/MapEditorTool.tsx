@@ -13,6 +13,7 @@ import {
 import {
   appearanceActiveAt,
   CANVAS,
+  SQUARE_CANVAS,
   useSanityMapData,
   type EditorCompany,
   type EditorEntity,
@@ -58,13 +59,9 @@ import {
 } from './pendingChanges'
 import {commitPending} from './patches'
 
-// Physics keeps planets inside an inset of the canvas (mirrors the app).
-const BOUNDS = {
-  x0: CANVAS.x + 120,
-  y0: CANVAS.y + 120,
-  x1: CANVAS.x + CANVAS.w - 120,
-  y1: CANVAS.y + CANVAS.h - 120,
-}
+type Rect = {x: number; y: number; w: number; h: number}
+// Physics keeps planets inside an inset of the active canvas (mirrors the app).
+const boundsFor = (c: Rect) => ({x0: c.x + 120, y0: c.y + 120, x1: c.x + c.w - 120, y1: c.y + c.h - 120})
 // Mouse-move threshold for treating a mousedown→up as a drag vs. a click.
 const DRAG_THRESHOLD_PX = 4
 
@@ -74,11 +71,11 @@ const ZOOM_MIN = 1
 const ZOOM_MAX = 6
 const ZOOM_STEP = 1.3
 
-// Clamp a pan offset (slide units) so the zoomed viewBox stays inside the
+// Clamp a pan offset (slide units) so the zoomed viewBox stays inside the active
 // canvas. At zoom 1 the bounds collapse to 0, locking pan to the centered view.
-const clampPan = (p: {x: number; y: number}, z: number) => {
-  const maxX = (CANVAS.w - CANVAS.w / z) / 2
-  const maxY = (CANVAS.h - CANVAS.h / z) / 2
+const clampPan = (p: {x: number; y: number}, z: number, c: Rect) => {
+  const maxX = (c.w - c.w / z) / 2
+  const maxY = (c.h - c.h / z) / 2
   return {
     x: Math.max(-maxX, Math.min(maxX, p.x)),
     y: Math.max(-maxY, Math.min(maxY, p.y)),
@@ -155,6 +152,22 @@ export function MapEditorTool() {
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }
+
+  // Aspect ratio: Desktop (16:9-ish, the live site) vs Square (mobile). Square uses
+  // the square canvas + each sector's mobile_center + each planet's
+  // mobile_position_overrides, and drags save to the mobile field.
+  const [aspectRatio, setAspectRatio] = useState<'desktop' | 'square'>('desktop')
+  const isSquare = aspectRatio === 'square'
+  const positionField: 'desktop' | 'mobile' = isSquare ? 'mobile' : 'desktop'
+  const activeCanvas = isSquare ? SQUARE_CANVAS : CANVAS
+  const activeBounds = useMemo(() => boundsFor(activeCanvas), [activeCanvas])
+  // Override-carrier for the active field, so editAt/clearAt/resolveOverrides act on
+  // the desktop or square (mobile) overrides depending on the aspect ratio.
+  const carrierFor = (p: EditorCompany | EditorEntity) => ({
+    id: p.id,
+    name: p.name,
+    positionOverrides: isSquare ? p.mobilePositionOverrides : p.positionOverrides,
+  })
   const panDragRef = useRef<{
     startScreenX: number
     startScreenY: number
@@ -230,16 +243,16 @@ export function MapEditorTool() {
   // The visible slide-space window (SVG viewBox). At zoom 1 it equals the full
   // canvas; zooming in shrinks it around the centered, clamped pan offset.
   const view = useMemo(() => {
-    const w = CANVAS.w / zoom
-    const h = CANVAS.h / zoom
-    const cp = clampPan(pan, zoom)
+    const w = activeCanvas.w / zoom
+    const h = activeCanvas.h / zoom
+    const cp = clampPan(pan, zoom, activeCanvas)
     return {
-      x: CANVAS.x + (CANVAS.w - w) / 2 + cp.x,
-      y: CANVAS.y + (CANVAS.h - h) / 2 + cp.y,
+      x: activeCanvas.x + (activeCanvas.w - w) / 2 + cp.x,
+      y: activeCanvas.y + (activeCanvas.h - h) / 2 + cp.y,
       w,
       h,
     }
-  }, [zoom, pan])
+  }, [zoom, pan, activeCanvas])
 
   // Slide-units per screen pixel. "meet" → use the LIMITING ratio (the larger
   // of the two) so labels/strokes render at correct screen px AND drag deltas
@@ -257,9 +270,9 @@ export function MapEditorTool() {
   // label radii and re-pack the layout. Rendering uses the zoomed value above.
   const baseSlideUnitsPerPx =
     containerW > 0 && containerH > 0
-      ? Math.max(CANVAS.w / containerW, CANVAS.h / containerH)
+      ? Math.max(activeCanvas.w / containerW, activeCanvas.h / containerH)
       : containerW > 0
-        ? CANVAS.w / containerW
+        ? activeCanvas.w / containerW
         : 1
 
   // Sector centers resolved against pending edits at the current moment.
@@ -271,14 +284,17 @@ export function MapEditorTool() {
     const out: Record<string, {x: number; y: number}> = {}
     if (!data) return out
     for (const s of data.sectors) {
-      const live =
-        sectorDragState?.sectorId === s.id
+      // Square mode uses the sector's mobile_center (falling back to desktop if
+      // unset); desktop mode uses the time-scoped desktop center + live drag.
+      const live = isSquare
+        ? s.mobileCenter ?? effectiveSectorCenterAt(s, pending, s.id, moment)
+        : sectorDragState?.sectorId === s.id
           ? {x: sectorDragState.x, y: sectorDragState.y}
           : effectiveSectorCenterAt(s, pending, s.id, moment)
       out[s.name] = live
     }
     return out
-  }, [data, pending, sectorDragState, moment])
+  }, [data, pending, sectorDragState, moment, isSquare])
 
   // Live valuations size the planets, matched to the viewed year so scrubbing the
   // TimeSelector resizes them exactly like the public map. Precedence mirrors the
@@ -336,8 +352,8 @@ export function MapEditorTool() {
   )
 
   const anchorDiam = useMemo(
-    () => computeAnchorDiam(inputs.map((i) => i.valuation_b), CANVAS.w * CANVAS.h, knobs.packingDensity),
-    [inputs, knobs.packingDensity],
+    () => computeAnchorDiam(inputs.map((i) => i.valuation_b), activeCanvas.w * activeCanvas.h, knobs.packingDensity),
+    [inputs, knobs.packingDensity, activeCanvas],
   )
   const labelRadii = useMemo(
     () => computeLabelRadii(inputs, knobs.labelSizePx, baseSlideUnitsPerPx),
@@ -357,14 +373,15 @@ export function MapEditorTool() {
       ...Object.values(data.entitiesByName),
     ]
     for (const p of placeables) {
-      const resolved = resolveOverrides(p.positionOverrides, pending, p.name)
+      const base = isSquare ? p.mobilePositionOverrides : p.positionOverrides
+      const resolved = resolveOverrides(base, pending, p.name, positionField)
       const active = activeOverrideAt(resolved, moment)
       if (active) {
         out[p.name] = {x: active.x, y: active.y, pin: active.pin}
       }
     }
     return out
-  }, [data, pending, moment])
+  }, [data, pending, moment, isSquare, positionField])
 
   // Resolved connections = Sanity + pending creates − pending deletes (with
   // pending edits merged). The physics sim sees the full set so spring forces
@@ -382,7 +399,7 @@ export function MapEditorTool() {
 
   const nodes = usePhysicsLayout({
     inputs,
-    bounds: BOUNDS,
+    bounds: activeBounds,
     viewMode: 'map',
     positions,
     isEditMode: true,
@@ -445,7 +462,7 @@ export function MapEditorTool() {
   // never hijacked). Disabled in connect mode and when fully zoomed out.
   const onCanvasMouseDown = (e: ReactMouseEvent) => {
     if (connectMode || zoom <= ZOOM_MIN) return
-    const cp = clampPan(pan, zoom)
+    const cp = clampPan(pan, zoom, activeCanvas)
     panDragRef.current = {
       startScreenX: e.clientX,
       startScreenY: e.clientY,
@@ -467,6 +484,7 @@ export function MapEditorTool() {
             y: panDragRef.current.startPanY - dy * slideUnitsPerPx,
           },
           zoom,
+          activeCanvas,
         ),
       )
       return
@@ -551,7 +569,7 @@ export function MapEditorTool() {
     if (!drag || !state || !didDragRef.current || !data) return
     const placeable = placeablesByName[drag.name]
     if (!placeable) return
-    setPending((prev) => editAt(prev, placeable, moment, {x: state.x, y: state.y}))
+    setPending((prev) => editAt(prev, carrierFor(placeable), moment, {x: state.x, y: state.y}, positionField))
   }
 
   const onSectorMarkerMouseDown = (
@@ -581,9 +599,14 @@ export function MapEditorTool() {
   const history: ResolvedOverride[] = useMemo(
     () =>
       selectedCompany
-        ? resolveOverrides(selectedCompany.positionOverrides, pending, selectedCompany.name)
+        ? resolveOverrides(
+            isSquare ? selectedCompany.mobilePositionOverrides : selectedCompany.positionOverrides,
+            pending,
+            selectedCompany.name,
+            positionField,
+          )
         : [],
-    [selectedCompany, pending],
+    [selectedCompany, pending, isSquare, positionField],
   )
   const activeOverride = useMemo(
     () => activeOverrideAt(history, moment),
@@ -598,15 +621,15 @@ export function MapEditorTool() {
       // `moment`, mutates it; otherwise creates a new override at `moment`
       // seeded with the active position so the pin "takes effect from this
       // moment forward" without moving the planet.
-      setPending((prev) => editAt(prev, selectedCompany, moment, {pin: next}))
+      setPending((prev) => editAt(prev, carrierFor(selectedCompany), moment, {pin: next}, positionField))
     },
-    [selectedCompany, moment],
+    [selectedCompany, moment, isSquare, positionField],
   )
 
   const onClearAtCurrentMoment = useCallback(() => {
     if (!selectedCompany) return
-    setPending((prev) => clearAt(prev, selectedCompany, moment))
-  }, [selectedCompany, moment])
+    setPending((prev) => clearAt(prev, carrierFor(selectedCompany), moment, positionField))
+  }, [selectedCompany, moment, isSquare, positionField])
 
   // --- Connection inspector data + handlers --------------------------------
 
@@ -739,7 +762,7 @@ export function MapEditorTool() {
   const applyZoom = useCallback((next: number) => {
     const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next))
     setZoom(z)
-    setPan((p) => clampPan(p, z))
+    setPan((p) => clampPan(p, z, activeCanvas))
   }, [])
   const zoomIn = useCallback(() => applyZoom(zoom * ZOOM_STEP), [applyZoom, zoom])
   const zoomOut = useCallback(() => applyZoom(zoom / ZOOM_STEP), [applyZoom, zoom])
@@ -805,10 +828,10 @@ export function MapEditorTool() {
               where the map border sits. Stroke/dash scale with zoom so they stay
               a constant on-screen thickness. Non-interactive. */}
           <rect
-            x={CANVAS.x}
-            y={CANVAS.y}
-            width={CANVAS.w}
-            height={CANVAS.h}
+            x={activeCanvas.x}
+            y={activeCanvas.y}
+            width={activeCanvas.w}
+            height={activeCanvas.h}
             fill="none"
             stroke="rgba(255,255,255,0.6)"
             strokeWidth={1.5 * slideUnitsPerPx}
@@ -1020,7 +1043,25 @@ export function MapEditorTool() {
           </Flex>
           {controlsOpen && (
             <Box style={{overflowY: 'auto', flex: '1 1 auto'}}>
-              <CollapsibleSection title="Map Year" first>
+              <CollapsibleSection title="Aspect ratio" first>
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.currentTarget.value as 'desktop' | 'square')}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    borderRadius: 4,
+                    background: 'rgba(255,255,255,0.06)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="desktop" style={{color: '#000'}}>Desktop (16:9)</option>
+                  <option value="square" style={{color: '#000'}}>Square (mobile)</option>
+                </select>
+              </CollapsibleSection>
+              <CollapsibleSection title="Map Year">
                 <TimeSelector
                   bare
                   moment={moment}

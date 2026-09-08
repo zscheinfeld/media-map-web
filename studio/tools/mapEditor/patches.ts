@@ -1,5 +1,6 @@
 import type {SanityClient} from 'sanity'
 import {momentToSanityDate} from './moment'
+import {fieldOf} from './pendingChanges'
 import type {PendingPositionOp, PendingState} from './pendingChanges'
 
 // Sanity write helpers for the Map Editor. Each helper wraps a single
@@ -113,14 +114,18 @@ export async function commitPending(
   const tx = client.transaction()
   for (const [companyId, ops] of byCompany) {
     let patch = client.patch(companyId)
-    let needsSetIfMissing = false
     const sets: Record<string, unknown> = {}
     const unsets: string[] = []
-    const appends: Record<string, unknown>[] = []
+    // Appends + setIfMissing are per-array, so desktop and mobile edits on the
+    // same company both commit correctly.
+    const appendsByArr: Record<string, Record<string, unknown>[]> = {}
+    // The array each op targets: desktop → position_overrides, mobile → mobile_*.
+    const arrOf = (op: PendingPositionOp) =>
+      fieldOf(op) === 'mobile' ? 'mobile_position_overrides' : 'position_overrides'
 
     for (const op of ops) {
+      const arr = arrOf(op)
       if (op.kind === 'createOverride') {
-        needsSetIfMissing = true
         const entry: Record<string, unknown> = {
           _key: op.tempKey,
           _type: 'positionOverride',
@@ -129,26 +134,21 @@ export async function commitPending(
           pin: op.pin,
           start_date: momentToSanityDate(op.moment),
         }
-        appends.push(entry)
+        ;(appendsByArr[arr] ??= []).push(entry)
       } else if (op.kind === 'updateOverride') {
-        if (op.x !== undefined) {
-          sets[`position_overrides[_key=="${op.windowKey}"].x`] = Math.round(op.x)
-        }
-        if (op.y !== undefined) {
-          sets[`position_overrides[_key=="${op.windowKey}"].y`] = Math.round(op.y)
-        }
-        if (op.pin !== undefined) {
-          sets[`position_overrides[_key=="${op.windowKey}"].pin`] = op.pin
-        }
+        if (op.x !== undefined) sets[`${arr}[_key=="${op.windowKey}"].x`] = Math.round(op.x)
+        if (op.y !== undefined) sets[`${arr}[_key=="${op.windowKey}"].y`] = Math.round(op.y)
+        if (op.pin !== undefined) sets[`${arr}[_key=="${op.windowKey}"].pin`] = op.pin
       } else if (op.kind === 'deleteOverride') {
-        unsets.push(`position_overrides[_key=="${op.windowKey}"]`)
+        unsets.push(`${arr}[_key=="${op.windowKey}"]`)
       }
     }
 
-    if (needsSetIfMissing) patch = patch.setIfMissing({position_overrides: []})
+    const missing = Object.fromEntries(Object.keys(appendsByArr).map((arr) => [arr, []]))
+    if (Object.keys(missing).length > 0) patch = patch.setIfMissing(missing)
     if (Object.keys(sets).length > 0) patch = patch.set(sets)
     if (unsets.length > 0) patch = patch.unset(unsets)
-    if (appends.length > 0) patch = patch.append('position_overrides', appends)
+    for (const [arr, entries] of Object.entries(appendsByArr)) patch = patch.append(arr, entries)
     tx.patch(patch)
   }
 

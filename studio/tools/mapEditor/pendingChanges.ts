@@ -20,9 +20,15 @@ export type ConnectionStyle = 'solid' | 'dotted'
  * Each pending op maps 1:1 to a Sanity patch fired on Save. Kept as plain data
  * (no closures) so the reducer can dedupe/coalesce edits in place.
  */
+/** Which position array an op targets: the desktop map or the square (mobile) map.
+ *  Absent = 'desktop' (back-compat with pre-mobile ops). */
+export type PositionField = 'desktop' | 'mobile'
+export const fieldOf = (op: {field?: PositionField}): PositionField => op.field ?? 'desktop'
+
 export type PendingPositionOp =
   | {
       kind: 'createOverride'
+      field?: PositionField
       companyId: string
       companyName: string
       tempKey: string
@@ -33,6 +39,7 @@ export type PendingPositionOp =
     }
   | {
       kind: 'updateOverride'
+      field?: PositionField
       companyId: string
       companyName: string
       windowKey: string // Sanity _key
@@ -42,6 +49,7 @@ export type PendingPositionOp =
     }
   | {
       kind: 'deleteOverride'
+      field?: PositionField
       companyId: string
       companyName: string
       windowKey: string // Sanity _key
@@ -164,8 +172,11 @@ export function resolveOverrides(
   sanityOverrides: ReadonlyArray<RawOverride>,
   pending: PendingState,
   companyName: string,
+  field: PositionField = 'desktop',
 ): ResolvedOverride[] {
-  const opsForCompany = pending.positions.filter((p) => p.companyName === companyName)
+  const opsForCompany = pending.positions.filter(
+    (p) => p.companyName === companyName && fieldOf(p) === field,
+  )
   const deleted = new Set<string>()
   const edits = new Map<string, {x?: number; y?: number; pin?: boolean}>()
   for (const op of opsForCompany) {
@@ -242,8 +253,9 @@ export function editAt(
   company: {id: string; name: string; positionOverrides: ReadonlyArray<RawOverride>},
   at: Moment,
   patch: EditPatch,
+  field: PositionField = 'desktop',
 ): PendingState {
-  const resolved = resolveOverrides(company.positionOverrides, state, company.name)
+  const resolved = resolveOverrides(company.positionOverrides, state, company.name, field)
   const exact = resolved.find((r) => r.moment === at)
 
   if (exact) {
@@ -264,7 +276,7 @@ export function editAt(
     }
     // Sanity-backed: merge into a single updateOverride op for the windowKey.
     const existingIdx = state.positions.findIndex(
-      (op) => op.kind === 'updateOverride' && op.windowKey === exact.key,
+      (op) => op.kind === 'updateOverride' && op.windowKey === exact.key && fieldOf(op) === field,
     )
     if (existingIdx >= 0) {
       const existing = state.positions[existingIdx] as Extract<
@@ -286,6 +298,7 @@ export function editAt(
         ...state.positions,
         {
           kind: 'updateOverride',
+          field,
           companyId: company.id,
           companyName: company.name,
           windowKey: exact.key,
@@ -303,6 +316,7 @@ export function editAt(
       ...state.positions,
       {
         kind: 'createOverride',
+        field,
         companyId: company.id,
         companyName: company.name,
         tempKey: newTempKey(),
@@ -324,8 +338,9 @@ export function clearAt(
   state: PendingState,
   company: {id: string; name: string; positionOverrides: ReadonlyArray<RawOverride>},
   at: Moment,
+  field: PositionField = 'desktop',
 ): PendingState {
-  const resolved = resolveOverrides(company.positionOverrides, state, company.name)
+  const resolved = resolveOverrides(company.positionOverrides, state, company.name, field)
   const exact = resolved.find((r) => r.moment === at)
   if (!exact) return state
 
@@ -349,6 +364,7 @@ export function clearAt(
       ),
       {
         kind: 'deleteOverride',
+        field,
         companyId: company.id,
         companyName: company.name,
         windowKey: exact.key,
