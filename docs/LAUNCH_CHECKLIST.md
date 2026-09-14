@@ -1,8 +1,16 @@
 # Launch checklist — remaining steps
 
-*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-08.*
+*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-13.*
 
 The site is **live on the Google Finance sheet** (public app + hosted Studio + Sanity-webhook reconciler). The FMP→GF switch is **done** (§1); everything below it is polish/QA + optional cleanup.
+
+**Just shipped (2026-09-13, merged to `main` — commit `0cfbafd`):** the typeface swap to **ITC Franklin Gothic** and the **CMS-driven About modal** (§4b). Deploying via Netlify.
+
+**▶ Pick back up here (in order):**
+1. **Adobe Fonts kit** (§4c) — add the Netlify/prod domain(s) to the kit, and activate **Medium (500) + Demi (600)**. Until the domain is added, the *live* site renders the Libre Franklin fallback, not real Franklin Gothic.
+2. **Redeploy Studio** (`cd studio && npm run deploy`) → author the **About Modal** content (sections/blocks) + fill the Substack / More-from-Eshap / Feedback links (the `mailto:` or form URL).
+3. **Verify the live deploy** — ABOUT (ⓘ) button opens the modal; confirm Franklin Gothic loaded (if it looks like the fallback, that's step 1).
+4. Then resume the QA passes (§2/§3/§5) and the remaining launch features (§4b: search, dynamic news feed, download reframe) + decisions (paywall, domain, analytics).
 
 ---
 
