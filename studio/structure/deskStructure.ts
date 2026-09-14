@@ -4,6 +4,7 @@ import {
   ControlsIcon,
   DatabaseIcon,
   EarthGlobeIcon,
+  InfoOutlineIcon,
   LinkIcon,
   TagIcon,
 } from '@sanity/icons'
@@ -42,6 +43,11 @@ export const deskStructure = (S: StructureBuilder) =>
         .title('Map Settings')
         .icon(ControlsIcon)
         .child(S.document().schemaType('mapSettings').documentId('mapSettings')),
+      // Singleton: content for the public app's "About" modal.
+      S.listItem()
+        .title('About Modal')
+        .icon(InfoOutlineIcon)
+        .child(S.document().schemaType('about').documentId('about')),
       S.listItem()
         .title('Data Sources')
         .icon(DatabaseIcon)

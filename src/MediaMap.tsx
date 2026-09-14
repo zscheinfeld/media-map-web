@@ -12,6 +12,7 @@ import {
   type LayoutInput,
 } from "@media-map/map-core";
 import { COMPANY_POSITIONS, type PlanetPosition } from "./layout";
+import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
@@ -207,7 +208,7 @@ function MobileViewSwitcher({
   /** Raise above the horizontal rotate-prompt overlay (z 40) so it stays usable. */
   elevated?: boolean;
 }) {
-  const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
+  const fontStack = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
   return (
     <div
       style={{
@@ -257,13 +258,13 @@ function MobileViewSwitcher({
             gap: 8,
           }}
         >
-          <span style={{ fontFamily: calibri, fontSize: 11, opacity: 0.85 }}>Map view</span>
+          <span style={{ fontFamily: fontStack, fontSize: 11, opacity: 0.85 }}>Map view</span>
           {MOBILE_VIEW_TYPES.map((opt) => (
             <button
               key={opt}
               onClick={() => onViewType(opt)}
               style={{
-                fontFamily: calibri,
+                fontFamily: fontStack,
                 fontSize: 13,
                 padding: "8px 10px",
                 borderRadius: 8,
@@ -352,7 +353,7 @@ function formatValuation(b: number): string {
 // Canvas-based text measurer. One offscreen 2D context shared across calls.
 // Used to compute each planet's rendered label width so the collision force
 // can keep small planets with long names from overlapping their neighbors.
-const LABEL_FONT_FAMILY = 'Calibri, "Helvetica Neue", Arial, sans-serif';
+const LABEL_FONT_FAMILY = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
 const textMeasureCtx: CanvasRenderingContext2D | null =
   typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
 const textWidthCache = new Map<string, number>();
@@ -389,7 +390,7 @@ const pillBtn: React.CSSProperties = {
   color: "#fff",
   borderRadius: 6,
   padding: "5px 0",
-  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
   fontSize: 16,
   cursor: "pointer",
 };
@@ -442,7 +443,7 @@ function SectorPanelContent({
           />
         )}
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>Sectors</div>
+          <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: 0.4 }}>Sectors</div>
           <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
             {loading ? "Loading…" : error ? "Error" : `${total} companies`}
           </div>
@@ -746,17 +747,17 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           background: "rgba(7, 14, 32, 0.85)",
           color: "#e6edf7",
           padding: "16px 14px",
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           userSelect: "none",
         }}
       >
       {/* Brand title + collapse button — pinned at the top of the panel. */}
       <div style={{ flex: "0 0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div
             style={{
-              fontSize: 20,
-              fontWeight: 700,
+              fontSize: 24,
+              fontWeight: 600, // ITC Franklin Gothic Demi — activate Demi in the Adobe Fonts kit; until then CSS rounds 600 → 700
               letterSpacing: 1.5,
               textTransform: "uppercase",
               lineHeight: 1.1,
@@ -820,9 +821,9 @@ function MobileSectorTriggerBar({ onOpen }: { onOpen: () => void }) {
           borderRadius: 10,
           color: "white",
           padding: "10px 14px",
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 700,
           letterSpacing: 0.6,
           cursor: "pointer",
         }}
@@ -872,7 +873,7 @@ function MobileSectorDrawer({
           borderTopLeftRadius: 18,
           borderTopRightRadius: 18,
           color: "#e6edf7",
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           userSelect: "none",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: "transform 280ms cubic-bezier(0.4, 0, 0.2, 1)",
@@ -958,7 +959,7 @@ function HistoryChart({ series }: { series: { month: string; value: number }[] }
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
         <span style={{ fontSize: 12, opacity: 0.6 }}>{fmtMonthLabel(cs.month)}</span>
-        <span style={{ fontSize: 16, fontWeight: 700 }}>{formatValuation(cs.value)}</span>
+        <span style={{ fontSize: 16, fontWeight: 500 }}>{formatValuation(cs.value)}</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -1026,7 +1027,7 @@ function PlanetDetailPanel({
         backdropFilter: "blur(6px)",
         boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
         color: "#e6edf7",
-        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
         padding: "22px 24px",
         boxSizing: "border-box",
         overflowY: "auto",
@@ -1065,7 +1066,7 @@ function PlanetDetailPanel({
           </button>
 
           <div style={{ marginBottom: 24, paddingRight: 36 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1, marginBottom: 6 }}>
+            <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.1, marginBottom: 6 }}>
               {usdFlag(node.name).display}
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1.5, textTransform: "uppercase" }}>
@@ -1074,7 +1075,7 @@ function PlanetDetailPanel({
           </div>
 
           <PanelSection label={VALUATION_LABELS[detail?.valuationType ?? "market_cap"]}>
-            <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
+            <span style={{ fontSize: 26, fontWeight: 500, letterSpacing: -0.5 }}>
               {formatValuation(valuation)}
             </span>
             {lastUpdated && (
@@ -1117,7 +1118,7 @@ function PlanetDetailPanel({
                       padding: "8px 11px",
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.1 }}>{v.name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.1 }}>{v.name}</div>
                     {v.statistic && (
                       <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>{v.statistic}</div>
                     )}
@@ -1161,7 +1162,7 @@ function PlanetDetailPanel({
 function PanelSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 22, paddingBottom: 18, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
         {label}
       </div>
       {children}
@@ -1199,7 +1200,7 @@ function ContentList({
         const inner = (
           <>
             <span style={{ minWidth: 0 }}>
-              <span style={{ fontWeight: 700, fontSize: 13 }}>{r.title}</span>
+              <span style={{ fontWeight: 500, fontSize: 13 }}>{r.title}</span>
               {r.meta && (
                 <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 6, textTransform: "capitalize" }}>
                   {r.meta}
@@ -1325,7 +1326,7 @@ function EditorToolbar({
           borderRadius: 8,
           padding: "6px 10px",
           color: "#ffe066",
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: 1,
@@ -1365,7 +1366,7 @@ function EditorToolbar({
         borderRadius: 10,
         padding: 12,
         color: "#e6edf7",
-        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
         fontSize: 12,
         boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
         backdropFilter: "blur(6px)",
@@ -1434,7 +1435,7 @@ function EditorToolbar({
               padding: "2px 6px",
               fontSize: 9,
               cursor: "pointer",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
             }}
             aria-label="Reset knobs to defaults"
           >
@@ -1625,7 +1626,7 @@ function EditorToolbar({
                     borderRadius: 5,
                     padding: "4px 6px",
                     color: active ? "#ffe066" : "#e6edf7",
-                    fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                    fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                     fontSize: 11,
                     cursor: "pointer",
                   }}
@@ -1686,7 +1687,7 @@ function EditorToolbar({
                 border: "1px solid rgba(255,255,255,0.18)",
                 borderRadius: 5,
                 color: "#fff",
-                fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                 fontSize: 11,
                 padding: "5px 6px",
                 marginBottom: 8,
@@ -1752,7 +1753,7 @@ function SliderRow({
           alignItems: "center",
           fontSize: 10,
           marginBottom: 2,
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
         }}
       >
         <span style={{ opacity: 0.75 }}>{label}</span>
@@ -1785,7 +1786,7 @@ const editorBtn: React.CSSProperties = {
   color: "#fff",
   borderRadius: 5,
   padding: "5px 8px",
-  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: 0.3,
@@ -1950,7 +1951,7 @@ function MapThumbnail({
       </div>
       <div
         style={{
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: isSelected ? 13 : 11,
           fontWeight: isSelected ? 700 : isActive ? 600 : 500,
           color: isSelected
@@ -2123,7 +2124,7 @@ function Carousel({
           background: "rgba(120,160,255,0.18)",
           border: "1px solid rgba(150,180,255,0.5)",
           color: "white",
-          fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: 1,
@@ -2207,7 +2208,7 @@ function TimelineStrip({
               padding: 0,
               cursor: "pointer",
               color: isHovered || active ? "white" : "rgba(255,255,255,0.55)",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               fontSize: 10,
               letterSpacing: 0.5,
               position: "relative",
@@ -2386,7 +2387,7 @@ function CompanyListView({
         padding: isMobile ? "0 0 16px" : "0 16px 16px",
         boxSizing: "border-box",
         zIndex: 5,
-        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
         // Fade up on enter / fade down on exit (cross-fades with the map, which
         // fades out underneath). Always mounted so the exit transition can play.
         // Container handles the cross-fade with the map underneath; the rows
@@ -2751,7 +2752,7 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
         position: "absolute",
         inset: 0,
         zIndex: 5,
-        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
         background: AGG_GRADIENT,
         opacity: active ? 1 : 0,
         pointerEvents: active ? "auto" : "none",
@@ -2823,34 +2824,31 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
   );
 }
 
-// Fetch the app's Calibri TTFs and inline them as @font-face data URIs. Used
-// when rasterizing the map SVG to PNG: an <img>-loaded SVG can't fetch external
-// fonts, so embedding them keeps the label typography correct (and same-origin
-// data URIs avoid tainting the export canvas). Cached after the first build.
+// Inline the self-hosted Libre Franklin variable TTF as an @font-face data URI.
+// Used when rasterizing the map SVG to PNG: an <img>-loaded SVG can't fetch
+// external fonts, so embedding keeps the label typography correct (and a
+// same-origin data URI avoids tainting the export canvas). The on-screen font is
+// Adobe's ITC Franklin Gothic ("franklin-gothic"), but Adobe's license forbids
+// embedding their files — so the export uses Libre Franklin (the OFL Franklin
+// Gothic revival) as a near-identical stand-in. The label font stack lists
+// "franklin-gothic" first, then "Libre Franklin"; in the detached export render
+// the Adobe face is unavailable, so this inlined face wins. One variable file
+// covers every weight. Cached after the first build.
 let mapFontCssCache: string | null = null;
 async function buildMapFontCss(): Promise<string> {
   if (mapFontCssCache !== null) return mapFontCssCache;
-  const fonts = [
-    { url: "/calibri.ttf", weight: 400 },
-    { url: "/calibri_bold.ttf", weight: 700 },
-  ];
-  const faces = await Promise.all(
-    fonts.map(async (f) => {
-      try {
-        const res = await fetch(f.url);
-        if (!res.ok) return "";
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        let bin = "";
-        for (let i = 0; i < bytes.length; i += 0x8000) {
-          bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-        }
-        return `@font-face{font-family:'Calibri';font-style:normal;font-weight:${f.weight};src:url(data:font/ttf;base64,${btoa(bin)}) format('truetype');}`;
-      } catch {
-        return "";
-      }
-    }),
-  );
-  mapFontCssCache = faces.filter(Boolean).join("\n");
+  try {
+    const res = await fetch("/librefranklin.ttf");
+    if (!res.ok) return (mapFontCssCache = "");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    mapFontCssCache = `@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:100 900;src:url(data:font/ttf;base64,${btoa(bin)}) format('truetype');}`;
+  } catch {
+    mapFontCssCache = "";
+  }
   return mapFontCssCache;
 }
 
@@ -2917,9 +2915,9 @@ function MobileEditorToolbar({
     dragRef.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
     e.preventDefault();
   };
-  const calibri = 'Calibri, "Helvetica Neue", Arial, sans-serif';
+  const fontStack = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
   const btn: React.CSSProperties = {
-    fontFamily: calibri,
+    fontFamily: fontStack,
     fontSize: 12,
     color: "white",
     background: "rgba(255,255,255,0.08)",
@@ -2947,7 +2945,7 @@ function MobileEditorToolbar({
         display: "flex",
         flexDirection: "column",
         gap: 12,
-        fontFamily: calibri,
+        fontFamily: fontStack,
         color: "white",
       }}
     >
@@ -2977,7 +2975,7 @@ function MobileEditorToolbar({
             onClick={() => onViewType(opt)}
             style={{
               flex: 1,
-              fontFamily: calibri,
+              fontFamily: fontStack,
               fontSize: 10,
               padding: "6px 2px",
               borderRadius: 6,
@@ -3020,7 +3018,7 @@ function MobileEditorToolbar({
                   onClick={() => onToggleSector(s)}
                   title={s}
                   style={{
-                    fontFamily: calibri,
+                    fontFamily: fontStack,
                     fontSize: 10.5,
                     padding: "4px 8px",
                     borderRadius: 999,
@@ -3427,6 +3425,7 @@ export default function MediaMap() {
   };
 
   const [viewMode, setViewMode] = useState<AppViewMode>("map");
+  const [aboutOpen, setAboutOpen] = useState(false);
   // The spatial layout shown beneath everything: map | linear. "list" is an
   // overlay that fades over whatever layout was last active, so the layout is
   // frozen here and "list" never drives the SVG geometry or the physics hook.
@@ -3717,13 +3716,13 @@ export default function MediaMap() {
   const labelRadii = useMemo(() => {
     if (naturalSlideUnitsPerPx === 1 && containerW === 0) return {};
     const result: Record<string, number> = {};
-    // Match Planet's rendering: lineHeight = 1.0, fontWeight 700, Calibri.
+    // Match Planet's rendering: lineHeight = 1.0, name at fontWeight 500 (Medium), Franklin Gothic.
     // Large Cap planets also render a valuation line below the name (with a
     // small top margin), so they get one extra line of height.
     for (const c of displayedCompanies) {
       const words = c.name.trim().split(/\s+/);
       const maxWordPx = words.reduce(
-        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 700)),
+        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 500)),
         0,
       );
       const lineCount = words.length + (c.sector === "Large Cap" ? 1 : 0);
@@ -4537,7 +4536,7 @@ export default function MediaMap() {
       text.setAttribute("x", String(cx));
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("dominant-baseline", "central");
-      text.setAttribute("font-family", 'Calibri, "Helvetica Neue", Arial, sans-serif');
+      text.setAttribute("font-family", '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif');
       text.setAttribute("font-weight", "700");
       text.setAttribute("font-size", String(fs));
       text.setAttribute("fill", fill);
@@ -4737,7 +4736,7 @@ export default function MediaMap() {
               padding: 32,
               background: LIST_BG_GRADIENT,
               color: "#e6edf7",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               textShadow: "none",
             }}
           >
@@ -5286,9 +5285,9 @@ export default function MediaMap() {
                     border: "none",
                     borderRadius: 7,
                     padding: "6px 14px",
-                    fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                    fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                     fontSize: 12,
-                    fontWeight: active ? 700 : 500,
+                    fontWeight: 500,
                     letterSpacing: 1.2,
                     cursor: "pointer",
                     transition: "background 160ms, color 160ms, box-shadow 160ms",
@@ -5384,9 +5383,9 @@ export default function MediaMap() {
                   padding: "8px 14px",
                   backdropFilter: "blur(6px)",
                   color: isActive ? "white" : isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.7)",
-                  fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                  fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                   fontSize: 13,
-                  fontWeight: isActive ? 600 : 500,
+                  fontWeight: 500,
                   letterSpacing: 1,
                   cursor: isActive ? "default" : "pointer",
                   textAlign: "left",
@@ -5441,9 +5440,9 @@ export default function MediaMap() {
               padding: "8px 14px",
               backdropFilter: "blur(6px)",
               color: "white",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 500,
               letterSpacing: 1,
               cursor: "pointer",
               textAlign: "left",
@@ -5476,9 +5475,9 @@ export default function MediaMap() {
               padding: "8px 14px",
               backdropFilter: "blur(6px)",
               color: "white",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 500,
               letterSpacing: 1,
               cursor: "pointer",
             }}
@@ -5556,8 +5555,8 @@ export default function MediaMap() {
                 border: "1px solid rgba(255,255,255,0.15)",
               }}
             >
-              <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={zoomBtnStyle}>−</button>
-              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={zoomBtnStyle}>+</button>
+              <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>−</button>
+              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>+</button>
               <button
                 aria-label="Refresh view"
                 className="mm-hover"
@@ -5575,9 +5574,9 @@ export default function MediaMap() {
                         alignItems: "center",
                         gap: 6,
                         padding: "0 12px",
-                        fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+                        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                         fontSize: 13,
-                        fontWeight: 600,
+                        fontWeight: 500,
                         letterSpacing: 1,
                       }),
                 }}
@@ -5608,13 +5607,31 @@ export default function MediaMap() {
                 }}
               >
                 <button
-                  aria-label="Download map (3840×2160 PNG)"
-                  title="Download map (3840×2160)"
+                  aria-label="About the Media Universe"
+                  title="About"
                   className="mm-hover"
-                  onClick={downloadMapImage}
-                  style={zoomBtnStyle}
+                  onClick={() => setAboutOpen(true)}
+                  style={{
+                    ...zoomBtnStyle,
+                    // Label stays white (zoomBtnStyle color); only the icon is grey.
+                    // Mobile: icon-only square; desktop: auto-width pill with the ABOUT label.
+                    ...(isMobile
+                      ? {}
+                      : {
+                          width: "auto",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "0 12px",
+                          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          letterSpacing: 1,
+                        }),
+                  }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>download</span>
+                  {!isMobile && <span className="cap-center">ABOUT</span>}
+                  <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 18, display: "block", lineHeight: 1, color: ICON_GREY }}>info</span>
                 </button>
               </div>
             )}
@@ -5672,7 +5689,7 @@ export default function MediaMap() {
               borderRadius: 8,
               padding: "8px 10px",
               color: "#e6edf7",
-              fontFamily: 'Calibri, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               fontSize: 12,
               lineHeight: 1.4,
               boxShadow: "0 6px 24px rgba(0,0,0,0.5)",
@@ -5690,6 +5707,8 @@ export default function MediaMap() {
           </div>
         );
       })()}
+
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} onDownloadMap={downloadMapImage} />
     </div>
   );
 }
@@ -5710,6 +5729,10 @@ const arrowBtnStyle = (enabled: boolean): React.CSSProperties => ({
   backdropFilter: "blur(6px)",
   transition: "background 160ms ease, color 160ms ease",
 });
+
+// Shared light-grey for the map-control icons (TIME MACHINE / REFRESH / +/− /
+// download), matching the 0.6-opacity grey the TIME MACHINE + REFRESH icons use.
+const ICON_GREY = "rgba(255,255,255,0.6)";
 
 const zoomBtnStyle: React.CSSProperties = {
   width: 34,

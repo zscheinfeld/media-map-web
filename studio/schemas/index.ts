@@ -7,6 +7,7 @@ import {sector} from './documents/sector'
 import {connection} from './documents/connection'
 import {dataSource} from './documents/dataSource'
 import {mapSettings} from './documents/mapSettings'
+import {about} from './documents/about'
 
 // Shared objects
 import {planetStyle} from './objects/planetStyle'
@@ -18,6 +19,15 @@ import {mapSettingsOverride} from './objects/mapSettingsOverride'
 import {vital} from './objects/vital'
 import {eshapContent} from './objects/eshapContent'
 import {externalArticle} from './objects/externalArticle'
+import {
+  aboutSectionHeader,
+  aboutBody,
+  aboutPrimaryButton,
+  aboutSecondaryButton,
+  aboutLink,
+  aboutPhoto,
+  aboutSection,
+} from './objects/aboutBlocks'
 
 export const schemaTypes: SchemaTypeDefinition[] = [
   // Documents
@@ -27,6 +37,7 @@ export const schemaTypes: SchemaTypeDefinition[] = [
   connection,
   dataSource,
   mapSettings,
+  about,
   // Objects
   planetStyle,
   glow,
@@ -37,4 +48,11 @@ export const schemaTypes: SchemaTypeDefinition[] = [
   vital,
   eshapContent,
   externalArticle,
+  aboutSectionHeader,
+  aboutBody,
+  aboutPrimaryButton,
+  aboutSecondaryButton,
+  aboutLink,
+  aboutPhoto,
+  aboutSection,
 ]

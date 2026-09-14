@@ -925,7 +925,7 @@ export function MapEditorTool() {
           {/* Sector marker = the labeled pill itself. Rendered AFTER planets
               so it's always readable on top. Drag the pill to move the
               sector center; the pill IS the click target. Width estimated
-              from character count (Calibri-bold ≈ 0.55 em/char). Subtle
+              from character count (Franklin-Gothic-bold ≈ 0.52 em/char). Subtle
               hover state nudges border + background brightness so editors
               know the pill is interactive without it screaming. Hidden entirely
               when the "Sector labels" toggle is off. */}
@@ -970,7 +970,7 @@ export function MapEditorTool() {
                   dominantBaseline="central"
                   pointerEvents="none"
                   style={{
-                    fontFamily: 'Calibri, system-ui, sans-serif',
+                    fontFamily: '"franklin-gothic", "Libre Franklin", system-ui, sans-serif',
                     fontWeight: 700,
                     fontSize,
                     fill: isHovered ? '#fff5b8' : 'rgba(255,224,102,0.95)',
