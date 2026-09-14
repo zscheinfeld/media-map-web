@@ -72,15 +72,20 @@ export function Planet({
     const gap = valText ? labelFontPx * 0.15 : 0
     const totalH = words.length * lineH + (valText ? gap + lineH : 0)
     const top = node.y - totalH / 2
-    const rows = words.map((w, i) => ({text: w, y: top + lineH / 2 + i * lineH, opacity: 1}))
-    if (valText) rows.push({text: valText, y: top + words.length * lineH + gap + lineH / 2, opacity: 0.85})
+    const rows = words.map((w, i) => ({text: w, y: top + lineH / 2 + i * lineH, opacity: 1, isVal: false}))
+    if (valText)
+      rows.push({text: valText, y: top + words.length * lineH + gap + lineH / 2, opacity: 0.85, isVal: true})
+    // Company name = ITC Franklin Gothic Medium (500) + 2% tracking; the valuation
+    // number stays Book (400) with normal tracking. Weight/spacing are set per
+    // <tspan> so both share one <text> (and one outline). Tracking is 2% of the
+    // font size, in slide units, so it scales with zoom like everything else.
+    const nameTracking = 0.02 * labelFontPx
     return (
       <text
         x={node.x}
         textAnchor="middle"
         dominantBaseline="central"
-        fontFamily='Calibri, "Helvetica Neue", Arial, sans-serif'
-        fontWeight={700}
+        fontFamily='"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif'
         fontSize={labelFontPx}
         fill={node.labelColor ?? "#fff"}
         stroke="#000"
@@ -91,7 +96,14 @@ export function Planet({
         style={{pointerEvents: isEditMode ? "auto" : "none", cursor: isEditMode ? "grab" : undefined}}
       >
         {rows.map((r, i) => (
-          <tspan key={i} x={node.x} y={r.y} opacity={r.opacity}>
+          <tspan
+            key={i}
+            x={node.x}
+            y={r.y}
+            opacity={r.opacity}
+            fontWeight={r.isVal ? 400 : 500}
+            letterSpacing={r.isVal ? 0 : nameTracking}
+          >
             {r.text}
           </tspan>
         ))}

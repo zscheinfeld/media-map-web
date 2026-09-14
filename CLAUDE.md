@@ -116,4 +116,10 @@ Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet 
 
 ### Typography
 
-The Calibri TTFs live in `public/` and are registered as `@font-face` in [src/App.css](src/App.css) at weights 400 and 700. Map labels (planet name, valuation, sector labels) use weight 700 with a thin black SVG/text stroke (`paintOrder: "stroke fill"` + `WebkitTextStroke` for HTML-in-foreignObject labels).
+The global typeface is **ITC Franklin Gothic**, served by an **Adobe Fonts (Typekit) kit** — the `<link>` in [index.html](index.html) exposes the CSS family `"franklin-gothic"` (weights **400 Book / 700 Bold**; activate **Medium 500** and **Demi 600** in the Adobe project to use those weights). The shared font stack everywhere is `"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif`.
+
+**Libre Franklin** (the OFL Franklin Gothic revival) is self-hosted (`public/librefranklin.ttf`, registered `@font-face` in [src/App.css](src/App.css)) as the fallback **and** the face the PNG export embeds — Adobe's license forbids embedding their files, so `buildMapFontCss` in [MediaMap.tsx](src/MediaMap.tsx) inlines Libre Franklin for the detached export render.
+
+> **Adobe Fonts kits are domain-locked:** add `localhost` + the Netlify/production domains to the kit, or `franklin-gothic` silently falls back to Libre Franklin.
+
+Map labels use a thin black SVG/text stroke (`paintOrder: "stroke"`). The planet **name** renders at weight **500 (Medium) + 2% tracking**; the **valuation** number at **400 (Book)** — both in one `<text>` element, split per-`<tspan>` in [packages/map-core/src/Planet.tsx](packages/map-core/src/Planet.tsx). Sector labels are 700.

@@ -2,7 +2,7 @@ import type {LayoutInput} from '@media-map/map-core'
 
 // Offscreen canvas to measure label text width (same approach as the app), so
 // the collision force can space planets whose labels overflow their circle.
-const LABEL_FONT_FAMILY = 'Calibri, "Helvetica Neue", Arial, sans-serif'
+const LABEL_FONT_FAMILY = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif'
 const cache = new Map<string, number>()
 
 // Created LAZILY on first measurement (not at module load) and wrapped in

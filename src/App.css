@@ -1,15 +1,12 @@
+/* Franklin Gothic is served on-screen by the Adobe Fonts (Typekit) kit linked in
+   index.html as the family "franklin-gothic". Libre Franklin (self-hosted below,
+   the OFL Franklin Gothic revival) is the fallback AND the face the PNG export
+   inlines — Adobe's license forbids embedding their files, so the export uses
+   this near-identical open font instead. One variable TTF covers all weights. */
 @font-face {
-  font-family: "Calibri";
-  src: url("/calibri.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Calibri";
-  src: url("/calibri_bold.ttf") format("truetype");
-  font-weight: 700;
+  font-family: "Libre Franklin";
+  src: url("/librefranklin.ttf") format("truetype");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -19,7 +16,7 @@ html, body, #root {
   padding: 0;
   background: #03060f;
   color: #e6edf7;
-  font-family: Calibri, "Helvetica Neue", Arial, sans-serif;
+  font-family: "franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
   /* iOS Safari auto-inflates ("boosts") some text — which blew up planet
      valuation labels to giant sizes. Pin it so labels render at their set size. */
   -webkit-text-size-adjust: 100%;
@@ -35,7 +32,7 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* All-caps button labels sit optically high: Calibri's line box keeps empty
+/* All-caps button labels sit optically high: the font's line box keeps empty
    descender space below the caps (all-caps text has no descenders), so vertical
    centering leaves more gap below than above. Trim the text box to the cap /
    baseline edges where supported (perfect optical centering); fall back to a
@@ -72,4 +69,35 @@ html, body, #root {
 }
 .mm-hover:hover {
   box-shadow: inset 0 0 0 200px rgba(255, 255, 255, 0.08);
+}
+
+/* About-modal tab bar: horizontally scrollable on mobile with no visible bar. */
+.about-tabs {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge */
+}
+.about-tabs::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
+/* About-modal body: custom scrollbar with a blue handle. */
+.about-scroll {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #5981ff transparent; /* thumb, track (Firefox) */
+}
+.about-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.about-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.about-scroll::-webkit-scrollbar-thumb {
+  background: #5981ff;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.about-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6f92ff;
+  background-clip: padding-box;
 }
