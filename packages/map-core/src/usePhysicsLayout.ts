@@ -1020,11 +1020,6 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 20, 1)
       ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
     }
-    // Cache only once this sim has FULLY cooled (below) — never mid-settle. The
-    // synchronous prewarm above may leave a half-resolved frame; the live sim then
-    // relaxes it over ~1s, and we record the layout the moment it comes to rest.
-    let cachedOnRest = false
-
     const sim = forceSimulation<PlanetNode>(built)
       .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
       .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
@@ -1051,12 +1046,6 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         else if (sim.alphaTarget() > 0) sim.alphaTarget(0)
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 2, 0.5)
         ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 2)
-        // Record the per-year layout once it has fully come to rest (sim cooled and
-        // sizes done tweening) — the true "fully resolved" on-screen positions.
-        if (!cachedOnRest && !anyTweening && sim.alpha() < 0.01) {
-          cachedOnRest = true
-          cacheLayout()
-        }
         setNodes(built.slice())
       })
     simRef.current = sim
