@@ -479,10 +479,13 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       nodeMapRef.current.clear()
       hasFirstAnimRef.current = false
     }
-    // Invalidate the per-year layout cache when anything that SHAPES a layout
-    // (knobs, authored positions, bounds, labels, a manual refresh) changes — but
-    // NOT on year/data changes (those are captured by the per-year cache key).
-    const layoutSig = `${positionsKey}|${collidePadding}|${entityRadius}|${sizeSpacing}|${sectorPull}|${repulsion}|${connectionStrength}|${boundsKey}|${labelRadiiKey}|${restartToken}`
+    // Invalidate the per-year layout cache only when something changes the layout
+    // for EVERY year mid-session: the canvas (desktop/mobile swap) or a manual
+    // "refresh physics". Everything else that shapes a layout — knobs, authored
+    // positions, label radii — is per-year (time-scoped / appearance-windowed) and
+    // is baked into that year's cached entry, so it must NOT clear the cache, or
+    // every year toggle would re-settle from scratch (the ~0.5s delay).
+    const layoutSig = `${boundsKey}|${restartToken}`
     if (layoutSig !== prevLayoutSigRef.current) {
       prevLayoutSigRef.current = layoutSig
       layoutCacheRef.current.clear()
