@@ -418,9 +418,12 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const prevRestartTokenRef = useRef(restartToken)
   const prevResettleTokenRef = useRef(resettleToken)
   const prevFlyTokenRef = useRef(flyIntroToken)
-  // Per-year resolved layouts (name → {x,y}) for the A/B tween, keyed by layoutKey.
-  const layoutCacheRef = useRef<Map<string, Map<string, {x: number; y: number}>>>(new Map())
-  const prevLayoutSigRef = useRef("")
+  // Per-year resolved layouts for the A/B tween, keyed by layoutKey. Each entry
+  // carries the `sig` of the inputs it was resolved from, so a stale entry (cached
+  // before the data/sizes settled, or after a knob/canvas change) is ignored.
+  const layoutCacheRef = useRef<Map<string, {sig: string; pos: Map<string, {x: number; y: number}>}>>(
+    new Map(),
+  )
 
   // Stable keys so the sim only restarts on meaningful change (membership,
   // valuation/size, center moves, overrides, labels, connections, bounds).
@@ -479,17 +482,12 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       nodeMapRef.current.clear()
       hasFirstAnimRef.current = false
     }
-    // Invalidate the per-year layout cache only when something changes the layout
-    // for EVERY year mid-session: the canvas (desktop/mobile swap) or a manual
-    // "refresh physics". Everything else that shapes a layout — knobs, authored
-    // positions, label radii — is per-year (time-scoped / appearance-windowed) and
-    // is baked into that year's cached entry, so it must NOT clear the cache, or
-    // every year toggle would re-settle from scratch (the ~0.5s delay).
-    const layoutSig = `${boundsKey}|${restartToken}`
-    if (layoutSig !== prevLayoutSigRef.current) {
-      prevLayoutSigRef.current = layoutSig
-      layoutCacheRef.current.clear()
-    }
+    // Signature of everything that shapes THIS view's layout. Stored with each
+    // cache entry and checked on lookup: a cached year is reused only if its inputs
+    // still match, so persistence stays fast across toggles (same year → same sig →
+    // hit) while a stale entry (e.g. cached during first load before valuations
+    // settled, or after a knob/canvas/refresh change) is re-resolved.
+    const layoutSig = `${inputsKey}|${anchorDiam}|${collidePadding}|${entityRadius}|${sizeSpacing}|${sectorPull}|${repulsion}|${connectionStrength}|${boundsKey}|${labelRadiiKey}|${positionsKey}|${restartToken}`
 
     const active = inputs
     const centerByName = new Map(active.map((c) => [c.name, c.center]))
@@ -577,10 +575,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // back by the A/B tween). Called after each settle path resolves the layout.
     const cacheLayout = () => {
       if (layoutKey) {
-        layoutCacheRef.current.set(
-          layoutKey,
-          new Map(built.map((n) => [n.name, {x: n.x, y: n.y}])),
-        )
+        layoutCacheRef.current.set(layoutKey, {
+          sig: layoutSig,
+          pos: new Map(built.map((n) => [n.name, {x: n.x, y: n.y}])),
+        })
       }
     }
 
@@ -720,22 +718,24 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         .velocityDecay(0.72)
         .stop()
 
-      const PREWARM_TICKS = 400
+      const PREWARM_TICKS = 600
       sim.tick(PREWARM_TICKS)
       // Converge to a non-overlapping layout. A single 8-sweep pass can't
       // separate the many *unpositioned* planets that start dead-stacked at a
       // shared sector center, so alternate a strong hard de-overlap with short
       // bursts of the attraction sim: planets spread apart without drifting off
       // their sector, and pinned planets stay fixed. End on a de-overlap pass so
-      // the snapshot the tween eases toward is overlap-free.
-      for (let round = 0; round < 10; round++) {
+      // the snapshot (and its cache entry) is overlap-free. Kept in step with the
+      // A/B tween's miss-settle so a year cached here is as resolved as one cached
+      // by a pill toggle (else the present map comes back with residual overlap).
+      for (let round = 0; round < 14; round++) {
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 16, 1)
         sim.tick(20)
       }
       // Final hard de-overlap: many sweeps so tight clusters around big pinned
       // planets fully resolve (the snapshot the tween eases toward is final).
-      separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 60, 1)
-      ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
+      separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 160, 1)
+      ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 6)
 
       const settled = new Map<string, {x: number; y: number}>()
       const savedFx = new Map<string, {fx: number | null; fy: number | null}>()
@@ -815,9 +815,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const startR = new Map(built.map((n) => [n.name, n.r]))
       const savedFx = new Map(built.map((n) => [n.name, {fx: n.fx ?? null, fy: n.fy ?? null}]))
 
-      let target = layoutKey ? layoutCacheRef.current.get(layoutKey) : undefined
+      const cached = layoutKey ? layoutCacheRef.current.get(layoutKey) : undefined
+      let target = cached && cached.sig === layoutSig ? cached.pos : undefined
       if (!target) {
-        // Cache miss: resolve this year's layout once and cache it. Critical: use
+        // Cache miss (or stale): resolve this year's layout once and cache it. Use
         // the TARGET-year radii for the settle (existing nodes still carry the old
         // year's r until the tween), else collision packs for the wrong sizes and
         // caches an overlapping layout. Mutates `built`; we restore A below.
@@ -853,7 +854,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 6)
         cacheLayout()
         target =
-          (layoutKey && layoutCacheRef.current.get(layoutKey)) ||
+          layoutCacheRef.current.get(layoutKey)?.pos ??
           new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
       }
 
