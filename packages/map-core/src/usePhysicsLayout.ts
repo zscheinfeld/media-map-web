@@ -358,6 +358,17 @@ export type PhysicsOptions = {
   /** Bump this number to re-settle the sim from the current positions WITHOUT
    *  changing any settings (a manual "refresh physics"). */
   restartToken?: number
+  /** Bump this number to smoothly TWEEN the current layout into the target year's
+   *  resolved layout (positions + sizes). Used for A/B pill comparisons — the
+   *  target layout is taken from the per-year cache (keyed by `layoutKey`), or
+   *  resolved once and cached, so toggling back and forth is stable. */
+  resettleToken?: number
+  /** Bump this number to replay the first-load intro (fly out from the sector
+   *  wells) for the current data — a deliberate "explore this year" reveal. */
+  flyIntroToken?: number
+  /** Identifies the current layout (the viewed year) for the per-year layout cache
+   *  the `resettleToken` tween reads/writes. */
+  layoutKey?: string
 }
 
 /**
@@ -384,6 +395,9 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     connectionStrength = CONNECTION_PULL,
     dragging = null,
     restartToken = 0,
+    resettleToken = 0,
+    flyIntroToken = 0,
+    layoutKey = "",
   } = opts
 
   const [nodes, setNodes] = useState<PlanetNode[]>([])
@@ -402,6 +416,11 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const hasFirstAnimRef = useRef(false)
   const tweenRafRef = useRef<number | null>(null)
   const prevRestartTokenRef = useRef(restartToken)
+  const prevResettleTokenRef = useRef(resettleToken)
+  const prevFlyTokenRef = useRef(flyIntroToken)
+  // Per-year resolved layouts (name → {x,y}) for the A/B tween, keyed by layoutKey.
+  const layoutCacheRef = useRef<Map<string, Map<string, {x: number; y: number}>>>(new Map())
+  const prevLayoutSigRef = useRef("")
 
   // Stable keys so the sim only restarts on meaningful change (membership,
   // valuation/size, center moves, overrides, labels, connections, bounds).
@@ -445,6 +464,30 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       nodeMapRef.current.clear()
     }
 
+    // Re-settle request (year transition): forget the previous layout entirely and
+    // re-resolve from scratch — a hard cut is fine, years don't cross-fade. Clearing
+    // the node cache makes every planet a fresh node at its well, and the steady-
+    // state branch below runs the full first-load-strength settle (no tween, so
+    // nothing can freeze a half-settled frame — the failure mode of easing across).
+    const resettleRequested = resettleToken !== prevResettleTokenRef.current
+    prevResettleTokenRef.current = resettleToken
+    // A fly-intro replays the first-load animation for the new data: clear the node
+    // cache (fresh nodes at their wells) and re-arm the first-load branch below.
+    const flyRequested = flyIntroToken !== prevFlyTokenRef.current
+    prevFlyTokenRef.current = flyIntroToken
+    if (flyRequested) {
+      nodeMapRef.current.clear()
+      hasFirstAnimRef.current = false
+    }
+    // Invalidate the per-year layout cache when anything that SHAPES a layout
+    // (knobs, authored positions, bounds, labels, a manual refresh) changes — but
+    // NOT on year/data changes (those are captured by the per-year cache key).
+    const layoutSig = `${positionsKey}|${collidePadding}|${entityRadius}|${sizeSpacing}|${sectorPull}|${repulsion}|${connectionStrength}|${boundsKey}|${labelRadiiKey}|${restartToken}`
+    if (layoutSig !== prevLayoutSigRef.current) {
+      prevLayoutSigRef.current = layoutSig
+      layoutCacheRef.current.clear()
+    }
+
     const active = inputs
     const centerByName = new Map(active.map((c) => [c.name, c.center]))
 
@@ -486,8 +529,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         // Snap to the new target when a position override changed — but NOT when
         // returning from linear (linear set every target to a strip slot, so
         // targets always "differ"; snapping would rob the fly-back tween).
+        // Skip the snap during a re-settle — we want to tween from the current
+        // position, not jump to the new target first.
         const comingFromLinear = prevViewModeRef.current === "linear"
-        if (!comingFromLinear && (prevTargetX !== targetX || prevTargetY !== targetY)) {
+        if (!comingFromLinear && !resettleRequested && (prevTargetX !== targetX || prevTargetY !== targetY)) {
           existing.x = targetX
           existing.y = targetY
           existing.vx = 0
@@ -523,6 +568,17 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     const activeNames = new Set(built.map((n) => n.name))
     for (const key of map.keys()) {
       if (!activeNames.has(key)) map.delete(key)
+    }
+
+    // Snapshot the current resolved positions into the per-year layout cache (read
+    // back by the A/B tween). Called after each settle path resolves the layout.
+    const cacheLayout = () => {
+      if (layoutKey) {
+        layoutCacheRef.current.set(
+          layoutKey,
+          new Map(built.map((n) => [n.name, {x: n.x, y: n.y}])),
+        )
+      }
     }
 
     // Resolve connections to node pairs (skip ones missing an endpoint).
@@ -684,6 +740,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         settled.set(n.name, {x: n.x, y: n.y})
         savedFx.set(n.name, {fx: n.fx ?? null, fy: n.fy ?? null})
       }
+      cacheLayout() // built is at the resolved layout here — snapshot it for A/B tweens.
 
       // Reset to each planet's resolved center (with mild noise) for the tween start.
       for (const n of built) {
@@ -742,6 +799,115 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           tweenRafRef.current = null
         }
         sim.stop()
+      }
+    }
+
+    // A/B comparison tween (a saved-year pill toggle): ease the CURRENT layout into
+    // the target year's resolved layout (positions + sizes). The target comes from
+    // the per-year cache; on a miss, resolve it once (fresh settle) and cache it, so
+    // toggling back and forth lands on the same map each time. No live sim — a
+    // deterministic morph between two pre-resolved layouts.
+    if (resettleRequested && !isEditMode && hasFirstAnimRef.current && prevMode !== "linear" && built.length > 0) {
+      const startPos = new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
+      const startR = new Map(built.map((n) => [n.name, n.r]))
+      const savedFx = new Map(built.map((n) => [n.name, {fx: n.fx ?? null, fy: n.fy ?? null}]))
+
+      let target = layoutKey ? layoutCacheRef.current.get(layoutKey) : undefined
+      if (!target) {
+        // Cache miss: resolve this year's layout once and cache it. Critical: use
+        // the TARGET-year radii for the settle (existing nodes still carry the old
+        // year's r until the tween), else collision packs for the wrong sizes and
+        // caches an overlapping layout. Mutates `built`; we restore A below.
+        for (const n of built) {
+          n.r = n.targetR
+          if (n.fx == null) {
+            const center = centerByName.get(n.name) ?? {x: n.targetX, y: n.targetY}
+            n.x = center.x + (Math.random() - 0.5) * 120
+            n.y = center.y + (Math.random() - 0.5) * 120
+            n.vx = 0
+            n.vy = 0
+          }
+        }
+        const s = forceSimulation<PlanetNode>(built)
+          .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
+          .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
+          .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
+          .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
+          .force("link", connectionForce(linkPairs, connectionStrength))
+          .force("bounds", boundsForce(bounds))
+          .alpha(0.9)
+          .alphaDecay(0.022)
+          .velocityDecay(0.72)
+          .stop()
+        s.tick(600)
+        // Fully converge: alternate strong de-overlap with attraction bursts, then
+        // a long final de-overlap so the cached layout has NO residual overlap.
+        for (let round = 0; round < 14; round++) {
+          separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 16, 1)
+          s.tick(20)
+        }
+        separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 160, 1)
+        ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 6)
+        cacheLayout()
+        target =
+          (layoutKey && layoutCacheRef.current.get(layoutKey)) ||
+          new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
+      }
+
+      // Reset to A (current) for the tween start; clear pins during the morph.
+      for (const n of built) {
+        const a = startPos.get(n.name)!
+        n.x = a.x
+        n.y = a.y
+        n.vx = 0
+        n.vy = 0
+        n.fx = null
+        n.fy = null
+      }
+
+      const TWEEN_MS = 650
+      const t0 = performance.now()
+      const morph = target
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - t0) / TWEEN_MS)
+        const k = 1 - Math.pow(1 - t, 3)
+        for (const n of built) {
+          const a = startPos.get(n.name) ?? {x: n.x, y: n.y}
+          const b = morph.get(n.name) ?? a
+          n.x = a.x + (b.x - a.x) * k
+          n.y = a.y + (b.y - a.y) * k
+          const r0 = startR.get(n.name) ?? n.targetR
+          n.r = r0 + (n.targetR - r0) * k
+        }
+        setNodes(built.slice())
+        if (t < 1) {
+          tweenRafRef.current = requestAnimationFrame(tick)
+        } else {
+          tweenRafRef.current = null
+          for (const n of built) {
+            const b = morph.get(n.name)
+            if (b) {
+              n.x = b.x
+              n.y = b.y
+            }
+            n.r = n.targetR
+            const f = savedFx.get(n.name)
+            if (f && f.fx !== null && f.fy !== null) {
+              n.fx = f.fx
+              n.fy = f.fy
+            }
+          }
+          setNodes(built.slice())
+        }
+      }
+      tweenRafRef.current = requestAnimationFrame(tick)
+      simRef.current = null
+      setNodes(built.slice())
+      return () => {
+        if (tweenRafRef.current !== null) {
+          cancelAnimationFrame(tweenRafRef.current)
+          tweenRafRef.current = null
+        }
       }
     }
 
@@ -843,8 +1009,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         .velocityDecay(0.72)
         .stop()
       // Mostly separation (keeps a settled layout in place) with light attraction
-      // bursts so a dead-stacked cluster from an interrupted intro still spreads
-      // toward its sector rather than blowing outward.
+      // bursts so a dead-stacked cluster from an interrupted intro still spreads.
       for (let round = 0; round < 10; round++) {
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 12, 1)
         prewarm.tick(5)
@@ -852,6 +1017,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 20, 1)
       ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
     }
+    // Cache only once this sim has FULLY cooled (below) — never mid-settle. The
+    // synchronous prewarm above may leave a half-resolved frame; the live sim then
+    // relaxes it over ~1s, and we record the layout the moment it comes to rest.
+    let cachedOnRest = false
 
     const sim = forceSimulation<PlanetNode>(built)
       .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
@@ -860,6 +1029,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
       .force("link", connectionForce(linkPairs, connectionStrength))
       .force("bounds", boundsForce(bounds))
+      // Cool maintaining sim — the pre-warm above already resolved the layout
+      // (including a full re-settle), so this only holds separation + eases r.
       .alpha(0.12)
       .alphaDecay(0.05)
       .velocityDecay(0.85)
@@ -877,6 +1048,12 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         else if (sim.alphaTarget() > 0) sim.alphaTarget(0)
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 2, 0.5)
         ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 2)
+        // Record the per-year layout once it has fully come to rest (sim cooled and
+        // sizes done tweening) — the true "fully resolved" on-screen positions.
+        if (!cachedOnRest && !anyTweening && sim.alpha() < 0.01) {
+          cachedOnRest = true
+          cacheLayout()
+        }
         setNodes(built.slice())
       })
     simRef.current = sim
@@ -885,7 +1062,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       sim.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken])
+  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken, resettleToken, flyIntroToken])
 
   // Wake/cool the sim on drag enter/leave. The tick callback already nudges
   // alphaTarget on every tick, but the sim can be fully cooled (alpha=0) when

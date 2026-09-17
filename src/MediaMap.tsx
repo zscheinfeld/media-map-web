@@ -1997,6 +1997,7 @@ function Carousel({
   const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
+  const [exploreHover, setExploreHover] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -2110,6 +2111,8 @@ function Carousel({
       <button
         aria-label="Explore the map at this view"
         onClick={onExplore}
+        onMouseEnter={() => setExploreHover(true)}
+        onMouseLeave={() => setExploreHover(false)}
         style={{
           position: "absolute",
           left: "50%",
@@ -2121,8 +2124,9 @@ function Carousel({
           gap: 6,
           padding: "6px 12px",
           borderRadius: 8,
-          background: "rgba(120,160,255,0.18)",
-          border: "1px solid rgba(150,180,255,0.5)",
+          // Hover changes color only (no scale/position — the transform stays put).
+          background: exploreHover ? "rgba(120,160,255,0.34)" : "rgba(120,160,255,0.18)",
+          border: `1px solid ${exploreHover ? "rgba(180,205,255,0.9)" : "rgba(150,180,255,0.5)"}`,
           color: "white",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 13,
@@ -3112,6 +3116,12 @@ export default function MediaMap() {
   // Bump to re-settle the physics sim from current positions without changing
   // any layout settings (the editor's "Refresh physics" button).
   const [physicsBump, setPhysicsBump] = useState(0);
+  // Two year-transition intros, bumped by the click handlers (batched with
+  // setActiveDate, so the physics re-runs once — no pre-settle flash):
+  //   resettleToken  → comparison A/B (saved-date pills): re-pack + grow in place.
+  //   flyIntroToken  → a direct Time-Machine "Explore": full fly-out-from-wells.
+  const [resettleToken, setResettleToken] = useState(0);
+  const [flyIntroToken, setFlyIntroToken] = useState(0);
   // Mutators scoped to the active view type.
   const updateActiveLayout = (fn: (l: MobileLayout) => MobileLayout) =>
     setMobileLayouts((prev) => ({ ...prev, [activeType]: fn(prev[activeType]) }));
@@ -3264,7 +3274,15 @@ export default function MediaMap() {
     if (!year) return CURRENT_DATE;
     const updated = latestUpdated(lastUpdatedBySlug);
     // Month from the run date when it lands in the newest year; else calendar month.
-    const month = updated && String(updated.year) === year ? updated.month : CURRENT_DATE.month;
+    // Never let a stray FUTURE last_updated (a bad sheet date) push the label past
+    // today's actual month — clamp to the calendar month in the current year.
+    let month = CURRENT_DATE.month;
+    if (updated && String(updated.year) === year) {
+      month =
+        Number(year) === CURRENT_DATE.year
+          ? Math.min(updated.month, CURRENT_DATE.month)
+          : updated.month;
+    }
     return { year: Number(year), month };
   }, [valData, lastUpdatedBySlug]);
   const currentYearKey = String(currentDate.year);
@@ -3335,12 +3353,19 @@ export default function MediaMap() {
   // its pill here. Seeded with the present; kept in sync with `currentDate`.
   const [savedViews, setSavedViews] = useState<MapDate[]>([CURRENT_DATE]);
 
-  const selectDate = (d: MapDate) => setActiveDate(d);
+  // A/B comparison between saved-year pills → re-pack + grow in place.
+  const selectDate = (d: MapDate) => {
+    setActiveDate(d);
+    if (d.year !== activeDate.year) setResettleToken((n) => n + 1);
+  };
 
   const removeSavedView = (d: MapDate) => {
     if (d.year === currentDate.year) return; // the current year is never removable
     setSavedViews(prev => prev.filter(p => !sameDate(p, d)));
-    if (sameDate(d, activeDate)) setActiveDate(currentDate); // closed the active view → back to the present
+    if (sameDate(d, activeDate)) {
+      setActiveDate(currentDate); // closed the active view → back to the present
+      if (currentDate.year !== activeDate.year) setResettleToken((n) => n + 1);
+    }
   };
 
   // Keep exactly one current-year pill, equal to `currentDate` (so its month
@@ -3404,6 +3429,7 @@ export default function MediaMap() {
   const onExploreMap = () => {
     const target = timelineFocus;
     setActiveDate(target);
+    setFlyIntroToken((n) => n + 1); // direct Time-Machine explore → fly out from the wells
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
     setTimelineOpen(false);
   };
@@ -3832,6 +3858,9 @@ export default function MediaMap() {
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
     restartToken: physicsBump,
+    resettleToken,
+    flyIntroToken,
+    layoutKey: String(activeDate.year),
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
