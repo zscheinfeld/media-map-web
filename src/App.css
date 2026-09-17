@@ -101,3 +101,12 @@ html, body, #root {
   background: #6f92ff;
   background-clip: padding-box;
 }
+
+/* Side-panel Eshap logo → Substack: pointer + fade on hover. */
+.eshap-logo {
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+.eshap-logo:hover {
+  opacity: 0.8;
+}

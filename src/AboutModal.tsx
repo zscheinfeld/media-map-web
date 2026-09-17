@@ -16,6 +16,7 @@ const CARD_BG = "#0b1224";
 
 // Height reserved for the sticky tab bar so scroll-to lands sections just below it.
 const TABS_HEIGHT = 52;
+const TAB_GAP = 28;
 
 // ── Content model ────────────────────────────────────────────────────────────
 type Block =
@@ -207,7 +208,11 @@ export function AboutModal({
   const [active, setActive] = useState(0);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const tabScrollRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [showRightFade, setShowRightFade] = useState(false);
+  // Trailing spacer width (mobile) so even the LAST tab can scroll to the left
+  // edge of the column — otherwise the row's max scroll stops short of it.
+  const [tabEndSpacer, setTabEndSpacer] = useState(0);
 
   const idOf = (i: number) => `sec-${i}`;
 
@@ -217,13 +222,40 @@ export function AboutModal({
     if (!el) return;
     setShowRightFade(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
   };
+  const measureTabSpacer = () => {
+    const el = tabScrollRef.current;
+    const last = tabRefs.current[sections.length - 1];
+    if (!el || !last || !narrow) {
+      setTabEndSpacer(0);
+      return;
+    }
+    // Room after the last tab = column width − last tab width − the flex gap
+    // the spacer itself adds.
+    setTabEndSpacer(Math.max(0, el.clientWidth - last.offsetWidth - TAB_GAP));
+  };
   useEffect(() => {
     if (!open) return;
-    const onResize = () => updateFade();
-    requestAnimationFrame(updateFade);
+    const onResize = () => {
+      measureTabSpacer();
+      updateFade();
+    };
+    requestAnimationFrame(onResize);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, narrow, sections.length]);
+
+  // Keep the active tab left-aligned with the column: slide the tab row so the
+  // current tab's left edge sits at the row's left edge (mobile, where the row
+  // overflows; a no-op on desktop where the tabs fit and are centered).
+  useEffect(() => {
+    if (!open) return;
+    const row = tabScrollRef.current;
+    const tab = tabRefs.current[active];
+    if (!row || !tab) return;
+    const target = row.scrollLeft + (tab.getBoundingClientRect().left - row.getBoundingClientRect().left);
+    row.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [open, active, tabEndSpacer]);
 
   // Esc closes.
   useEffect(() => {
@@ -349,7 +381,7 @@ export function AboutModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: narrow ? 16 : 24,
         fontFamily: FONT,
       }}
     >
@@ -358,7 +390,10 @@ export function AboutModal({
         style={{
           position: "relative",
           width: "min(800px, 100%)",
-          maxHeight: "min(90vh, 900px)",
+          // `dvh` tracks the VISIBLE viewport (excludes mobile browser toolbars);
+          // plain `vh` is the full screen on iOS Safari, so the card ran under
+          // the URL bar and bottom toolbar. Mobile also gets a shorter cap.
+          maxHeight: narrow ? "min(80dvh, 720px)" : "min(90dvh, 900px)",
           display: "flex",
           flexDirection: "column",
           background: CARD_BG,
@@ -453,7 +488,7 @@ export function AboutModal({
               onScroll={updateFade}
               style={{
                 display: "flex",
-                gap: 28,
+                gap: TAB_GAP,
                 flexWrap: "nowrap",
                 overflowX: "auto",
                 WebkitOverflowScrolling: "touch",
@@ -470,6 +505,9 @@ export function AboutModal({
               return (
                 <button
                   key={i}
+                  ref={(el) => {
+                    tabRefs.current[i] = el;
+                  }}
                   onClick={() => scrollTo(i)}
                   onMouseEnter={() => setHoveredTab(i)}
                   onMouseLeave={() => setHoveredTab(null)}
@@ -506,6 +544,7 @@ export function AboutModal({
                 </button>
               );
             })}
+            {tabEndSpacer > 0 && <div aria-hidden style={{ flex: `0 0 ${tabEndSpacer}px`, height: 1 }} />}
             </div>
             {/* Right-edge fade — hints there's more to scroll (hidden at the end). */}
             <div

@@ -16,6 +16,8 @@ import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
+import { buildExportPng, downloadBlob, measureLabelTextWidth } from "./exportMap";
+import { StarfieldDefs } from "./exportScene";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
 const VALUATION_LABELS: Record<ValuationType, string> = {
@@ -348,24 +350,6 @@ function formatValuation(b: number): string {
   if (b >= 10) return `$${b.toFixed(0)}B`;
   if (b >= 1) return `$${b.toFixed(1)}B`;
   return `$${(b * 1000).toFixed(0)}M`;
-}
-
-// Canvas-based text measurer. One offscreen 2D context shared across calls.
-// Used to compute each planet's rendered label width so the collision force
-// can keep small planets with long names from overlapping their neighbors.
-const LABEL_FONT_FAMILY = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
-const textMeasureCtx: CanvasRenderingContext2D | null =
-  typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
-const textWidthCache = new Map<string, number>();
-function measureLabelTextWidth(text: string, fontPx: number, weight: number = 700): number {
-  if (!textMeasureCtx) return text.length * fontPx * 0.55;
-  const key = `${weight}|${fontPx}|${text}`;
-  const cached = textWidthCache.get(key);
-  if (cached !== undefined) return cached;
-  textMeasureCtx.font = `${weight} ${fontPx}px ${LABEL_FONT_FAMILY}`;
-  const w = textMeasureCtx.measureText(text).width;
-  textWidthCache.set(key, w);
-  return w;
 }
 
 
@@ -756,11 +740,11 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div
             style={{
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: 600, // ITC Franklin Gothic Demi — activate Demi in the Adobe Fonts kit; until then CSS rounds 600 → 700
-              letterSpacing: 1.5,
+              letterSpacing: "-0.01em", // -1%
               textTransform: "uppercase",
-              lineHeight: 1.1,
+              lineHeight: 0.9, // 90%
             }}
           >
             Media Universe
@@ -783,13 +767,21 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
         <SectorPanelContent {...props} />
       </div>
 
-      {/* ESHAP logo — pinned at the lower left of the panel. */}
+      {/* Eshap logo — pinned at the lower left of the panel; links to Substack. */}
       <div style={{ flex: "0 0 auto", paddingTop: 14, marginTop: 4 }}>
-        <img
-          src="/ESHAP%20logo.png"
-          alt="ESHAP"
-          style={{ width: 96, height: "auto", display: "block" }}
-        />
+        <a
+          href="https://eshap.substack.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="eshap-logo"
+          style={{ display: "inline-block" }}
+        >
+          <img
+            src="/Evan-logo-new.png"
+            alt="Eshap on Substack"
+            style={{ width: 96, height: "auto", display: "block" }}
+          />
+        </a>
       </div>
       </div>
     </aside>
@@ -996,12 +988,15 @@ function PlanetDetailPanel({
   detail,
   lastUpdated,
   history,
+  isPresent,
   onClose,
 }: {
   node: PlanetNode | null;
   detail: CompanyDetail | null;
   lastUpdated?: string;
   history: { month: string; value: number }[];
+  /** True when the viewed year is the present — Vitals only show then. */
+  isPresent: boolean;
   onClose: () => void;
 }) {
   const open = node !== null;
@@ -1105,7 +1100,9 @@ function PlanetDetailPanel({
             </PanelSection>
           )}
 
-          {detail && detail.vitals.length > 0 && (
+          {/* Vitals are current-state facts (users, MAU, etc.), so they only make
+              sense on the present map — hide them entirely on Time Machine years. */}
+          {isPresent && detail && detail.vitals.length > 0 && (
             <PanelSection label="Vitals">
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {detail.vitals.map((v, i) => (
@@ -1997,6 +1994,7 @@ function Carousel({
   const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
+  const [exploreHover, setExploreHover] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -2110,6 +2108,8 @@ function Carousel({
       <button
         aria-label="Explore the map at this view"
         onClick={onExplore}
+        onMouseEnter={() => setExploreHover(true)}
+        onMouseLeave={() => setExploreHover(false)}
         style={{
           position: "absolute",
           left: "50%",
@@ -2121,8 +2121,9 @@ function Carousel({
           gap: 6,
           padding: "6px 12px",
           borderRadius: 8,
-          background: "rgba(120,160,255,0.18)",
-          border: "1px solid rgba(150,180,255,0.5)",
+          // Hover changes color only (no scale/position — the transform stays put).
+          background: exploreHover ? "rgba(120,160,255,0.34)" : "rgba(120,160,255,0.18)",
+          border: `1px solid ${exploreHover ? "rgba(180,205,255,0.9)" : "rgba(150,180,255,0.5)"}`,
           color: "white",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 13,
@@ -2824,34 +2825,6 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
   );
 }
 
-// Inline the self-hosted Libre Franklin variable TTF as an @font-face data URI.
-// Used when rasterizing the map SVG to PNG: an <img>-loaded SVG can't fetch
-// external fonts, so embedding keeps the label typography correct (and a
-// same-origin data URI avoids tainting the export canvas). The on-screen font is
-// Adobe's ITC Franklin Gothic ("franklin-gothic"), but Adobe's license forbids
-// embedding their files — so the export uses Libre Franklin (the OFL Franklin
-// Gothic revival) as a near-identical stand-in. The label font stack lists
-// "franklin-gothic" first, then "Libre Franklin"; in the detached export render
-// the Adobe face is unavailable, so this inlined face wins. One variable file
-// covers every weight. Cached after the first build.
-let mapFontCssCache: string | null = null;
-async function buildMapFontCss(): Promise<string> {
-  if (mapFontCssCache !== null) return mapFontCssCache;
-  try {
-    const res = await fetch("/librefranklin.ttf");
-    if (!res.ok) return (mapFontCssCache = "");
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) {
-      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    }
-    mapFontCssCache = `@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:100 900;src:url(data:font/ttf;base64,${btoa(bin)}) format('truetype');}`;
-  } catch {
-    mapFontCssCache = "";
-  }
-  return mapFontCssCache;
-}
-
 // Floating toolbar for the mobile layout editor (?edit=mobile): a view-type
 // selector (full/vertical/horizontal), that view's settings sliders, sector-well
 // toggle, per-planet clear, and export of the whole per-type MOBILE_LAYOUTS.
@@ -3112,6 +3085,12 @@ export default function MediaMap() {
   // Bump to re-settle the physics sim from current positions without changing
   // any layout settings (the editor's "Refresh physics" button).
   const [physicsBump, setPhysicsBump] = useState(0);
+  // Two year-transition intros, bumped by the click handlers (batched with
+  // setActiveDate, so the physics re-runs once — no pre-settle flash):
+  //   resettleToken  → comparison A/B (saved-date pills): re-pack + grow in place.
+  //   flyIntroToken  → a direct Time-Machine "Explore": full fly-out-from-wells.
+  const [resettleToken, setResettleToken] = useState(0);
+  const [flyIntroToken, setFlyIntroToken] = useState(0);
   // Mutators scoped to the active view type.
   const updateActiveLayout = (fn: (l: MobileLayout) => MobileLayout) =>
     setMobileLayouts((prev) => ({ ...prev, [activeType]: fn(prev[activeType]) }));
@@ -3264,7 +3243,15 @@ export default function MediaMap() {
     if (!year) return CURRENT_DATE;
     const updated = latestUpdated(lastUpdatedBySlug);
     // Month from the run date when it lands in the newest year; else calendar month.
-    const month = updated && String(updated.year) === year ? updated.month : CURRENT_DATE.month;
+    // Never let a stray FUTURE last_updated (a bad sheet date) push the label past
+    // today's actual month — clamp to the calendar month in the current year.
+    let month = CURRENT_DATE.month;
+    if (updated && String(updated.year) === year) {
+      month =
+        Number(year) === CURRENT_DATE.year
+          ? Math.min(updated.month, CURRENT_DATE.month)
+          : updated.month;
+    }
     return { year: Number(year), month };
   }, [valData, lastUpdatedBySlug]);
   const currentYearKey = String(currentDate.year);
@@ -3335,12 +3322,19 @@ export default function MediaMap() {
   // its pill here. Seeded with the present; kept in sync with `currentDate`.
   const [savedViews, setSavedViews] = useState<MapDate[]>([CURRENT_DATE]);
 
-  const selectDate = (d: MapDate) => setActiveDate(d);
+  // A/B comparison between saved-year pills → re-pack + grow in place.
+  const selectDate = (d: MapDate) => {
+    setActiveDate(d);
+    if (d.year !== activeDate.year) setResettleToken((n) => n + 1);
+  };
 
   const removeSavedView = (d: MapDate) => {
     if (d.year === currentDate.year) return; // the current year is never removable
     setSavedViews(prev => prev.filter(p => !sameDate(p, d)));
-    if (sameDate(d, activeDate)) setActiveDate(currentDate); // closed the active view → back to the present
+    if (sameDate(d, activeDate)) {
+      setActiveDate(currentDate); // closed the active view → back to the present
+      if (currentDate.year !== activeDate.year) setResettleToken((n) => n + 1);
+    }
   };
 
   // Keep exactly one current-year pill, equal to `currentDate` (so its month
@@ -3404,6 +3398,7 @@ export default function MediaMap() {
   const onExploreMap = () => {
     const target = timelineFocus;
     setActiveDate(target);
+    setFlyIntroToken((n) => n + 1); // direct Time-Machine explore → fly out from the wells
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
     setTimelineOpen(false);
   };
@@ -3730,8 +3725,25 @@ export default function MediaMap() {
       const halfExtentPx = Math.max(maxWordPx, heightPx) / 2;
       result[c.name] = halfExtentPx * naturalSlideUnitsPerPx;
     }
+    // Text-only entity nodes (Sanity sub-brands) were missing from this map
+    // entirely — they got no `labelRadii` entry, so the physics hook fell back to
+    // one fixed `entityRadius` constant for every entity regardless of its actual
+    // name length. A short entity ("NEON") was fine; a long one ("Indian Premiere
+    // League", "BeMedia Canada") had no real per-label spacing and clustered/
+    // overlapped its neighbors. Measure them the same way (single line — entities
+    // never show a valuation line).
+    for (const e of sanity?.entities ?? []) {
+      const words = e.name.trim().split(/\s+/);
+      const maxWordPx = words.reduce(
+        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 500)),
+        0,
+      );
+      const heightPx = words.length * eff.labelSizePx;
+      const halfExtentPx = Math.max(maxWordPx, heightPx) / 2;
+      result[e.name] = halfExtentPx * naturalSlideUnitsPerPx;
+    }
     return result;
-  }, [displayedCompanies, eff.labelSizePx, naturalSlideUnitsPerPx, containerW]);
+  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, naturalSlideUnitsPerPx, containerW]);
 
   // Adapter: resolve the sheet's companies into map-core's data-source-agnostic
   // LayoutInput (visible-only, with each planet's default center, hue, and style
@@ -3832,6 +3844,9 @@ export default function MediaMap() {
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
     restartToken: physicsBump,
+    resettleToken,
+    flyIntroToken,
+    layoutKey: String(activeDate.year),
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -4479,123 +4494,74 @@ export default function MediaMap() {
     animateView(1, { x: 0, y: 0 }, 1100);
   };
 
-  // Export the current map as a 1920×1080 PNG. Clones the live map SVG, reframes
-  // it to a 16:9 viewBox around the current view, embeds the fonts, rasterizes to
-  // a canvas over the map's background gradient, and downloads it.
+  // === Static PNG export (see exportMap.tsx) ===
+  // Pre-rendered in the background from the settled PRESENT-year layout and
+  // cached, so the About-modal download is instant. Regenerated (debounced)
+  // whenever the present layout, label size, connections or sector set change.
+  // No physics re-run and no live-state mutation: the export takes the on-screen
+  // composition and applies a deterministic label-aware de-overlap pass.
+  const isPresentYear = activeDate.year === currentDate.year;
+  const exportCacheRef = useRef<{ key: string; blob: Blob } | null>(null);
+  const exportInFlightRef = useRef<Promise<Blob | null> | null>(null);
+  const exportKey = useMemo(
+    () =>
+      nodes
+        .map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`)
+        .join("|") +
+      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}`,
+    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled],
+  );
+  const generateExportPng = useCallback(async (): Promise<Blob | null> => {
+    // Let an in-flight render finish first, then re-check: it may have produced
+    // exactly this key (or a stale one, in which case we build the fresh one).
+    if (exportInFlightRef.current) await exportInFlightRef.current;
+    if (exportCacheRef.current?.key === exportKey) return exportCacheRef.current.blob;
+    const run = buildExportPng({
+      nodes,
+      connections: effectiveConnections,
+      labelSizePx,
+      bounds: physicsBounds,
+      year: currentDate.year,
+      sectors: allSectors,
+      counts,
+    })
+      .then((blob) => {
+        if (blob) exportCacheRef.current = { key: exportKey, blob };
+        return blob;
+      })
+      .finally(() => {
+        exportInFlightRef.current = null;
+      });
+    exportInFlightRef.current = run;
+    return run;
+  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts]);
+
+  // Background pre-render: desktop, present year, map mode, not authoring.
+  // Debounced so the settle's per-tick node updates don't each kick off a 4K
+  // rasterization — it runs ~2.5s after the layout stops moving.
+  useEffect(() => {
+    if (isMobile || isEditMode || mobileEdit || layoutMode !== "map" || !isPresentYear || nodes.length === 0) return;
+    const t = window.setTimeout(() => {
+      void generateExportPng();
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [generateExportPng, isMobile, isEditMode, mobileEdit, layoutMode, isPresentYear, nodes.length]);
+
+  // Download the PRESENT map as a 3840×2160 (16:9) PNG. On the present year this
+  // is the cached render (instant) or a fresh one if the layout changed since; on
+  // a Time Machine year it serves the last cached present render (the export is
+  // present-only), building from the current layout only as a last resort.
   const downloadMapImage = async () => {
-    const svg = mapSvgRef.current;
-    if (!svg) return;
-    const W = 3840, H = 2160;
-    // Present map → "YYYY-MM"; past years → just "YYYY" (matches the on-map label).
-    const dateStr = activeDate.year === currentDate.year
-      ? `${activeDate.year}-${String(activeDate.month).padStart(2, "0")}`
-      : `${activeDate.year}`;
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    // 16:9 viewBox centered on the current view so the export fills the frame.
-    const targetAspect = W / H;
-    const viewAspect = view.w / view.h;
-    let exW: number, exH: number;
-    if (viewAspect > targetAspect) { exW = view.w; exH = view.w / targetAspect; }
-    else { exH = view.h; exW = view.h * targetAspect; }
-    const exX = view.x + view.w / 2 - exW / 2;
-    const exY = view.y + view.h / 2 - exH / 2;
-    clone.setAttribute("viewBox", `${exX} ${exY} ${exW} ${exH}`);
-    clone.setAttribute("width", String(W));
-    clone.setAttribute("height", String(H));
-    clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-
-    // Chrome taints a canvas drawn from ANY SVG that contains <foreignObject>, so
-    // convert the (foreignObject) planet labels to native SVG <text>: word-stacked
-    // name + valuation, centered on the planet, keeping the black outline.
-    const SVGNS = "http://www.w3.org/2000/svg";
-    clone.querySelectorAll("foreignObject").forEach((fo) => {
-      const x = parseFloat(fo.getAttribute("x") || "0");
-      const y = parseFloat(fo.getAttribute("y") || "0");
-      const w = parseFloat(fo.getAttribute("width") || "0");
-      const h = parseFloat(fo.getAttribute("height") || "0");
-      const styled = fo.querySelector("div") as HTMLElement | null;
-      const fs = (styled && parseFloat(styled.style.fontSize)) || 12;
-      const fill = styled?.style.color || "#fff";
-      const strokeW =
-        parseFloat(styled?.style.getPropertyValue("-webkit-text-stroke-width") || "") ||
-        parseFloat(styled?.style.getPropertyValue("-webkit-text-stroke") || "") ||
-        fs * 0.1;
-      const lines: string[] = [];
-      fo.querySelectorAll("div").forEach((d) => {
-        if (d.children.length === 0) {
-          const t = (d.textContent || "").trim();
-          if (t) lines.push(t);
-        }
-      });
-      if (!lines.length) { fo.remove(); return; }
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      const text = document.createElementNS(SVGNS, "text");
-      text.setAttribute("x", String(cx));
-      text.setAttribute("text-anchor", "middle");
-      text.setAttribute("dominant-baseline", "central");
-      text.setAttribute("font-family", '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif');
-      text.setAttribute("font-weight", "700");
-      text.setAttribute("font-size", String(fs));
-      text.setAttribute("fill", fill);
-      text.setAttribute("stroke", "#000");
-      text.setAttribute("stroke-width", String(strokeW));
-      text.setAttribute("paint-order", "stroke");
-      const y0 = cy - ((lines.length - 1) * fs) / 2;
-      lines.forEach((line, i) => {
-        const ts = document.createElementNS(SVGNS, "tspan");
-        ts.setAttribute("x", String(cx));
-        if (i === 0) ts.setAttribute("y", String(y0));
-        else ts.setAttribute("dy", String(fs));
-        ts.textContent = line;
-        text.appendChild(ts);
-      });
-      fo.replaceWith(text);
-    });
-
-    const fontCss = await buildMapFontCss();
-    if (fontCss) {
-      const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
-      styleEl.textContent = fontCss;
-      clone.insertBefore(styleEl, clone.firstChild);
+    let blob =
+      isPresentYear && layoutMode === "map"
+        ? await generateExportPng()
+        : (exportCacheRef.current?.blob ?? null);
+    if (!blob) {
+      console.warn("[media-map] no present-year export cached; rendering the current layout instead");
+      blob = await generateExportPng();
     }
-
-    const svgStr = new XMLSerializer().serializeToString(clone);
-    const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" }));
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { URL.revokeObjectURL(svgUrl); return; }
-      const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, "#1E0300");
-      g.addColorStop(0.51, "#010C4C");
-      g.addColorStop(1, "#070010");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      ctx.drawImage(img, 0, 0, W, H);
-      URL.revokeObjectURL(svgUrl);
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const a = document.createElement("a");
-        const href = URL.createObjectURL(blob);
-        a.href = href;
-        a.download = `media-universe-${dateStr}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(href);
-      }, "image/png");
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(svgUrl);
-      console.warn("[media-map] map export failed to rasterize");
-    };
-    img.src = svgUrl;
+    if (!blob) return;
+    downloadBlob(blob, `media-universe-${currentDate.year}.png`);
   };
 
   // Zoom + center on the bounding box of all planets in a sector.
@@ -4828,25 +4794,7 @@ export default function MediaMap() {
             preserveAspectRatio="xMidYMid meet"
             style={{ display: "block" }}
           >
-            <defs>
-              <pattern
-                id="starfield"
-                x="0"
-                y="0"
-                width="180"
-                height="180"
-                patternUnits="userSpaceOnUse"
-              >
-                <circle cx="14" cy="29" r="0.7" fill="white" opacity="0.8" />
-                <circle cx="74" cy="61" r="0.4" fill="white" opacity="0.6" />
-                <circle cx="120" cy="14" r="0.6" fill="white" opacity="0.5" />
-                <circle cx="42" cy="111" r="0.5" fill="white" opacity="0.7" />
-                <circle cx="151" cy="98" r="0.3" fill="white" opacity="0.45" />
-                <circle cx="167" cy="142" r="0.7" fill="white" opacity="0.65" />
-                <circle cx="93" cy="156" r="0.4" fill="white" opacity="0.5" />
-                <circle cx="32" cy="68" r="0.3" fill="white" opacity="0.4" />
-              </pattern>
-            </defs>
+            <StarfieldDefs />
 
             <rect
               x={canvas.x}
@@ -5670,6 +5618,7 @@ export default function MediaMap() {
         detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}
         lastUpdated={inspectedPlanet ? lastUpdatedByName.get(inspectedPlanet) : undefined}
         history={inspectedHistory}
+        isPresent={activeDate.year === currentDate.year}
         onClose={() => { setInspectedPlanet(null); resetView(); }}
       />
 

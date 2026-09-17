@@ -242,6 +242,23 @@ export function vitalActiveAt(v: {start_date?: string; end_date?: string}, at: M
   return windowActiveAt(v.start_date, v.end_date, at)
 }
 
+// Sanity returns BOTH the published doc and its `drafts.<id>` copy for any doc
+// with unpublished edits — which would render that company/entity twice on the
+// map. Collapse each underlying document to one, preferring the draft so the
+// editor reflects your unpublished changes.
+const baseDocId = (id: string) => (id.startsWith('drafts.') ? id.slice(7) : id)
+function preferDrafts<T extends {_id: string}>(docs: T[]): T[] {
+  const byBase = new Map<string, T>()
+  for (const d of docs) {
+    const base = baseDocId(d._id)
+    const existing = byBase.get(base)
+    if (!existing || (d._id.startsWith('drafts.') && !existing._id.startsWith('drafts.'))) {
+      byBase.set(base, d)
+    }
+  }
+  return [...byBase.values()]
+}
+
 function buildMapData(
   sectors: RawSector[],
   companies: RawCompany[],
@@ -386,7 +403,16 @@ export function useSanityMapData(): {data: MapData | null; error: string | null}
           client.fetch<RawEntity[]>(ENTITIES_Q),
           client.fetch<RawMapSettings>(SETTINGS_Q),
         ])
-        if (!cancelled) setData(buildMapData(sectors, companies, connections, entities, settings))
+        if (!cancelled)
+          setData(
+            buildMapData(
+              preferDrafts(sectors),
+              preferDrafts(companies),
+              preferDrafts(connections),
+              preferDrafts(entities),
+              settings,
+            ),
+          )
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
       }

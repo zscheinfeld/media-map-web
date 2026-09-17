@@ -7,6 +7,10 @@ export type SaveBarProps = {
   saveError: string | null
   onSave: () => void
   onReset: () => void
+  /** Drag offset from the default top-right anchor (px). */
+  offset?: {dx: number; dy: number}
+  /** Grab the header to drag the panel out of the way. */
+  onHeaderMouseDown?: (e: React.MouseEvent) => void
 }
 
 /**
@@ -14,7 +18,15 @@ export type SaveBarProps = {
  * locally (PendingState); Save batch-commits them; Reset discards. Lists each
  * pending change in plain text below the buttons. Disabled when nothing's staged.
  */
-export function SaveBar({changes, isSaving, saveError, onSave, onReset}: SaveBarProps) {
+export function SaveBar({
+  changes,
+  isSaving,
+  saveError,
+  onSave,
+  onReset,
+  offset = {dx: 0, dy: 0},
+  onHeaderMouseDown,
+}: SaveBarProps) {
   const hasPending = changes.length > 0
   return (
     <Card
@@ -27,10 +39,16 @@ export function SaveBar({changes, isSaving, saveError, onSave, onReset}: SaveBar
         right: 12,
         width: 280,
         background: 'rgba(7,14,32,0.92)',
+        transform: `translate(${offset.dx}px, ${offset.dy}px)`,
       }}
     >
       <Stack space={3}>
-        <Flex justify="space-between" align="center">
+        <Flex
+          justify="space-between"
+          align="center"
+          onMouseDown={onHeaderMouseDown}
+          style={{cursor: onHeaderMouseDown ? 'move' : undefined, userSelect: 'none'}}
+        >
           <Text
             size={0}
             weight="semibold"

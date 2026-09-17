@@ -153,6 +153,22 @@ export function MapEditorTool() {
     document.addEventListener('mouseup', onUp)
   }
 
+  // Draggable offset for the Changes (SaveBar) panel, top-right anchored — grab its
+  // header to move it out of the way.
+  const [changesOffset, setChangesOffset] = useState({dx: 0, dy: 0})
+  const onChangesHeaderMouseDown = (e: React.MouseEvent) => {
+    const start = {sx: e.clientX, sy: e.clientY, dx0: changesOffset.dx, dy0: changesOffset.dy}
+    const onMove = (ev: MouseEvent) => {
+      setChangesOffset({dx: start.dx0 + (ev.clientX - start.sx), dy: start.dy0 + (ev.clientY - start.sy)})
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
   // Aspect ratio: Desktop (16:9-ish, the live site) vs Square (mobile). Square uses
   // the square canvas + each sector's mobile_center + each planet's
   // mobile_position_overrides, and drags save to the mobile field.
@@ -622,6 +638,16 @@ export function MapEditorTool() {
       // seeded with the active position so the pin "takes effect from this
       // moment forward" without moving the planet.
       setPending((prev) => editAt(prev, carrierFor(selectedCompany), moment, {pin: next}, positionField))
+    },
+    [selectedCompany, moment, isSquare, positionField],
+  )
+
+  const onSetPosition = useCallback(
+    (x: number, y: number) => {
+      if (!selectedCompany) return
+      // Same path as a drag-commit, but with typed coordinates — mutates the
+      // override at `moment` (or seeds one), preserving its pin flag.
+      setPending((prev) => editAt(prev, carrierFor(selectedCompany), moment, {x, y}, positionField))
     },
     [selectedCompany, moment, isSquare, positionField],
   )
@@ -1114,6 +1140,8 @@ export function MapEditorTool() {
           saveError={saveError}
           onSave={onSave}
           onReset={onReset}
+          offset={changesOffset}
+          onHeaderMouseDown={onChangesHeaderMouseDown}
         />
       )}
 
@@ -1149,8 +1177,10 @@ export function MapEditorTool() {
           isActiveAtCurrentMoment={isActiveAtCurrentMoment}
           currentMoment={moment}
           onTogglePin={onTogglePin}
+          onSetPosition={onSetPosition}
           onClearAtCurrentMoment={onClearAtCurrentMoment}
           onClose={() => setSelectedName(null)}
+          offset={changesOffset}
         />
       )}
 

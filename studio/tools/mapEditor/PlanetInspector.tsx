@@ -1,4 +1,5 @@
-import {Box, Button, Card, Flex, Stack, Switch, Text} from '@sanity/ui'
+import {Box, Button, Card, Flex, Stack, Switch, Text, TextInput} from '@sanity/ui'
+import {useEffect, useState} from 'react'
 import {formatMomentYear, type Moment} from './moment'
 import type {ResolvedOverride} from './pendingChanges'
 import type {EditorCompany} from './sanityMapData'
@@ -14,9 +15,77 @@ export type PlanetInspectorProps = {
   /** The current global moment, used in labels + button copy. */
   currentMoment: Moment
   onTogglePin: (next: boolean) => void
+  /** Set exact coordinates at the current moment (for precise alignment). */
+  onSetPosition: (x: number, y: number) => void
   /** Remove the override at the current global moment (no-op if none exists). */
   onClearAtCurrentMoment: () => void
   onClose: () => void
+  /** Drag offset shared with the Changes panel, so the two move together. */
+  offset?: {dx: number; dy: number}
+}
+
+/**
+ * Editable X / Y for the active override, so coordinates can be typed exactly
+ * (e.g. give two planets the same X to line them up). Commits on blur / Enter;
+ * re-syncs whenever the underlying override changes (different planet/moment/drag).
+ */
+function PositionEditor({
+  override,
+  onSet,
+}: {
+  override: ResolvedOverride
+  onSet: (x: number, y: number) => void
+}) {
+  const [x, setX] = useState(String(Math.round(override.x)))
+  const [y, setY] = useState(String(Math.round(override.y)))
+  useEffect(() => {
+    setX(String(Math.round(override.x)))
+    setY(String(Math.round(override.y)))
+  }, [override.key, override.x, override.y])
+
+  const commit = () => {
+    const nx = Number(x)
+    const ny = Number(y)
+    if (Number.isFinite(nx) && Number.isFinite(ny) && (nx !== override.x || ny !== override.y)) {
+      onSet(nx, ny)
+    }
+  }
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') e.currentTarget.blur()
+  }
+
+  return (
+    <Flex gap={2}>
+      <Box style={{flex: 1}}>
+        <Text size={0} muted style={{marginBottom: 4}}>
+          X
+        </Text>
+        <TextInput
+          fontSize={1}
+          padding={2}
+          value={x}
+          inputMode="numeric"
+          onChange={(e) => setX(e.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+        />
+      </Box>
+      <Box style={{flex: 1}}>
+        <Text size={0} muted style={{marginBottom: 4}}>
+          Y
+        </Text>
+        <TextInput
+          fontSize={1}
+          padding={2}
+          value={y}
+          inputMode="numeric"
+          onChange={(e) => setY(e.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+        />
+      </Box>
+    </Flex>
+  )
 }
 
 const ESHAP_KIND_LABEL: Record<string, string> = {
@@ -48,9 +117,12 @@ export function PlanetInspector({
   isActiveAtCurrentMoment,
   currentMoment,
   onTogglePin,
+  onSetPosition,
   onClearAtCurrentMoment,
   onClose,
+  offset = {dx: 0, dy: 0},
 }: PlanetInspectorProps) {
+  const [collapsed, setCollapsed] = useState(false)
   if (!selectedCompany) return null
   const momentLabel = formatMomentYear(currentMoment)
   // Related content — not time-bound; shown newest-first.
@@ -74,6 +146,7 @@ export function PlanetInspector({
         background: '#070e20',
         maxHeight: 'calc(100% - 110px)',
         overflow: 'auto',
+        transform: `translate(${offset.dx}px, ${offset.dy}px)`,
       }}
     >
       <Stack space={4}>
@@ -85,11 +158,22 @@ export function PlanetInspector({
               {selectedCompany.name}
             </Text>
           </Box>
-          <Box style={{flex: '0 0 auto'}}>
+          <Flex style={{flex: '0 0 auto'}} gap={1}>
+            <Button
+              mode="bleed"
+              tone="default"
+              text={collapsed ? '▸' : '▾'}
+              title={collapsed ? 'Expand' : 'Collapse'}
+              onClick={() => setCollapsed((c) => !c)}
+              padding={2}
+              fontSize={1}
+            />
             <Button mode="bleed" tone="default" text="✕" onClick={onClose} padding={2} fontSize={1} />
-          </Box>
+          </Flex>
         </Flex>
 
+        {collapsed ? null : (
+          <>
         {/* Description — Evan's context blurb (not time-bound). */}
         {selectedCompany.description && (
           <Text size={1} style={{color: 'rgba(255,255,255,0.78)', lineHeight: 1.4}}>
@@ -139,10 +223,11 @@ export function PlanetInspector({
             At {momentLabel}
           </Text>
           {activeOverride ? (
-            <Text size={1} style={{color: '#fff', fontVariantNumeric: 'tabular-nums'}}>
-              ({Math.round(activeOverride.x)}, {Math.round(activeOverride.y)})
-              {activeOverride.pin ? ' · pinned' : ''}
-            </Text>
+            <PositionEditor
+              key={activeOverride.key}
+              override={activeOverride}
+              onSet={onSetPosition}
+            />
           ) : (
             <Text size={1} muted>
               No position yet — drag to place.
@@ -248,6 +333,8 @@ export function PlanetInspector({
             </Stack>
           )}
         </Stack>
+          </>
+        )}
       </Stack>
     </Card>
   )
