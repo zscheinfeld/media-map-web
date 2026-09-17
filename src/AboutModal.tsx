@@ -305,6 +305,29 @@ export function AboutModal({
     setActive(i);
   };
 
+  // Close (✕) button. Placed inside the header on desktop, and above the card on
+  // mobile, where the narrower title would otherwise run into it.
+  const closeButton = (
+    <button
+      onClick={onClose}
+      aria-label="Close"
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        background: narrow ? CARD_BG : "rgba(255,255,255,0.06)",
+        border: "1px solid rgba(255,255,255,0.16)",
+        color: "white",
+        fontSize: 18,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      ✕
+    </button>
+  );
+
   const hrefFor = (b: { action: "link" | "download"; url: string }) =>
     b.action === "download" ? undefined : b.url;
   const onClickFor = (b: { action: "link" | "download" }) =>
@@ -385,15 +408,32 @@ export function AboutModal({
         fontFamily: FONT,
       }}
     >
+      {/* Wrapper holds the card (and, on mobile, the close button above it) so
+          the pair shares one height cap and stays centered together. */}
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
-          position: "relative",
           width: "min(800px, 100%)",
           // `dvh` tracks the VISIBLE viewport (excludes mobile browser toolbars);
           // plain `vh` is the full screen on iOS Safari, so the card ran under
           // the URL bar and bottom toolbar. Mobile also gets a shorter cap.
           maxHeight: narrow ? "min(80dvh, 720px)" : "min(90dvh, 900px)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+      {/* Mobile: the close button sits above the card, clear of the title. */}
+      {narrow && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10, flex: "0 0 auto" }}>
+          {closeButton}
+        </div>
+      )}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative",
+          width: "100%",
+          flex: "1 1 auto",
+          minHeight: 0, // let the card shrink so its body scrolls within the cap
           display: "flex",
           flexDirection: "column",
           background: CARD_BG,
@@ -420,27 +460,8 @@ export function AboutModal({
             <br />
             Media Universe
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              position: "absolute",
-              top: 24,
-              right: 24,
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.16)",
-              color: "white",
-              fontSize: 18,
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            ✕
-          </button>
+          {/* Desktop: close button in the header's top-right corner. */}
+          {!narrow && <div style={{ position: "absolute", top: 24, right: 24 }}>{closeButton}</div>}
         </div>
 
         {/* Scroll body: hero photo → sticky tabs → sections. */}
@@ -586,6 +607,7 @@ export function AboutModal({
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
