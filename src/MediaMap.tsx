@@ -3747,39 +3747,44 @@ export default function MediaMap() {
   const labelRadii = useMemo(() => {
     if (naturalSlideUnitsPerPx === 1 && containerW === 0) return {};
     const result: Record<string, number> = {};
-    // Match Planet's rendering: lineHeight = 1.0, name at fontWeight 500 (Medium), Franklin Gothic.
-    // Large Cap planets also render a valuation line below the name (with a
-    // small top margin), so they get one extra line of height.
-    for (const c of displayedCompanies) {
-      const words = c.name.trim().split(/\s+/);
+    // LINEAR mode is one horizontal strip, so a label's WIDTH is what decides
+    // whether neighbours collide — and it has to be the width actually DRAWN:
+    //  • at the rendered font size (the site draws the local `labelSizePx`, scaled
+    //    by zoom — not the smaller Sanity-saved size the map-mode physics measures);
+    //  • at the CURRENT zoom: labels are a constant pixel size, but Linear's zoom
+    //    changes how many slide units a pixel covers (viewBox height = canvas.h /
+    //    zoom), so zooming out makes every label wider in layout terms;
+    //  • including the 2% name tracking, plus a few px of breathing room.
+    // Map mode keeps its existing measurement so the authored layout is unchanged.
+    const linear = layoutMode === "linear";
+    const fontPx = linear ? labelSizePx * labelScaleForZoom(zoom) : eff.labelSizePx;
+    const suPerPx = linear && containerH > 0 ? canvas.h / zoom / containerH : naturalSlideUnitsPerPx;
+    const LINEAR_LABEL_PAD_PX = 4;
+    const halfExtent = (label: string, extraLines: number) => {
+      const words = label.trim().split(/\s+/);
       const maxWordPx = words.reduce(
-        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 500)),
+        (m, w) => Math.max(m, measureLabelTextWidth(w, fontPx, 500) + (linear ? 0.02 * fontPx * w.length : 0)),
         0,
       );
-      const lineCount = words.length + (c.sector === "Large Cap" ? 1 : 0);
-      const heightPx = lineCount * eff.labelSizePx;
-      const halfExtentPx = Math.max(maxWordPx, heightPx) / 2;
-      result[c.name] = halfExtentPx * naturalSlideUnitsPerPx;
+      if (linear) return (maxWordPx / 2 + LINEAR_LABEL_PAD_PX) * suPerPx;
+      // Map mode — match Planet's rendering: lineHeight = 1.0, one word per line;
+      // Large Cap planets also render a valuation line, so one extra line of height.
+      const heightPx = (words.length + extraLines) * fontPx;
+      return (Math.max(maxWordPx, heightPx) / 2) * suPerPx;
+    };
+    for (const c of displayedCompanies) {
+      // Linear measures the text that's drawn (the "convert to USD" authoring
+      // marker is stripped from the label); map mode keeps measuring the full name.
+      const label = linear ? usdFlag(c.name).display : c.name;
+      result[c.name] = halfExtent(label, c.sector === "Large Cap" ? 1 : 0);
     }
     // Text-only entity nodes (Sanity sub-brands) were missing from this map
     // entirely — they got no `labelRadii` entry, so the physics hook fell back to
     // one fixed `entityRadius` constant for every entity regardless of its actual
-    // name length. A short entity ("NEON") was fine; a long one ("Indian Premiere
-    // League", "BeMedia Canada") had no real per-label spacing and clustered/
-    // overlapped its neighbors. Measure them the same way (single line — entities
-    // never show a valuation line).
-    for (const e of sanity?.entities ?? []) {
-      const words = e.name.trim().split(/\s+/);
-      const maxWordPx = words.reduce(
-        (m, w) => Math.max(m, measureLabelTextWidth(w, eff.labelSizePx, 500)),
-        0,
-      );
-      const heightPx = words.length * eff.labelSizePx;
-      const halfExtentPx = Math.max(maxWordPx, heightPx) / 2;
-      result[e.name] = halfExtentPx * naturalSlideUnitsPerPx;
-    }
+    // name length. Measure them the same way (entities never show a valuation line).
+    for (const e of sanity?.entities ?? []) result[e.name] = halfExtent(e.name, 0);
     return result;
-  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, naturalSlideUnitsPerPx, containerW]);
+  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, naturalSlideUnitsPerPx, containerW, containerH, layoutMode, zoom, labelSizePx, canvas]);
 
   // Adapter: resolve the sheet's companies into map-core's data-source-agnostic
   // LayoutInput (visible-only, with each planet's default center, hue, and style
@@ -3891,7 +3896,7 @@ export default function MediaMap() {
     if (layoutMode !== "linear") return canvas.w;
     let maxRight = canvas.x + canvas.w;
     for (const n of nodes) {
-      const right = n.x + n.r + 80;
+      const right = n.x + Math.max(n.r, n.labelRadius ?? 0) + 80;
       if (right > maxRight) maxRight = right;
     }
     return Math.max(canvas.w, maxRight - canvas.x);
