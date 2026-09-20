@@ -67,6 +67,8 @@ export type ValuationType = "market_cap" | "fundraising_valuation" | "yearly_rev
 type RawCompany = {
   name: string
   slug?: string
+  /** Exchange ticker — lets search find a company by symbol (e.g. TGNA). */
+  ticker?: string
   description?: string
   sector?: RawSector | null
   planet_style?: SanityPlanetStyle
@@ -199,6 +201,8 @@ export type ResolvedSanityMap = {
   squareSettings: ResolvedKnobs | null
   /** Side-panel content per company (vitals filtered to T; content newest-first). */
   detailByName: Record<string, CompanyDetail>
+  /** name → ticker, for search-by-symbol. */
+  tickerByName: Record<string, string>
 }
 
 const byDateDesc = (a: {published_date?: string}, b: {published_date?: string}) =>
@@ -215,6 +219,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   const mobilePositions: ResolvedSanityMap["mobilePositions"] = {}
   const mobileCenterBySector: ResolvedSanityMap["mobileCenterBySector"] = {}
   const detailByName: Record<string, CompanyDetail> = {}
+  const tickerByName: Record<string, string> = {}
 
   const noteSector = (sector: RawSector | null | undefined, name: string) => {
     if (!hueBySector[name]) hueBySector[name] = hashHue(name)
@@ -237,6 +242,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     const sectorName = c.sector?.name ?? "Uncategorized"
     noteSector(c.sector, sectorName)
     companies.push({name: c.name, sector: sectorName, slug: c.slug})
+    if (c.ticker) tickerByName[c.name] = c.ticker
     styleByName[c.name] = mergeStyle(toCoreStyle(c.sector?.default_style), toCoreStyle(c.planet_style))
     const activePos = activeAt(c.position_overrides ?? [], at, overrideMoment)
     if (activePos) positions[c.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
@@ -304,7 +310,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   // Square knobs forward-propagate independently of desktop's.
   const squareSettings = toKnobs(activeAt(raw.settings?.square_overrides ?? [], at, overrideMoment))
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName}
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
@@ -324,6 +330,7 @@ const STYLE_PROJ = `{
 }`
 const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
 const COMPANIES_Q = `*[_type == "company"]{
+  ticker,
   name, "slug": slug.current, description,
   sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
   "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date},

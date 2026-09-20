@@ -25,6 +25,9 @@ export type PlanetProps = {
    *  diameter threshold can't reveal them on zoom — the caller drives this from a
    *  zoom threshold instead (e.g. hidden on mobile until zoomed in). */
   entityLabelSuppressed?: boolean
+  /** Search match: always show the label (even on planets small enough to hide
+   *  it). The match reads through everything else dimming, not a colour change. */
+  highlighted?: boolean
 }
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
@@ -45,6 +48,7 @@ export function Planet({
   labelSuppressed = false,
   labelMinScreenDiameter = 0,
   entityLabelSuppressed = false,
+  highlighted = false,
 }: PlanetProps) {
   const safeName = node.name.replace(/[^a-z0-9]/gi, "_")
   const gradId = `planet-${safeName}`
@@ -59,7 +63,7 @@ export function Planet({
   const glowSpread = glow ? (glow.spreadPx ?? 4) * slideUnitsPerPx : 0
   const labelFontPx = labelSizePx * slideUnitsPerPx
   const screenDiameter = (node.r * 2) / slideUnitsPerPx
-  const showLabel = isHovered || (!labelSuppressed && screenDiameter >= labelMinScreenDiameter)
+  const showLabel = isHovered || highlighted || (!labelSuppressed && screenDiameter >= labelMinScreenDiameter)
 
   // Reusable name label as native SVG <text> (word-stacked, coloured fill + black
   // outline). SVG text scales correctly with the viewBox on every browser —
@@ -156,7 +160,7 @@ export function Planet({
         {/* Entities are all-label. Hidden when the caller suppresses them (e.g.
             mobile, zoomed out); revealed on hover, in edit mode, or once the
             caller stops suppressing (zoomed in past its threshold). */}
-        {(isEditMode || isHovered || !entityLabelSuppressed) && renderNameLabel(false)}
+        {(isEditMode || isHovered || highlighted || !entityLabelSuppressed) && renderNameLabel(false)}
       </g>
     )
   }
