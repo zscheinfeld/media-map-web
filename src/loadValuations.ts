@@ -202,31 +202,42 @@ function healFromSnapshot(live: ValuationLoad, snapshot: ValuationLoad): number 
   return healed
 }
 
+/** The daily snapshot (same-origin, cached): the BASELINE the map paints from.
+ *  Null only if the file is missing or unparseable — it's committed to the repo,
+ *  so in practice this resolves in tens of milliseconds. */
+export async function fetchSnapshotValuations(): Promise<ValuationLoad | null> {
+  try {
+    return parseValuationCsv(await fetchCsvText(SNAPSHOT_URL, 2, "default"))
+  } catch {
+    return null
+  }
+}
+
+export type LiveResult =
+  | {load: ValuationLoad; source: "live" | "live+snapshot"; detail?: string}
+  | {error: string}
+
 /**
- * Load valuations: the live published sheet (re-fetched for a fuller copy if it
- * looks degraded), healed cell-by-cell from the daily same-origin snapshot; the
- * snapshot alone if the live fetch fails outright. Throws only if BOTH fail, in
- * which case the caller stays on the legacy code-bundled values.
+ * The live published sheet, healed cell-by-cell from the snapshot. A degraded
+ * copy (see isDegraded) is healed immediately when a snapshot exists; only when
+ * there's nothing to heal from is it worth re-fetching for a fuller copy.
  */
-export async function loadValuations(): Promise<ValuationLoad & {source: ValuationSource; detail?: string}> {
-  if (!CSV_URL) return {values: new Map(), hidden: new Map(), lastUpdated: new Map(), source: "legacy"}
-
-  // The snapshot is same-origin and small; fetch it alongside the live sheet so
-  // healing never waits on a second round trip. Failure here is non-fatal.
-  const snapshotP: Promise<ValuationLoad | null> = fetchCsvText(SNAPSHOT_URL, 2, "default")
-    .then((t) => parseValuationCsv(t))
-    .catch(() => null)
-
-  let live: ValuationLoad | null = null
-  let liveError: string | undefined
+export async function fetchLiveValuations(snapshotP: Promise<ValuationLoad | null>): Promise<LiveResult> {
+  if (!CSV_URL) return {error: "VITE_VALUATIONS_CSV_URL not set"}
+  let live: ValuationLoad | null
   try {
     live = parseValuationCsv(await fetchCsvText(CSV_URL, LIVE_ATTEMPTS, "no-store"))
-    if (!live) liveError = "live CSV had no slug column"
-    // Degraded copy → try again (up to twice) and keep whichever is fullest. A
-    // healthy copy was measured to come back on roughly one fetch in three.
-    for (let i = 0; live && isDegraded(live) && i < 2; i++) {
-      const year = latestYear(live.values) ?? "?"
-      console.warn(`[media-map] live sheet looks degraded (${fillOf(live.values, year)} ${year} values) — re-fetching`)
+  } catch (e) {
+    return {error: e instanceof Error ? e.message : String(e)}
+  }
+  if (!live) return {error: "live CSV had no slug column"}
+  const snapshot = await snapshotP
+  if (isDegraded(live) && !snapshot) {
+    // Nothing to heal from → try again (up to twice), keeping the fullest copy.
+    // A healthy copy was measured to come back on roughly one fetch in three.
+    const year = latestYear(live.values) ?? "?"
+    for (let i = 0; isDegraded(live) && i < 2; i++) {
+      console.warn(`[media-map] live sheet looks degraded (${fillOf(live.values, year)} ${year} values), no snapshot — re-fetching`)
       await new Promise((r) => setTimeout(r, 1500))
       try {
         const again = parseValuationCsv(await fetchCsvText(CSV_URL, 1, "no-store"))
@@ -235,21 +246,29 @@ export async function loadValuations(): Promise<ValuationLoad & {source: Valuati
         /* keep what we have */
       }
     }
-  } catch (e) {
-    liveError = e instanceof Error ? e.message : String(e)
+    return {load: live, source: "live", detail: isDegraded(live) ? "degraded copy, no snapshot to heal from" : undefined}
   }
+  const healed = snapshot ? healFromSnapshot(live, snapshot) : 0
+  return healed > 0
+    ? {load: live, source: "live+snapshot", detail: `${healed} blank cell(s) filled from the daily snapshot`}
+    : {load: live, source: "live"}
+}
 
+/**
+ * One-shot resolution (used by tooling/tests): the live sheet healed from the
+ * snapshot, else the snapshot alone. Throws only if BOTH are unavailable. The
+ * app's hook below streams the same two sources instead — snapshot first for an
+ * instant, correct first paint, then the live upgrade in place.
+ */
+export async function loadValuations(): Promise<ValuationLoad & {source: ValuationSource; detail?: string}> {
+  if (!CSV_URL) return {values: new Map(), hidden: new Map(), lastUpdated: new Map(), source: "legacy"}
+  const snapshotP = fetchSnapshotValuations()
+  const live = await fetchLiveValuations(snapshotP)
+  if ("load" in live) return {...live.load, source: live.source, detail: live.detail}
+  console.warn(`[media-map] live valuations sheet unavailable (${live.error}) — using the daily snapshot`)
   const snapshot = await snapshotP
-  if (live) {
-    if (!snapshot) return {...live, source: "live", detail: isDegraded(live) ? "degraded copy, no snapshot to heal from" : undefined}
-    const healed = healFromSnapshot(live, snapshot)
-    return healed > 0
-      ? {...live, source: "live+snapshot", detail: `${healed} blank cell(s) filled from the daily snapshot`}
-      : {...live, source: "live"}
-  }
-  console.warn(`[media-map] live valuations sheet unavailable (${liveError}) — using the daily snapshot`)
-  if (snapshot) return {...snapshot, source: "snapshot", detail: liveError}
-  throw new Error(`live: ${liveError}; snapshot: unavailable`)
+  if (snapshot) return {...snapshot, source: "snapshot", detail: live.error}
+  throw new Error(`live: ${live.error}; snapshot: unavailable`)
 }
 
 /** True if the sheet explicitly hid this company for the given year (a "-" cell). */
@@ -301,32 +320,53 @@ export function useValuations(): {
   useEffect(() => {
     if (!isValuationsConfigured()) return
     let cancelled = false
+    let haveLive = false
     const note = (source: ValuationSource, detail?: string) => {
       const w = window as unknown as {__mediaMapValuations?: unknown}
       w.__mediaMapValuations = {source, detail, loadedAt: new Date().toISOString()}
       const msg = `[media-map] valuations source: ${source}${detail ? ` (${detail})` : ""}`
-      if (source === "live") console.info(msg)
+      if (source === "live" || (source === "snapshot" && detail === "live pending")) console.info(msg)
       else console.warn(msg)
     }
-    loadValuations()
-      .then((res) => {
-        if (!cancelled) {
-          setData(res.values)
-          setHidden(res.hidden)
-          setLastUpdated(res.lastUpdated)
-          setSource(res.source)
-          setLoading(false)
-          note(res.source, res.detail)
-        }
-      })
-      .catch((e) => {
-        console.warn("[media-map] valuations sheet AND snapshot failed — on legacy code-bundled values:", e)
-        if (!cancelled) {
-          setSource("legacy")
-          setLoading(false)
-        }
-        note("legacy", e instanceof Error ? e.message : String(e))
-      })
+    const apply = (load: ValuationLoad, src: ValuationSource, detail?: string) => {
+      setData(load.values)
+      setHidden(load.hidden)
+      setLastUpdated(load.lastUpdated)
+      setSource(src)
+      setLoading(false)
+      note(src, detail)
+    }
+
+    // 1) Snapshot first — same-origin + cached, so the map paints (correctly)
+    //    within tens of ms instead of waiting on Google. Skipped only if the live
+    //    sheet somehow beat it.
+    const snapshotP = fetchSnapshotValuations()
+    snapshotP.then((snap) => {
+      if (!cancelled && snap && !haveLive) apply(snap, "snapshot", "live pending")
+    })
+
+    // 2) Live sheet — upgrades the snapshot in place when it lands (planet sizes
+    //    tween to the fresh values). If it never lands, the snapshot simply stays.
+    fetchLiveValuations(snapshotP).then(async (res) => {
+      if (cancelled) return
+      if ("load" in res) {
+        haveLive = true
+        apply(res.load, res.source, res.detail)
+        return
+      }
+      const snap = await snapshotP
+      if (snap) {
+        // Already painted from the snapshot above; just record why live is absent.
+        setSource("snapshot")
+        setLoading(false)
+        note("snapshot", `live unavailable: ${res.error}`)
+      } else {
+        console.warn("[media-map] valuations sheet AND snapshot failed — on legacy code-bundled values:", res.error)
+        setSource("legacy")
+        setLoading(false)
+        note("legacy", res.error)
+      }
+    })
     return () => {
       cancelled = true
     }

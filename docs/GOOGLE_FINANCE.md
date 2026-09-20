@@ -178,7 +178,7 @@ market-cap source. Keep it around until the sheet is fully on GF; then drop the
 `FMP_API_KEY` dependency. `suggest-tickers.ts` (FMP name search) can still help
 find primary-listing symbols, or retire it too.
 
-## Resilience: degraded publishes + the daily snapshot
+## Resilience: the daily snapshot is the baseline; the live sheet upgrades it
 
 Google's "publish to web" CSV endpoint is not an API, and it fails **two ways**:
 
@@ -197,12 +197,20 @@ Either way the app used to fall through to stale code-bundled values (wrong
 market caps, 173 of 183 companies), and every planet name in the Map Editor
 turned red (no live value → the "not live-sourced" flag). Now:
 
+- **Snapshot first.** The app paints from `public/valuations-snapshot.csv` the
+  moment it loads — same-origin and cached, so within tens of milliseconds and
+  always with a complete roster (no more legacy-sized planets or a missing
+  Space X for the first second). The live sheet then **upgrades it in place**
+  when it lands (planet sizes tween to the fresh values); if the live fetch
+  fails, the snapshot simply stays. The legacy code-bundled values are reached
+  only if the snapshot file itself is missing, which can't happen once deployed.
 - **Quality check + re-fetch.** The app ([src/loadValuations.ts](../src/loadValuations.ts))
   and the Studio editor ([studio/tools/mapEditor/liveValuations.ts](../studio/tools/mapEditor/liveValuations.ts))
   retry outright failures with backoff, treat an HTML body as a failure, and
   detect a degraded copy by comparing the newest year's fill to the previous
-  year's (healthy ≈ 1.0, degraded ≈ 0.35). A degraded copy is re-fetched up to
-  twice, keeping the fullest.
+  year's (healthy ≈ 1.0, degraded ≈ 0.35). A degraded copy is healed from the
+  snapshot immediately; only when there is no snapshot to heal from is it
+  re-fetched (up to twice, keeping the fullest).
 - **Cell-level healing.** Whatever is still blank is filled **per company, per
   year** from the daily snapshot — real-time values where Google delivered
   them, yesterday's where it didn't, never the legacy numbers. Only companies
@@ -217,8 +225,10 @@ turned red (no live value → the "not live-sourced" flag). Now:
   `public/valuations-snapshot.csv`; Netlify deploys it, so it's same-origin. A
   **red run** = Google was failing at that moment; the run history doubles as
   an outage log.
-- **Diagnostics.** The app logs `[media-map] valuations source: live | live+snapshot | snapshot | legacy`
-  (with a detail such as `41 blank cell(s) filled from the daily snapshot`) and
+- **Diagnostics.** The app logs `[media-map] valuations source: …` twice on a
+  normal load — `snapshot (live pending)` at first paint, then `live` or
+  `live+snapshot (N blank cell(s) filled from the daily snapshot)` when the
+  upgrade lands; `snapshot (live unavailable: …)` if it never does — and
   sets `window.__mediaMapValuations = {source, detail, loadedAt}`, so a
   wrong-looking map is diagnosable from the console in seconds.
 
