@@ -1,6 +1,6 @@
 # Launch checklist — remaining steps
 
-*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-18.*
+*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-20.*
 
 The site is **live on the Google Finance sheet** (public app + hosted Studio + Sanity-webhook reconciler). The FMP→GF switch is **done** (§1); everything below it is polish/QA + optional cleanup.
 
@@ -12,7 +12,7 @@ The site is **live on the Google Finance sheet** (public app + hosted Studio + S
 
 **▶ Pick back up here (in order):**
 1. **Author the About Modal content** in Studio + fill the Substack / More-from-Eshap / Feedback links (Studio is redeployed, so the `about` singleton is available).
-2. **Add the `VALUATIONS_CSV_URL` GitHub secret** (same link as Netlify's `VITE_VALUATIONS_CSV_URL`) and run the **Snapshot valuations** workflow once — this turns on the daily snapshot fallback that stops the live site reverting to stale data when Google's CSV endpoint hiccups. Recommended: set `SANITY_STUDIO_VALUATIONS_SNAPSHOT_URL` in the Studio (+ redeploy) so the editor heals blank cells too instead of going all-red during those hiccups. See [GOOGLE_FINANCE.md → Resilience](GOOGLE_FINANCE.md#resilience-the-daily-snapshot-fallback).
+2. ~~Add the `VALUATIONS_CSV_URL` GitHub secret + run the Snapshot valuations workflow; set `SANITY_STUDIO_VALUATIONS_SNAPSHOT_URL` + redeploy Studio~~ — ✅ done 2026-09-20. The daily snapshot is live and is now the map's first-paint baseline (see [GOOGLE_FINANCE.md → Resilience](GOOGLE_FINANCE.md#resilience-the-daily-snapshot-is-the-baseline-the-live-sheet-upgrades-it)).
 3. **Adobe Fonts kit** (§4c) — add the Netlify/prod domain(s) to the kit, and activate **Medium (500) + Demi (600)**. Until the domain is added, the *live* site renders the Libre Franklin fallback, not real Franklin Gothic.
 4. **Historical maps on mobile** (§3) — adjust the year-transition layouts for the mobile/square view.
 5. Then the remaining launch features (§4b: search, dynamic news feed), launch infra (§4c), QA passes (§2/§3/§5), and decisions (paywall, domain, analytics).
@@ -81,6 +81,9 @@ Each is grounded in existing code, not a from-scratch build. Rough effort in bra
 - [ ] **Confirm the paid-gating decision** (freemium Time-Machine paywall) — launch requirement or post-launch? (Not started.)
 
 ---
+
+## Roadmap — data quality
+- [ ] **Plausibility check on Google Finance values** *(~½ day; roadmap, not blocking)*. `GOOGLEFINANCE("…","marketcap")` does not return a stable currency for dual-listed tickers — it may be the home currency or the listing currency, and it can **flip without warning**. Seen 2026-09-20: `NYSE:SONY` returned yen in the morning and dollars by evening, so the sheet's ×JPY rate turned $141B into **$0.90B**; same class as `LON:WPP` and `HKG:9988` (Alibaba showed $35.9B against $363B the year before). The daily snapshot does **not** protect against this — it faithfully copies the wrong number. Plan: in the app loader and `jobs/snapshot-valuations.ts`, distrust a **Google-Finance-sourced** current-year value that is more than ~5× off the previous year's (either direction) and keep the last good value instead; surface the flagged rows in `jobs/gf-audit-metadata.ts` and the console. **Manual rows must be exempt** — Anthropic (5.3×), Kobalt (5.8×) and A+E (0.13×) are real jumps. Until then the manual screen is: compare each company's current year to last year, and confirm suspects by implied share count (raw value ÷ share price in each candidate currency).
 
 ## Post-launch / not blocking
 - Global "Latest from Eshap" feed (Substack/podcast RSS) — the per-company Eshap content stays manual (see §4b).
