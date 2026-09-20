@@ -418,6 +418,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const prevRestartTokenRef = useRef(restartToken)
   const prevResettleTokenRef = useRef(resettleToken)
   const prevFlyTokenRef = useRef(flyIntroToken)
+  // The first-load intro while it is in flight: when it started, how long it
+  // runs, and the resolved targets it is tweening toward. Lets an effect re-run
+  // mid-intro RE-TARGET the tween instead of tearing it down and snapping.
+  const introRef = useRef<{t0: number; ms: number; settled: Map<string, {x: number; y: number}>} | null>(null)
   // Per-year resolved layouts for the A/B tween, keyed by layoutKey. Each entry
   // carries the `sig` of the inputs it was resolved from, so a stale entry (cached
   // before the data/sizes settled, or after a knob/canvas change) is ignored.
@@ -761,6 +765,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
 
       const TWEEN_MS = 800
       const t0 = performance.now()
+      introRef.current = {t0, ms: TWEEN_MS, settled}
 
       const tweenTick = (now: number) => {
         const t = Math.min(1, (now - t0) / TWEEN_MS)
@@ -782,6 +787,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           tweenRafRef.current = requestAnimationFrame(tweenTick)
         } else {
           tweenRafRef.current = null
+          introRef.current = null
           for (const n of built) {
             const f = savedFx.get(n.name)
             if (f && f.fx !== null && f.fy !== null) {
@@ -987,6 +993,101 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       setNodes(built.slice())
       return () => {
         sim.stop()
+      }
+    }
+
+    // The first-load intro is an 800ms tween driven inside this effect, so ANY
+    // dependency change during it (the live valuations upgrading the snapshot,
+    // the container being measured, Sanity settings landing) tears the tween
+    // down and re-runs the effect — which used to fall through to the silent
+    // re-settle below and SNAP every planet to its final spot. That is why the
+    // intro "sometimes didn't happen": a race it lost more often than not.
+    // Instead, RE-TARGET the in-flight intro: re-settle for the new inputs
+    // (seated at the previous resolved targets, so a light settle suffices) and
+    // keep tweening from wherever the planets are now to the new targets over
+    // the time the intro had left.
+    const intro = introRef.current
+    const introElapsed = intro ? performance.now() - intro.t0 : Infinity
+    if (intro && introElapsed < intro.ms && !isEditMode && built.length > 0) {
+      const startPos = new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
+      const shownR = new Map(built.map((n) => [n.name, n.r]))
+      const savedFx = new Map(built.map((n) => [n.name, {fx: n.fx ?? null, fy: n.fy ?? null}]))
+      for (const n of built) {
+        const at = intro.settled.get(n.name)
+        n.x = at ? at.x : n.targetX
+        n.y = at ? at.y : n.targetY
+        n.vx = 0
+        n.vy = 0
+        n.r = n.targetR // settle for the FINAL sizes; the shown size keeps easing below
+      }
+      const s = forceSimulation<PlanetNode>(built)
+        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
+        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
+        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
+        .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
+        .force("link", connectionForce(linkPairs, connectionStrength))
+        .force("bounds", boundsForce(bounds))
+        .alpha(0.4)
+        .alphaDecay(0.05)
+        .velocityDecay(0.72)
+        .stop()
+      for (let round = 0; round < 10; round++) {
+        separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 12, 1)
+        s.tick(5)
+      }
+      separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 40, 1)
+      ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 6)
+      const settled = new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
+      cacheLayout()
+
+      // Back to what is on screen; the tween carries it to the new targets.
+      for (const n of built) {
+        const p = startPos.get(n.name)!
+        n.x = p.x
+        n.y = p.y
+        n.r = shownR.get(n.name) ?? n.r
+        n.vx = 0
+        n.vy = 0
+        n.fx = null
+        n.fy = null
+      }
+      const remaining = Math.max(350, intro.ms - introElapsed)
+      const t0 = performance.now()
+      introRef.current = {t0, ms: remaining, settled}
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - t0) / remaining)
+        const k = 1 - Math.pow(1 - t, 3)
+        for (const n of built) {
+          const a = startPos.get(n.name)!
+          const b = settled.get(n.name)!
+          n.x = a.x + (b.x - a.x) * k
+          n.y = a.y + (b.y - a.y) * k
+          if (Math.abs(n.r - n.targetR) > 0.05) n.r += (n.targetR - n.r) * 0.08
+          else n.r = n.targetR
+        }
+        setNodes(built.slice())
+        if (t < 1) {
+          tweenRafRef.current = requestAnimationFrame(tick)
+        } else {
+          tweenRafRef.current = null
+          introRef.current = null
+          for (const n of built) {
+            const f = savedFx.get(n.name)
+            if (f && f.fx !== null && f.fy !== null) {
+              n.fx = f.fx
+              n.fy = f.fy
+            }
+          }
+        }
+      }
+      tweenRafRef.current = requestAnimationFrame(tick)
+      simRef.current = null
+      setNodes(built.slice())
+      return () => {
+        if (tweenRafRef.current !== null) {
+          cancelAnimationFrame(tweenRafRef.current)
+          tweenRafRef.current = null
+        }
       }
     }
 
