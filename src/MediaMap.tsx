@@ -3246,7 +3246,12 @@ export default function MediaMap() {
   }, [sanityError]);
   // Real market caps from the valuation Google Sheet (Phase 4c), indexed by
   // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
-  const { data: valData, hidden: hiddenByYear, lastUpdated: lastUpdatedBySlug } = useValuations();
+  const {
+    data: valData,
+    hidden: hiddenByYear,
+    lastUpdated: lastUpdatedBySlug,
+    loading: valuationsLoading,
+  } = useValuations();
   // The map's "current" view = the newest YEAR column in the valuation sheet (so
   // the view advances when a year rolls over), with its MONTH derived from the
   // newest ingest "last_updated" (decision #3). Falls back to the calendar date
@@ -3298,6 +3303,12 @@ export default function MediaMap() {
     // overlapping frame. Holding empty until the data lands makes the first-anim
     // run once on stable data and complete every time.
     if (isSanityConfigured() && sanityLoading) return [];
+    // Likewise wait for the valuation sheet (live / snapshot / gave up). Without
+    // this the map rendered as soon as Sanity landed — every planet sized from
+    // the legacy fallback for a second or two, then a jolt when the real values
+    // arrived (and companies absent from the legacy sheet, e.g. Space X, blinked
+    // in late). The Studio editor has always gated on this; the app didn't.
+    if (valuationsLoading) return [];
     if (!sanity) return companies;
     return sanity.companies.map((c) => {
       const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
@@ -3309,7 +3320,7 @@ export default function MediaMap() {
         valuationAt(valData, c.slug, currentYearKey) ?? detail?.manualValue ?? sheetVal;
       return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
     });
-  }, [sanity, sanityLoading, companies, sheetValByName, valData, currentYearKey]);
+  }, [sanity, sanityLoading, valuationsLoading, companies, sheetValByName, valData, currentYearKey]);
   // "Last updated" date per company name (join slug → date from the sheet).
   const lastUpdatedByName = useMemo(() => {
     const m = new Map<string, string>();
@@ -4659,8 +4670,11 @@ export default function MediaMap() {
     enabled,
     onToggle: toggleSector,
     onAll: setAll,
-    total: companies.length,
-    loading,
+    // Companies actually on the map (same figure the export panel shows) — not
+    // the legacy sheet's row count, which is what made the panel say "173"
+    // regardless of what was rendered.
+    total: Object.values(counts).reduce((a, b) => a + b, 0),
+    loading: loading || valuationsLoading,
     error,
     hoveredSector,
     onHoverSector: setHoveredSector,
