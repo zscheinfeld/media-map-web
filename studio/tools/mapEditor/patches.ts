@@ -192,14 +192,19 @@ export async function commitPending(
   }
   for (const [sectorId, ops] of bySector) {
     let patch = client.patch(sectorId)
-    let needsSetIfMissing = false
     const sets: Record<string, unknown> = {}
     const unsets: string[] = []
-    const appends: Record<string, unknown>[] = []
+    // Per-array appends, so a desktop and a square edit on the same sector both
+    // land in their own field (mirrors the company position patch above).
+    const appendsByArr: Record<string, Record<string, unknown>[]> = {}
+    // Square-mode edits target mobile_center_overrides; desktop the desktop array.
+    const arrOf = (op: {field?: 'desktop' | 'mobile'}) =>
+      (op.field ?? 'desktop') === 'mobile' ? 'mobile_center_overrides' : 'desktop_center_overrides'
+
     for (const op of ops) {
+      const arr = arrOf(op)
       if (op.kind === 'createSectorOverride') {
-        needsSetIfMissing = true
-        appends.push({
+        ;(appendsByArr[arr] ??= []).push({
           _key: op.tempKey,
           _type: 'sectorCenterOverride',
           x: Math.round(op.x),
@@ -207,36 +212,36 @@ export async function commitPending(
           start_date: momentToSanityDate(op.moment),
         })
       } else if (op.kind === 'updateSectorOverride') {
-        if (op.x !== undefined) {
-          sets[`desktop_center_overrides[_key=="${op.windowKey}"].x`] = Math.round(op.x)
-        }
-        if (op.y !== undefined) {
-          sets[`desktop_center_overrides[_key=="${op.windowKey}"].y`] = Math.round(op.y)
-        }
+        if (op.x !== undefined) sets[`${arr}[_key=="${op.windowKey}"].x`] = Math.round(op.x)
+        if (op.y !== undefined) sets[`${arr}[_key=="${op.windowKey}"].y`] = Math.round(op.y)
       } else if (op.kind === 'deleteSectorOverride') {
-        unsets.push(`desktop_center_overrides[_key=="${op.windowKey}"]`)
+        unsets.push(`${arr}[_key=="${op.windowKey}"]`)
       }
     }
-    if (needsSetIfMissing) patch = patch.setIfMissing({desktop_center_overrides: []})
+    const missing = Object.fromEntries(Object.keys(appendsByArr).map((arr) => [arr, []]))
+    if (Object.keys(missing).length > 0) patch = patch.setIfMissing(missing)
     if (Object.keys(sets).length > 0) patch = patch.set(sets)
     if (unsets.length > 0) patch = patch.unset(unsets)
-    if (appends.length > 0) patch = patch.append('desktop_center_overrides', appends)
+    for (const [arr, entries] of Object.entries(appendsByArr)) patch = patch.append(arr, entries)
     tx.patch(patch)
   }
 
-  // Layout knobs → the mapSettings singleton's time-scoped overrides[]. Same
-  // append/set pattern as positions and sector overrides; the doc is created on
-  // first save. Part of the same transaction as everything else.
+  // Layout knobs → the mapSettings singleton. Desktop knobs live in `overrides[]`,
+  // square/mobile knobs in `square_overrides[]`, so tuning one canvas can't
+  // retune the other. Same append/set pattern as positions and sector overrides;
+  // the doc is created on first save, inside the same transaction.
   if (state.settings.length > 0) {
     tx.createIfNotExists({_id: MAP_SETTINGS_ID, _type: 'mapSettings'})
     let patch = client.patch(MAP_SETTINGS_ID)
-    let needsSetIfMissing = false
     const sets: Record<string, unknown> = {}
-    const appends: Record<string, unknown>[] = []
+    const appendsByArr: Record<string, Record<string, unknown>[]> = {}
+    const arrOf = (op: {aspect?: 'desktop' | 'square'}) =>
+      (op.aspect ?? 'desktop') === 'square' ? 'square_overrides' : 'overrides'
+
     for (const op of state.settings) {
+      const arr = arrOf(op)
       if (op.kind === 'createSettingsOverride') {
-        needsSetIfMissing = true
-        appends.push({
+        ;(appendsByArr[arr] ??= []).push({
           _key: op.tempKey,
           _type: 'mapSettingsOverride',
           start_date: momentToSanityDate(op.moment),
@@ -252,20 +257,21 @@ export async function commitPending(
       } else {
         const v = op.values
         const k = op.windowKey
-        if (v.packingDensity !== undefined) sets[`overrides[_key=="${k}"].packing_density`] = v.packingDensity
-        if (v.collidePadding !== undefined) sets[`overrides[_key=="${k}"].collide_padding`] = v.collidePadding
-        if (v.labelSizePx !== undefined) sets[`overrides[_key=="${k}"].label_size_px`] = v.labelSizePx
-        if (v.connectionPull !== undefined) sets[`overrides[_key=="${k}"].connection_pull`] = v.connectionPull
-        if (v.entityRadius !== undefined) sets[`overrides[_key=="${k}"].entity_radius`] = v.entityRadius
-        if (v.sizeSpacing !== undefined) sets[`overrides[_key=="${k}"].size_spacing`] = v.sizeSpacing
-        if (v.sectorPull !== undefined) sets[`overrides[_key=="${k}"].sector_pull`] = v.sectorPull
-        if (v.repulsion !== undefined) sets[`overrides[_key=="${k}"].repulsion`] = v.repulsion
+        const at = (f: string) => `${arr}[_key=="${k}"].${f}`
+        if (v.packingDensity !== undefined) sets[at('packing_density')] = v.packingDensity
+        if (v.collidePadding !== undefined) sets[at('collide_padding')] = v.collidePadding
+        if (v.labelSizePx !== undefined) sets[at('label_size_px')] = v.labelSizePx
+        if (v.connectionPull !== undefined) sets[at('connection_pull')] = v.connectionPull
+        if (v.entityRadius !== undefined) sets[at('entity_radius')] = v.entityRadius
+        if (v.sizeSpacing !== undefined) sets[at('size_spacing')] = v.sizeSpacing
+        if (v.sectorPull !== undefined) sets[at('sector_pull')] = v.sectorPull
+        if (v.repulsion !== undefined) sets[at('repulsion')] = v.repulsion
       }
     }
-    if (needsSetIfMissing) patch = patch.setIfMissing({overrides: []})
+    const missing = Object.fromEntries(Object.keys(appendsByArr).map((arr) => [arr, []]))
+    if (Object.keys(missing).length > 0) patch = patch.setIfMissing(missing)
     if (Object.keys(sets).length > 0) patch = patch.set(sets)
-    if (appends.length > 0) patch = patch.append('overrides', appends)
-    tx.patch(patch)
+    for (const [arr, entries] of Object.entries(appendsByArr)) patch = patch.append(arr, entries)
   }
 
   await tx.commit()

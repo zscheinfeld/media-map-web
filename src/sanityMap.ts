@@ -59,6 +59,7 @@ type RawSector = {
   desktop_center?: Coord
   mobile_center?: Coord
   desktop_center_overrides?: RawCenterOverride[]
+  mobile_center_overrides?: RawCenterOverride[]
   default_style?: SanityPlanetStyle
 }
 type RawManualValuation = {value_billions_usd?: number; as_of_date?: string}
@@ -103,7 +104,7 @@ type RawMapDocs = {
   companies: RawCompany[]
   connections: RawConnection[]
   entities: RawEntity[]
-  settings: {overrides?: RawSettingsOverride[]} | null
+  settings: {overrides?: RawSettingsOverride[]; square_overrides?: RawSettingsOverride[]} | null
 }
 
 // --- Sanity → map-core conversions -----------------------------------------
@@ -131,6 +132,15 @@ function sectorCenterAt(sector: RawSector | null | undefined, at: Moment): Coord
   const active = activeAt(sector.desktop_center_overrides ?? [], at, overrideMoment)
   if (active) return {x: active.x, y: active.y}
   return sector.desktop_center
+}
+
+/** Square (mobile) sector center at T — same forward-propagation as desktop,
+ *  over `mobile_center_overrides[]` with `mobile_center` as the baseline. */
+function mobileSectorCenterAt(sector: RawSector | null | undefined, at: Moment): Coord | undefined {
+  if (!sector) return undefined
+  const active = activeAt(sector.mobile_center_overrides ?? [], at, overrideMoment)
+  if (active) return {x: active.x, y: active.y}
+  return sector.mobile_center
 }
 
 // --- Resolved output (structure only — valuations stay on the sheet) -------
@@ -184,6 +194,9 @@ export type ResolvedSanityMap = {
   connections: ResolvedConnection[]
   /** Layout-knob values active at T (forward-propagated), or null. */
   settings: ResolvedKnobs | null
+  /** Knobs for the SQUARE (mobile) canvas, tuned separately. Null until authored,
+   *  in which case the square map keeps its built-in mobile defaults. */
+  squareSettings: ResolvedKnobs | null
   /** Side-panel content per company (vitals filtered to T; content newest-first). */
   detailByName: Record<string, CompanyDetail>
 }
@@ -207,7 +220,8 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     if (!hueBySector[name]) hueBySector[name] = hashHue(name)
     const center = sectorCenterAt(sector, at)
     if (center && !centerBySector[name]) centerBySector[name] = center
-    if (sector?.mobile_center && !mobileCenterBySector[name]) mobileCenterBySector[name] = sector.mobile_center
+    const mobileCenter = mobileSectorCenterAt(sector, at)
+    if (mobileCenter && !mobileCenterBySector[name]) mobileCenterBySector[name] = mobileCenter
   }
 
   for (const s of raw.sectors) {
@@ -273,21 +287,24 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     .filter((c) => yearWindowsActiveAt([{start_year: c.start_year, end_year: c.end_year}], at))
     .map((c) => ({from: c.from, to: c.to, style: c.style, description: c.description ?? ""}))
 
-  const activeSettings = activeAt(raw.settings?.overrides ?? [], at, overrideMoment)
-  const settings: ResolvedKnobs | null = activeSettings
-    ? {
-        packingDensity: activeSettings.packing_density,
-        collidePadding: activeSettings.collide_padding,
-        labelSizePx: activeSettings.label_size_px,
-        connectionPull: activeSettings.connection_pull,
-        entityRadius: activeSettings.entity_radius,
-        sizeSpacing: activeSettings.size_spacing,
-        sectorPull: activeSettings.sector_pull,
-        repulsion: activeSettings.repulsion,
-      }
-    : null
+  const toKnobs = (o: RawSettingsOverride | null): ResolvedKnobs | null =>
+    o
+      ? {
+          packingDensity: o.packing_density,
+          collidePadding: o.collide_padding,
+          labelSizePx: o.label_size_px,
+          connectionPull: o.connection_pull,
+          entityRadius: o.entity_radius,
+          sizeSpacing: o.size_spacing,
+          sectorPull: o.sector_pull,
+          repulsion: o.repulsion,
+        }
+      : null
+  const settings = toKnobs(activeAt(raw.settings?.overrides ?? [], at, overrideMoment))
+  // Square knobs forward-propagate independently of desktop's.
+  const squareSettings = toKnobs(activeAt(raw.settings?.square_overrides ?? [], at, overrideMoment))
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, detailByName}
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
@@ -305,10 +322,10 @@ const STYLE_PROJ = `{
   stroke_width_px,
   "glow": { "color": glow.color.hex, "blur_px": glow.blur_px, "spread_px": glow.spread_px }
 }`
-const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
+const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
 const COMPANIES_Q = `*[_type == "company"]{
   name, "slug": slug.current, description,
-  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
+  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
   "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date},
   appearance_windows[]{start_year, end_year},
   vitals[]{_key, name, statistic, start_date, end_date},
@@ -319,10 +336,11 @@ const COMPANIES_Q = `*[_type == "company"]{
 const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_year, end_year, "from": from->name, "to": to->name }`
 const ENTITIES_Q = `*[_type == "entity"]{
   name,
-  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date} },
+  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date} },
   position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
 }`
-const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion} }`
+const SETTINGS_KNOBS = `start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion`
+const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}} }`
 
 /**
  * Fetch the raw Sanity map docs once (one query per type). Returns null docs
@@ -342,7 +360,7 @@ export function useSanityMapDocs(): {docs: RawMapDocs | null; loading: boolean; 
       sanityQuery<RawCompany[]>(COMPANIES_Q),
       sanityQuery<RawConnection[]>(CONNECTIONS_Q),
       sanityQuery<RawEntity[]>(ENTITIES_Q),
-      sanityQuery<{overrides?: RawSettingsOverride[]} | null>(SETTINGS_Q),
+      sanityQuery<{overrides?: RawSettingsOverride[]; square_overrides?: RawSettingsOverride[]} | null>(SETTINGS_Q),
     ])
       .then(([sectors, companies, connections, entities, settings]) => {
         if (!cancelled) setDocs({sectors: sectors ?? [], companies: companies ?? [], connections: connections ?? [], entities: entities ?? [], settings})

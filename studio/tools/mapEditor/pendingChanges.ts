@@ -87,14 +87,19 @@ export type PendingConnectionOp =
     }
 
 /**
- * Sector center authoring — time-scoped via `desktop_center_overrides[]` on
- * the Sector doc (forward-propagation, same model as Company position_overrides).
- * v1 = desktop layout only; mobile_center is left to Structure for now.
+ * Sector center authoring — time-scoped via `desktop_center_overrides[]` (or
+ * `mobile_center_overrides[]` in Square mode) on the Sector doc
+ * (forward-propagation, same model as Company position_overrides).
+ * `field` picks which layout an op targets, exactly like planet position ops, so
+ * a square-mode drag can never write the desktop center (and vice versa).
  *
  * Each op carries the sector's _id (for the patch) and name (for labels).
  * Resolution at moment T: largest `start_date ≤ T` wins among overrides; if
  * none qualify, the Sector's scalar baseline `center` is the fallback.
  */
+/** Which layout's sector center an op targets. */
+export type SectorCenterField = 'desktop' | 'mobile'
+
 export type PendingSectorOp =
   | {
       kind: 'createSectorOverride'
@@ -104,6 +109,7 @@ export type PendingSectorOp =
       x: number
       y: number
       moment: Moment
+      field: SectorCenterField
     }
   | {
       kind: 'updateSectorOverride'
@@ -112,12 +118,14 @@ export type PendingSectorOp =
       windowKey: string
       x?: number
       y?: number
+      field: SectorCenterField
     }
   | {
       kind: 'deleteSectorOverride'
       sectorId: string
       sectorName: string
       windowKey: string
+      field: SectorCenterField
     }
 
 export type PendingState = {
@@ -596,7 +604,7 @@ export type ResolvedSectorOverride = {
 
 /**
  * Build the resolved override list for a sector by applying pending ops on top
- * of Sanity's `desktop_center_overrides[]`. Same shape as planet position
+ * of Sanity's overrides for the SAME `field` (desktop or mobile). Same shape as planet position
  * resolution — undated entries are kept as `UNDATED` (always-active baseline,
  * lowest precedence) until they get a stamped `start_date`.
  */
@@ -604,8 +612,11 @@ export function resolveSectorOverrides(
   sanityOverrides: ReadonlyArray<RawSectorCenterOverride>,
   pending: PendingState,
   sectorId: string,
+  field: SectorCenterField = 'desktop',
 ): ResolvedSectorOverride[] {
-  const opsForSector = pending.sectors.filter((op) => op.sectorId === sectorId)
+  const opsForSector = pending.sectors.filter(
+    (op) => op.sectorId === sectorId && (op.field ?? 'desktop') === field,
+  )
   const deleted = new Set<string>()
   const edits = new Map<string, {x?: number; y?: number}>()
   for (const op of opsForSector) {
@@ -662,14 +673,25 @@ export function activeSectorOverrideAt(
  * track the sector live.
  */
 export function effectiveSectorCenterAt(
-  sector: {center: {x: number; y: number}; desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>},
+  sector: {
+    center: {x: number; y: number}
+    mobileCenter?: {x: number; y: number}
+    desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>
+    mobileCenterOverrides?: ReadonlyArray<RawSectorCenterOverride>
+  },
   pending: PendingState,
   sectorId: string,
   at: Moment,
+  field: SectorCenterField = 'desktop',
 ): {x: number; y: number} {
-  const resolved = resolveSectorOverrides(sector.desktopCenterOverrides, pending, sectorId)
+  const isMobile = field === 'mobile'
+  const overrides = isMobile ? (sector.mobileCenterOverrides ?? []) : sector.desktopCenterOverrides
+  // Square falls back to its own baseline, then to the desktop center when a
+  // sector has no mobile_center authored yet.
+  const baseline = isMobile ? (sector.mobileCenter ?? sector.center) : sector.center
+  const resolved = resolveSectorOverrides(overrides, pending, sectorId, field)
   const active = activeSectorOverrideAt(resolved, at)
-  return active ? {x: active.x, y: active.y} : sector.center
+  return active ? {x: active.x, y: active.y} : baseline
 }
 
 const newSectorTempKey = (): string =>
@@ -686,12 +708,19 @@ const newSectorTempKey = (): string =>
  */
 export function editSectorAt(
   state: PendingState,
-  sector: {id: string; name: string; desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>},
+  sector: {
+    id: string
+    name: string
+    desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>
+    mobileCenterOverrides?: ReadonlyArray<RawSectorCenterOverride>
+  },
   at: Moment,
   x: number,
   y: number,
+  field: SectorCenterField = 'desktop',
 ): PendingState {
-  const resolved = resolveSectorOverrides(sector.desktopCenterOverrides, state, sector.id)
+  const overrides = field === 'mobile' ? (sector.mobileCenterOverrides ?? []) : sector.desktopCenterOverrides
+  const resolved = resolveSectorOverrides(overrides, state, sector.id, field)
   const exact = resolved.find((r) => r.moment === at)
   const rx = Math.round(x)
   const ry = Math.round(y)
@@ -726,6 +755,7 @@ export function editSectorAt(
           windowKey: exact.key,
           x: rx,
           y: ry,
+          field,
         },
       ],
     }
@@ -743,6 +773,7 @@ export function editSectorAt(
         x: rx,
         y: ry,
         moment: at,
+        field,
       },
     ],
   }
@@ -755,10 +786,17 @@ export function editSectorAt(
  */
 export function clearSectorAt(
   state: PendingState,
-  sector: {id: string; name: string; desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>},
+  sector: {
+    id: string
+    name: string
+    desktopCenterOverrides: ReadonlyArray<RawSectorCenterOverride>
+    mobileCenterOverrides?: ReadonlyArray<RawSectorCenterOverride>
+  },
   at: Moment,
+  field: SectorCenterField = 'desktop',
 ): PendingState {
-  const resolved = resolveSectorOverrides(sector.desktopCenterOverrides, state, sector.id)
+  const overrides = field === 'mobile' ? (sector.mobileCenterOverrides ?? []) : sector.desktopCenterOverrides
+  const resolved = resolveSectorOverrides(overrides, state, sector.id, field)
   const exact = resolved.find((r) => r.moment === at)
   if (!exact) return state
 
@@ -785,6 +823,7 @@ export function clearSectorAt(
         sectorId: sector.id,
         sectorName: sector.name,
         windowKey: exact.key,
+        field,
       },
     ],
   }
@@ -799,9 +838,19 @@ export function clearSectorAt(
 // override authored exactly at T, or creates a new one seeded from the active
 // (forward-propagated) values so the other knobs keep their inherited values.
 
+/** Which canvas a knob override belongs to — desktop and square are tuned
+ *  separately because the canvas shape differs. */
+export type SettingsAspect = 'desktop' | 'square'
+
 export type PendingSettingsOp =
-  | {kind: 'createSettingsOverride'; tempKey: string; values: LayoutKnobsValues; moment: Moment}
-  | {kind: 'updateSettingsOverride'; windowKey: string; values: Partial<LayoutKnobsValues>}
+  | {
+      kind: 'createSettingsOverride'
+      tempKey: string
+      values: LayoutKnobsValues
+      moment: Moment
+      aspect: SettingsAspect
+    }
+  | {kind: 'updateSettingsOverride'; windowKey: string; values: Partial<LayoutKnobsValues>; aspect: SettingsAspect}
 
 export type ResolvedSettingsOverride = {
   key: string
@@ -827,9 +876,11 @@ function rawSettingsValues(o: RawSettingsOverride): LayoutKnobsValues {
 export function resolveSettingsOverrides(
   sanityOverrides: ReadonlyArray<RawSettingsOverride>,
   pending: PendingState,
+  aspect: SettingsAspect = 'desktop',
 ): ResolvedSettingsOverride[] {
   const edits = new Map<string, Partial<LayoutKnobsValues>>()
   for (const op of pending.settings) {
+    if ((op.aspect ?? 'desktop') !== aspect) continue
     if (op.kind === 'updateSettingsOverride') {
       edits.set(op.windowKey, {...(edits.get(op.windowKey) ?? {}), ...op.values})
     }
@@ -847,6 +898,7 @@ export function resolveSettingsOverrides(
     })
   }
   for (const op of pending.settings) {
+    if ((op.aspect ?? 'desktop') !== aspect) continue
     if (op.kind === 'createSettingsOverride') {
       resolved.push({key: op.tempKey, values: op.values, moment: op.moment, origin: 'pending-new'})
     }
@@ -880,8 +932,12 @@ export function editSettingsAt(
   sanityOverrides: ReadonlyArray<RawSettingsOverride>,
   at: Moment,
   patch: Partial<LayoutKnobsValues>,
+  aspect: SettingsAspect = 'desktop',
+  /** Values to seed a brand-new override from when none forward-propagates —
+   *  lets Square start from the live mobile defaults instead of desktop's. */
+  seed?: LayoutKnobsValues,
 ): PendingState {
-  const resolved = resolveSettingsOverrides(sanityOverrides, state)
+  const resolved = resolveSettingsOverrides(sanityOverrides, state, aspect)
   const exact = resolved.find((r) => r.moment === at)
 
   if (exact) {
@@ -909,17 +965,26 @@ export function editSettingsAt(
     }
     return {
       ...state,
-      settings: [...state.settings, {kind: 'updateSettingsOverride', windowKey: exact.key, values: patch}],
+      settings: [
+        ...state.settings,
+        {kind: 'updateSettingsOverride', windowKey: exact.key, values: patch, aspect},
+      ],
     }
   }
 
   const active = activeSettingsOverrideAt(resolved, at)
-  const base = active?.values ?? LAYOUT_KNOBS_DEFAULTS
+  const base = active?.values ?? seed ?? LAYOUT_KNOBS_DEFAULTS
   return {
     ...state,
     settings: [
       ...state.settings,
-      {kind: 'createSettingsOverride', tempKey: newSettingsTempKey(), values: {...base, ...patch}, moment: at},
+      {
+        kind: 'createSettingsOverride',
+        tempKey: newSettingsTempKey(),
+        values: {...base, ...patch},
+        moment: at,
+        aspect,
+      },
     ],
   }
 }

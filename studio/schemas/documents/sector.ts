@@ -51,13 +51,27 @@ export const sector = defineType({
       name: 'mobile_center',
       title: 'Mobile center',
       type: 'object',
-      description: 'Slide-unit coordinates of this sector’s center in the portrait (mobile) layout.',
+      description:
+        'Baseline slide-unit coordinates of this sector’s center in the square (mobile) layout. ' +
+        'Acts as the always-active fallback; if `mobile_center_overrides` carries dated entries, ' +
+        'they forward-propagate over this baseline from their effective date.',
       fields: [
         defineField({name: 'x', title: 'X', type: 'number', validation: (R) => R.required()}),
         defineField({name: 'y', title: 'Y', type: 'number', validation: (R) => R.required()}),
       ],
       options: {columns: 2},
       validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'mobile_center_overrides',
+      title: 'Mobile center overrides (time-scoped)',
+      type: 'array',
+      of: [{type: 'sectorCenterOverride'}],
+      description:
+        'Optional time-scoped re-anchors for this sector\'s SQUARE (mobile) center — the mobile twin ' +
+        'of `desktop_center_overrides`. At any viewed moment T, the override with the largest ' +
+        'start_date ≤ T wins; if none qualify, the baseline `mobile_center` is used. Authored via ' +
+        'the Map Editor in Square mode.',
     }),
     defineField({
       name: 'default_style',

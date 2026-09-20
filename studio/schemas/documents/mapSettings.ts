@@ -17,12 +17,23 @@ export const mapSettings = defineType({
   fields: [
     defineField({
       name: 'overrides',
-      title: 'Time-scoped knob values',
+      title: 'Time-scoped knob values (desktop)',
       type: 'array',
       of: [{type: 'mapSettingsOverride'}],
       description:
         'One entry per stretch of the timeline. Edited via the Map Editor — drag the knobs at a ' +
         'given year/month and Save to stamp values effective from that moment forward.',
+    }),
+    defineField({
+      name: 'square_overrides',
+      title: 'Time-scoped knob values (square / mobile)',
+      type: 'array',
+      of: [{type: 'mapSettingsOverride'}],
+      description:
+        'The square (mobile) twin of `overrides`. The square map needs its own spacing/pull ' +
+        'because the canvas is a different shape. Authored in the Map Editor’s Square mode. ' +
+        'While this is empty the square map keeps its built-in mobile defaults, so adding the ' +
+        'first entry is what hands control of mobile physics to the CMS.',
     }),
   ],
   preview: {
