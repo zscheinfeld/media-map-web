@@ -311,6 +311,8 @@ export function AboutModal({
     <button
       onClick={onClose}
       aria-label="Close"
+      // Same hover as the map's zoom / refresh / ABOUT buttons (App.css).
+      className="mm-hover"
       style={{
         width: 40,
         height: 40,
