@@ -5,6 +5,15 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# The daily valuations snapshot (committed by .github/workflows/snapshot-valuations.yml).
+# CORS-open so the hosted Sanity Studio can use it as its fallback too; short
+# cache so a fresh deploy's snapshot is picked up within minutes.
+[[headers]]
+  for = "/valuations-snapshot.csv"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=300"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

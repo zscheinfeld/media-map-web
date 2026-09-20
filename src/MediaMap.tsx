@@ -101,6 +101,12 @@ const CANVAS_BY_TYPE: Record<MobileViewType, { x: number; y: number; w: number; 
   square: CANVAS_MOBILE_SQUARE,
 };
 const MOBILE_VIEW_TYPES: MobileViewType[] = ["horizontal", "full", "square", "vertical"];
+// The mobile views actually offered — in the public switcher AND the in-app
+// editor, matching the Sanity Studio editor (Full + Square only). Horizontal /
+// vertical are retired: MOBILE_VIEW_TYPES keeps all four so their saved layout
+// data still loads, but nothing surfaces them for selection.
+const MOBILE_VIEW_TYPES_OFFERED: MobileViewType[] = ["square", "full"];
+const DEFAULT_MOBILE_VIEW: MobileViewType = "square";
 // Display labels for the view-type tabs (switcher + editor selector).
 const MOBILE_VIEW_LABELS: Record<MobileViewType, string> = {
   horizontal: "Horizontal",
@@ -116,14 +122,17 @@ const inheritsFullLayout = (t: MobileViewType) => t === "horizontal" || t === "s
 
 const MOBILE_VIEW_STORE_KEY = "mm.mobileViewType";
 function loadMobileViewType(): MobileViewType {
-  if (typeof window === "undefined") return "full";
+  if (typeof window === "undefined") return DEFAULT_MOBILE_VIEW;
   try {
     const raw = window.localStorage.getItem(MOBILE_VIEW_STORE_KEY);
-    if (raw && (MOBILE_VIEW_TYPES as string[]).includes(raw)) return raw as MobileViewType;
+    // Only accept a still-offered view: a returning visitor whose saved choice
+    // was horizontal/vertical falls back to the default rather than being stuck
+    // on a layout the switcher no longer shows.
+    if (raw && (MOBILE_VIEW_TYPES_OFFERED as string[]).includes(raw)) return raw as MobileViewType;
   } catch {
     /* ignore */
   }
-  return "full";
+  return DEFAULT_MOBILE_VIEW;
 }
 
 // Deep-clone the default layouts so the in-memory editor state doesn't mutate
@@ -261,7 +270,7 @@ function MobileViewSwitcher({
           }}
         >
           <span style={{ fontFamily: fontStack, fontSize: 11, opacity: 0.85 }}>Map view</span>
-          {MOBILE_VIEW_TYPES.map((opt) => (
+          {MOBILE_VIEW_TYPES_OFFERED.map((opt) => (
             <button
               key={opt}
               onClick={() => onViewType(opt)}
@@ -881,8 +890,12 @@ function MobileSectorDrawer({
   );
 }
 
-// Minimum months of data before a company is "complete" enough to chart.
-const CHART_MONTHS_MIN = 12;
+// Minimum data points before a company is chartable. The series is YEARLY (one
+// point per year column in the sheet), so 2 = the fewest that can draw a line.
+// Was 12 back when the series was monthly; left at 12 it meant "every one of the
+// 12 year columns", which silently hid the chart for a third of the roster —
+// anything younger than 2015 (WBD, A24, Canal+…) or with a single gap (IPG: 11/12).
+const CHART_YEARS_MIN = 2;
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtMonthLabel(m: string): string {
@@ -1080,7 +1093,7 @@ function PlanetDetailPanel({
             )}
           </PanelSection>
 
-          {history.length >= CHART_MONTHS_MIN && (
+          {history.length >= CHART_YEARS_MIN && (
             <PanelSection label="Historical Market Cap">
               <HistoryChart series={history} />
             </PanelSection>
@@ -2942,7 +2955,7 @@ function MobileEditorToolbar({
       </div>
       {/* View-type selector — which mobile layout you're editing. */}
       <div style={{ display: "flex", gap: 6 }}>
-        {MOBILE_VIEW_TYPES.map((opt) => (
+        {MOBILE_VIEW_TYPES_OFFERED.map((opt) => (
           <button
             key={opt}
             onClick={() => onViewType(opt)}
@@ -3664,14 +3677,26 @@ export default function MediaMap() {
   // On a mobile view, the active view type's own settings drive the physics so
   // all planets spread to FILL its frame without overlapping (unplaced ones flow
   // around the pins). Desktop = effBase.
+  // Mobile physics: Sanity's SQUARE knobs win when authored (Map Editor → Square
+  // mode), so mobile spacing is tunable in the CMS and time-scoped per year like
+  // desktop. Until then it falls back to the per-view-type values baked into
+  // mobileLayout.ts — i.e. adding the first square override is what moves mobile
+  // physics from code to the CMS, and nothing changes before that.
+  const sq = sanity?.squareSettings;
   const eff = {
     ...effBase,
     ...(mobileView
       ? {
-          sectorPull: activeSettings.sectorPull,
-          collidePadding: activeSettings.collidePadding,
-          sizeSpacing: activeSettings.sizeSpacing,
-          repulsion: activeSettings.repulsion,
+          sectorPull: sq?.sectorPull ?? activeSettings.sectorPull,
+          collidePadding: sq?.collidePadding ?? activeSettings.collidePadding,
+          sizeSpacing: sq?.sizeSpacing ?? activeSettings.sizeSpacing,
+          repulsion: sq?.repulsion ?? activeSettings.repulsion,
+          // These four have no mobileLayout.ts equivalent, so they fall through
+          // to the desktop-authored values exactly as before.
+          packingDensity: sq?.packingDensity ?? effBase.packingDensity,
+          labelSizePx: sq?.labelSizePx ?? effBase.labelSizePx,
+          connectionPull: sq?.connectionPull ?? effBase.connectionPull,
+          entityRadius: sq?.entityRadius ?? effBase.entityRadius,
         }
       : {}),
   };

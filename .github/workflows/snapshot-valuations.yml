@@ -1,0 +1,51 @@
+name: Snapshot valuations
+
+# Mirrors the published valuation sheet (CSV) into the repo once a day as
+# public/valuations-snapshot.csv, so the public app has a SAME-ORIGIN fallback
+# that is never more than a day old.
+#
+# Why: Google's "publish to web" CSV endpoint fails intermittently (rate limits,
+# an HTML consent page served with a 200, transient 5xx). The app reads the live
+# sheet first and only uses this snapshot when that fails — previously it fell
+# back to stale code-bundled values instead.
+#
+# A red run here means Google was failing at that moment (the job refuses to
+# write a missing/truncated sheet), which doubles as an outage log.
+#
+# Needs one repo secret: VALUATIONS_CSV_URL — the same publish-to-web CSV link
+# Netlify has as VITE_VALUATIONS_CSV_URL.
+on:
+  schedule:
+    - cron: "0 2 * * *" # daily 02:00 UTC, after the 01:00 roster sync
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install job deps
+        working-directory: jobs
+        run: npm install
+      - name: Fetch the published sheet → public/valuations-snapshot.csv
+        working-directory: jobs
+        env:
+          VALUATIONS_CSV_URL: ${{ secrets.VALUATIONS_CSV_URL }}
+        run: npm run snapshot-valuations
+      - name: Commit the snapshot if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/valuations-snapshot.csv
+          if git diff --cached --quiet; then
+            echo "Snapshot unchanged — nothing to commit."
+            exit 0
+          fi
+          git commit -m "data: valuations snapshot $(date -u +%Y-%m-%d)"
+          git push

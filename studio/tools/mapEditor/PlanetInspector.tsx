@@ -230,33 +230,34 @@ export function PlanetInspector({
             />
           ) : (
             <Text size={1} muted>
-              No position yet — drag to place.
+              No position yet — drag to place, or pin it where it sits now.
             </Text>
           )}
         </Stack>
 
-        {/* Pin toggle — acts on the active override. Prominent: a full-width row
-            that turns yellow when pinned so its state reads at a glance. */}
-        {activeOverride && (
+        {/* Pin toggle. Shown for ANY selected planet, not just one that already
+            has an override: pinning an unplaced planet stamps an override at its
+            current physics position (see onTogglePin), which is the usual way to
+            say "keep it exactly here". Prominent full-width row that turns yellow
+            when pinned so its state reads at a glance. */}
+        {(() => {
+          const pinned = !!activeOverride?.pin
+          return (
           <Flex
             align="center"
             justify="space-between"
             style={{
               padding: '12px 14px',
               borderRadius: 8,
-              background: activeOverride.pin ? 'rgba(255,224,102,0.14)' : 'rgba(255,255,255,0.05)',
-              border: activeOverride.pin
+              background: pinned ? 'rgba(255,224,102,0.14)' : 'rgba(255,255,255,0.05)',
+              border: pinned
                 ? '1px solid rgba(255,224,102,0.55)'
                 : '1px solid rgba(255,255,255,0.16)',
               transition: 'background 140ms ease, border-color 140ms ease',
             }}
           >
-            <Text
-              size={2}
-              weight="semibold"
-              style={{color: activeOverride.pin ? '#ffe066' : '#fff'}}
-            >
-              {activeOverride.pin ? 'Pinned' : 'Pin position'}
+            <Text size={2} weight="semibold" style={{color: pinned ? '#ffe066' : '#fff'}}>
+              {pinned ? 'Pinned' : activeOverride ? 'Pin position' : 'Pin where it sits'}
             </Text>
             {/* The switch's off-state track vanishes on the navy panel, so ring it. */}
             <span
@@ -266,13 +267,11 @@ export function PlanetInspector({
                 boxShadow: '0 0 0 1.5px rgba(255,255,255,0.6)',
               }}
             >
-              <Switch
-                checked={activeOverride.pin}
-                onChange={(e) => onTogglePin(e.currentTarget.checked)}
-              />
+              <Switch checked={pinned} onChange={(e) => onTogglePin(e.currentTarget.checked)} />
             </span>
           </Flex>
-        )}
+          )
+        })()}
 
         {/* Clear override at exactly this moment (only meaningful when one exists). */}
         {isActiveAtCurrentMoment && (

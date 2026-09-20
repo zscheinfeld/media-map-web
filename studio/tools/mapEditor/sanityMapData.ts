@@ -110,6 +110,7 @@ type RawSector = {
   desktop_center?: Coord
   mobile_center?: Coord
   desktop_center_overrides?: RawSectorCenterOverride[]
+  mobile_center_overrides?: RawSectorCenterOverride[]
 }
 type RawConnection = {
   _id: string
@@ -136,7 +137,7 @@ export type RawSettingsOverride = {
   sector_pull?: number
   repulsion?: number
 }
-type RawMapSettings = {overrides?: RawSettingsOverride[]} | null
+type RawMapSettings = {overrides?: RawSettingsOverride[]; square_overrides?: RawSettingsOverride[]} | null
 type RawAppearanceWindow = {_key: string; start_year?: number; end_year?: number}
 type RawEntity = {
   _id: string
@@ -158,6 +159,8 @@ export type EditorSector = {
   mobileCenter?: Coord
   /** Optional time-scoped overrides (forward-propagation; see docs/PROJECT.md). */
   desktopCenterOverrides: RawSectorCenterOverride[]
+  /** Same, for the SQUARE (mobile) center. */
+  mobileCenterOverrides: RawSectorCenterOverride[]
 }
 export type EditorCompany = {
   id: string
@@ -222,6 +225,8 @@ export type MapData = {
   // editor forward-propagates them at the viewed moment). Empty when the doc
   // doesn't exist yet — the editor falls back to LAYOUT_KNOBS_DEFAULTS.
   settingsOverrides: RawSettingsOverride[]
+  /** Square (mobile) knob overrides — the square canvas is tuned separately. */
+  squareSettingsOverrides: RawSettingsOverride[]
 }
 
 /**
@@ -341,6 +346,7 @@ function buildMapData(
       center: s.desktop_center as Coord,
       mobileCenter: s.mobile_center,
       desktopCenterOverrides: s.desktop_center_overrides ?? [],
+      mobileCenterOverrides: s.mobile_center_overrides ?? [],
     }))
 
   return {
@@ -351,11 +357,12 @@ function buildMapData(
     entitiesByName,
     sectors: editorSectors,
     settingsOverrides: settings?.overrides ?? [],
+    squareSettingsOverrides: settings?.square_overrides ?? [],
   }
 }
 
 const SECTORS_Q = `*[_type == "sector"]{
-  _id, name, desktop_center, mobile_center, desktop_center_overrides
+  _id, name, desktop_center, mobile_center, desktop_center_overrides, mobile_center_overrides
 }`
 const COMPANIES_Q = `*[_type == "company"]{
   _id, name, "slug": slug.current, description,
@@ -375,11 +382,11 @@ const ENTITIES_Q = `*[_type == "entity"]{
   sector->{_id, name, desktop_center},
   position_overrides, mobile_position_overrides, appearance_windows
 }`
+const SETTINGS_KNOBS = `_key, start_date,
+    packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion`
 const SETTINGS_Q = `*[_id == "mapSettings"][0]{
-  overrides[]{
-    _key, start_date,
-    packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion
-  }
+  overrides[]{${SETTINGS_KNOBS}},
+  square_overrides[]{${SETTINGS_KNOBS}}
 }`
 
 /**

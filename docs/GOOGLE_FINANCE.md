@@ -177,3 +177,62 @@ Once the current-year formulas are trusted, the FMP ingest
 market-cap source. Keep it around until the sheet is fully on GF; then drop the
 `FMP_API_KEY` dependency. `suggest-tickers.ts` (FMP name search) can still help
 find primary-listing symbols, or retire it too.
+
+## Resilience: degraded publishes + the daily snapshot
+
+Google's "publish to web" CSV endpoint is not an API, and it fails **two ways**:
+
+1. **Outright** — rate limits, transient 5xx, or an **HTML consent page served
+   with a 200**, which used to parse as "a sheet with no slug column" and
+   silently produce empty data.
+2. **Degraded** *(the common one)* — the sheet's `GOOGLEFINANCE()` formulas error
+   inside Google's publish pipeline, and the formula's `IFERROR(…, "")` turns
+   each error into a **blank current-year cell**. The CSV arrives with a 200, a
+   valid slug column and the right row count, but a third of the market caps
+   missing. Measured 2026-09-19: **two of three fetches, eight seconds apart,
+   were degraded** (64 vs 177 current-year values). Hand-entered years are never
+   affected.
+
+Either way the app used to fall through to stale code-bundled values (wrong
+market caps, 173 of 183 companies), and every planet name in the Map Editor
+turned red (no live value → the "not live-sourced" flag). Now:
+
+- **Quality check + re-fetch.** The app ([src/loadValuations.ts](../src/loadValuations.ts))
+  and the Studio editor ([studio/tools/mapEditor/liveValuations.ts](../studio/tools/mapEditor/liveValuations.ts))
+  retry outright failures with backoff, treat an HTML body as a failure, and
+  detect a degraded copy by comparing the newest year's fill to the previous
+  year's (healthy ≈ 1.0, degraded ≈ 0.35). A degraded copy is re-fetched up to
+  twice, keeping the fullest.
+- **Cell-level healing.** Whatever is still blank is filled **per company, per
+  year** from the daily snapshot — real-time values where Google delivered
+  them, yesterday's where it didn't, never the legacy numbers. Only companies
+  present in the live sheet are touched (a deleted row stays deleted), a live
+  value always wins, and hidden (`-`) cells are respected.
+- **Daily snapshot.** [.github/workflows/snapshot-valuations.yml](../.github/workflows/snapshot-valuations.yml)
+  runs [jobs/snapshot-valuations.ts](../jobs/snapshot-valuations.ts) daily
+  (02:00 UTC, after the roster sync). It fetches until it gets a healthy copy
+  (keeping the fullest of up to 6), and **refuses to overwrite** the existing
+  snapshot with a truncated roster or fewer current-year values than it already
+  has — so the snapshot is always a healthy copy. It commits to
+  `public/valuations-snapshot.csv`; Netlify deploys it, so it's same-origin. A
+  **red run** = Google was failing at that moment; the run history doubles as
+  an outage log.
+- **Diagnostics.** The app logs `[media-map] valuations source: live | live+snapshot | snapshot | legacy`
+  (with a detail such as `41 blank cell(s) filled from the daily snapshot`) and
+  sets `window.__mediaMapValuations = {source, detail, loadedAt}`, so a
+  wrong-looking map is diagnosable from the console in seconds.
+
+**Setup (one-time):**
+- GitHub repo secret `VALUATIONS_CSV_URL` = the same publish-to-web CSV link
+  Netlify has as `VITE_VALUATIONS_CSV_URL`. Then trigger the workflow once
+  manually (Actions → Snapshot valuations → Run workflow) to confirm it's green.
+- *(Recommended)* Studio env `SANITY_STUDIO_VALUATIONS_SNAPSHOT_URL` =
+  `https://<site>.netlify.app/valuations-snapshot.csv` so the editor heals
+  blanks too instead of showing red names during a degraded publish.
+  `netlify.toml` serves that file CORS-open for this purpose. Bake it in with a
+  Studio redeploy.
+
+**Longer-term option:** the root cause is evaluating `GOOGLEFINANCE()` at
+publish time. Moving the current-year values to a scheduled job that writes
+plain numbers into the sheet (or serving the snapshot as the primary source and
+refreshing it hourly) would remove the flakiness entirely rather than heal it.

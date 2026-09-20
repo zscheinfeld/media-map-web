@@ -199,14 +199,31 @@ export function MapEditorTool() {
   // values active at the viewed moment drive the canvas + the knob panel; editing
   // a knob stages an override stamped at the current moment, so earlier/sparser
   // maps can carry their own settings.
-  const knobs = useMemo<LayoutKnobsValues>(() => {
-    const resolved = resolveSettingsOverrides(data?.settingsOverrides ?? [], pending)
+  // Desktop and square are tuned separately (different canvas shape), so the
+  // knob panel reads/writes whichever aspect is being edited. Square falls back
+  // to the desktop values until it has been tuned, so it starts somewhere sane
+  // rather than at the bare defaults.
+  const settingsAspect: 'desktop' | 'square' = isSquare ? 'square' : 'desktop'
+  const settingsArray = isSquare
+    ? (data?.squareSettingsOverrides ?? [])
+    : (data?.settingsOverrides ?? [])
+  const desktopKnobs = useMemo<LayoutKnobsValues>(() => {
+    const resolved = resolveSettingsOverrides(data?.settingsOverrides ?? [], pending, 'desktop')
     return activeSettingsOverrideAt(resolved, moment)?.values ?? LAYOUT_KNOBS_DEFAULTS
   }, [data, pending, moment])
+  const knobs = useMemo<LayoutKnobsValues>(() => {
+    if (!isSquare) return desktopKnobs
+    const resolved = resolveSettingsOverrides(data?.squareSettingsOverrides ?? [], pending, 'square')
+    return activeSettingsOverrideAt(resolved, moment)?.values ?? desktopKnobs
+  }, [data, pending, moment, isSquare, desktopKnobs])
   const setKnob = useCallback(
     (key: keyof LayoutKnobsValues) => (v: number) =>
-      setPending((prev) => editSettingsAt(prev, data?.settingsOverrides ?? [], moment, {[key]: v})),
-    [data, moment],
+      setPending((prev) =>
+        // `knobs` seeds a brand-new square override, so the first square tweak
+        // carries the values you can currently see instead of resetting the rest.
+        editSettingsAt(prev, settingsArray, moment, {[key]: v}, settingsAspect, knobs),
+      ),
+    [settingsArray, moment, settingsAspect, knobs],
   )
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -302,11 +319,13 @@ export function MapEditorTool() {
     for (const s of data.sectors) {
       // Square mode uses the sector's mobile_center (falling back to desktop if
       // unset); desktop mode uses the time-scoped desktop center + live drag.
-      const live = isSquare
-        ? s.mobileCenter ?? effectiveSectorCenterAt(s, pending, s.id, moment)
-        : sectorDragState?.sectorId === s.id
+      // A live drag wins in BOTH modes so the pill follows the cursor; otherwise
+      // the time-scoped center for the mode being edited (square reads the
+      // mobile overrides + mobile_center baseline, desktop the desktop pair).
+      const live =
+        sectorDragState?.sectorId === s.id
           ? {x: sectorDragState.x, y: sectorDragState.y}
-          : effectiveSectorCenterAt(s, pending, s.id, moment)
+          : effectiveSectorCenterAt(s, pending, s.id, moment, isSquare ? 'mobile' : 'desktop')
       out[s.name] = live
     }
     return out
@@ -573,7 +592,11 @@ export function MapEditorTool() {
       if (sState && data) {
         const sector = data.sectors.find((s) => s.id === sDrag.sectorId)
         if (sector) {
-          setPending((prev) => editSectorAt(prev, sector, moment, sState.x, sState.y))
+          // Square drags write mobile_center_overrides, desktop drags the
+          // desktop array — never the other layout's field.
+          setPending((prev) =>
+            editSectorAt(prev, sector, moment, sState.x, sState.y, isSquare ? 'mobile' : 'desktop'),
+          )
         }
       }
       return
@@ -637,9 +660,16 @@ export function MapEditorTool() {
       // `moment`, mutates it; otherwise creates a new override at `moment`
       // seeded with the active position so the pin "takes effect from this
       // moment forward" without moving the planet.
-      setPending((prev) => editAt(prev, carrierFor(selectedCompany), moment, {pin: next}, positionField))
+      //
+      // A planet that has never been placed has no position to seed from, so
+      // pinning would otherwise create an override at (0,0) and fling it to the
+      // canvas origin. Seed those from where physics currently has it, i.e. pin
+      // it exactly where the editor is showing it.
+      const live = !activeOverride ? nodeByName.get(selectedCompany.name) : undefined
+      const patch = live ? {pin: next, x: live.x, y: live.y} : {pin: next}
+      setPending((prev) => editAt(prev, carrierFor(selectedCompany), moment, patch, positionField))
     },
-    [selectedCompany, moment, isSquare, positionField],
+    [selectedCompany, moment, isSquare, positionField, activeOverride, nodeByName],
   )
 
   const onSetPosition = useCallback(
@@ -716,7 +746,12 @@ export function MapEditorTool() {
   const sectorHistory: ResolvedSectorOverride[] = useMemo(
     () =>
       selectedSector
-        ? resolveSectorOverrides(selectedSector.desktopCenterOverrides, pending, selectedSector.id)
+        ? resolveSectorOverrides(
+            isSquare ? selectedSector.mobileCenterOverrides : selectedSector.desktopCenterOverrides,
+            pending,
+            selectedSector.id,
+            isSquare ? 'mobile' : 'desktop',
+          )
         : [],
     [selectedSector, pending],
   )
@@ -728,7 +763,7 @@ export function MapEditorTool() {
 
   const onClearSectorAtCurrentMoment = useCallback(() => {
     if (!selectedSector) return
-    setPending((prev) => clearSectorAt(prev, selectedSector, moment))
+    setPending((prev) => clearSectorAt(prev, selectedSector, moment, isSquare ? 'mobile' : 'desktop'))
   }, [selectedSector, moment])
 
   // --- Connect-mode controls ----------------------------------------------
