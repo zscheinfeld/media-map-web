@@ -682,6 +682,16 @@ export function MapEditorTool() {
     [selectedCompany, moment, isSquare, positionField],
   )
 
+  // Remove a specific override from the history by ITS OWN moment — so an
+  // undated ("Always") entry, whose moment is the empty sentinel, is reachable.
+  const onDeleteOverride = useCallback(
+    (o: {moment: string}) => {
+      if (!selectedCompany) return
+      setPending((prev) => clearAt(prev, carrierFor(selectedCompany), o.moment, positionField))
+    },
+    [selectedCompany, isSquare, positionField],
+  )
+
   const onClearAtCurrentMoment = useCallback(() => {
     if (!selectedCompany) return
     setPending((prev) => clearAt(prev, carrierFor(selectedCompany), moment, positionField))
@@ -1214,6 +1224,7 @@ export function MapEditorTool() {
           onTogglePin={onTogglePin}
           onSetPosition={onSetPosition}
           onClearAtCurrentMoment={onClearAtCurrentMoment}
+          onDeleteOverride={onDeleteOverride}
           onClose={() => setSelectedName(null)}
           offset={changesOffset}
         />
