@@ -12,9 +12,10 @@ The site is **live on the Google Finance sheet** (public app + hosted Studio + S
 
 **▶ Pick back up here (in order):**
 1. **Author the About Modal content** in Studio + fill the Substack / More-from-Eshap / Feedback links (Studio is redeployed, so the `about` singleton is available).
-2. **Adobe Fonts kit** (§4c) — add the Netlify/prod domain(s) to the kit, and activate **Medium (500) + Demi (600)**. Until the domain is added, the *live* site renders the Libre Franklin fallback, not real Franklin Gothic.
-3. **Historical maps on mobile** (§3) — adjust the year-transition layouts for the mobile/square view.
-4. Then the remaining launch features (§4b: search, dynamic news feed), launch infra (§4c), QA passes (§2/§3/§5), and decisions (paywall, domain, analytics).
+2. **Add the `VALUATIONS_CSV_URL` GitHub secret** (same link as Netlify's `VITE_VALUATIONS_CSV_URL`) and run the **Snapshot valuations** workflow once — this turns on the daily snapshot fallback that stops the live site reverting to stale data when Google's CSV endpoint hiccups. Recommended: set `SANITY_STUDIO_VALUATIONS_SNAPSHOT_URL` in the Studio (+ redeploy) so the editor heals blank cells too instead of going all-red during those hiccups. See [GOOGLE_FINANCE.md → Resilience](GOOGLE_FINANCE.md#resilience-the-daily-snapshot-fallback).
+3. **Adobe Fonts kit** (§4c) — add the Netlify/prod domain(s) to the kit, and activate **Medium (500) + Demi (600)**. Until the domain is added, the *live* site renders the Libre Franklin fallback, not real Franklin Gothic.
+4. **Historical maps on mobile** (§3) — adjust the year-transition layouts for the mobile/square view.
+5. Then the remaining launch features (§4b: search, dynamic news feed), launch infra (§4c), QA passes (§2/§3/§5), and decisions (paywall, domain, analytics).
 
 ---
 
