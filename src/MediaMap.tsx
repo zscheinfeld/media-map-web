@@ -18,6 +18,8 @@ import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
 import { buildExportPng, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
+import { SearchBar } from "./SearchBar";
+import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
 const VALUATION_LABELS: Record<ValuationType, string> = {
@@ -2292,16 +2294,32 @@ function CompanyListView({
   onSort,
   active,
   isMobile,
+  focusRow,
 }: {
   rows: ListRow[];
   sort: ListSort;
   onSort: (key: ListSortKey) => void;
   active: boolean;
   isMobile: boolean;
+  /** A search pick: scroll this row into view and flash it (token re-fires). */
+  focusRow: { name: string; token: number } | null;
 }) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
+  // The flash is DERIVED from the pick until its timer marks that token spent,
+  // so the effect only scrolls; state changes happen in the timeout callback.
+  const [spentToken, setSpentToken] = useState<number | null>(null);
+  const flashRow = focusRow && focusRow.token !== spentToken ? focusRow.name : null;
+  useEffect(() => {
+    if (!focusRow || !tbodyRef.current) return;
+    const row = Array.from(tbodyRef.current.children).find(
+      (el) => (el as HTMLElement).dataset.name === focusRow.name,
+    ) as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const t = window.setTimeout(() => setSpentToken(focusRow.token), 2200);
+    return () => window.clearTimeout(t);
+  }, [focusRow]);
   // Freeze the Company column on mobile so its names stay visible while the row
   // scrolls horizontally. Each frozen cell is painted (below) with the solid
   // color of the background gradient at its own vertical position, so the stacked
@@ -2468,12 +2486,15 @@ function CompanyListView({
             return (
             <tr
               key={r.name}
+              data-name={r.name}
               onMouseEnter={() => setHoveredRow(r.name)}
               onMouseLeave={() => setHoveredRow(prev => (prev === r.name ? null : prev))}
               style={{
-                background: hoveredRow === r.name
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(255,255,255,0.03)",
+                background: flashRow === r.name
+                  ? "rgba(255,255,255,0.2)"
+                  : hoveredRow === r.name
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(255,255,255,0.03)",
                 opacity: active ? 1 : 0,
                 transform: active ? "translateY(0)" : "translateY(10px)",
                 transition: `opacity 320ms ease ${enterDelay}ms, transform 320ms ease ${enterDelay}ms, background 120ms ease`,
@@ -2583,7 +2604,22 @@ function barsPath(xLeft: (i: number) => number, barW: number, upper: number[], l
 // stagM/stagC: month/company stagger spans · duration: ms · easing: out-cubic.
 const AGG_INTRO = { posOffset: 90, hFrac: 1, stagM: 0.2, stagC: 0.15, duration: 980 };
 
-function AggregateView({ active, data, zoomTarget, highlightSector }: { active: boolean; data: AggregateData; zoomTarget: number; highlightSector: string | null }) {
+function AggregateView({
+  active,
+  data,
+  zoomTarget,
+  highlightSector,
+  highlightCompany,
+  onClearHighlight,
+}: {
+  active: boolean;
+  data: AggregateData;
+  zoomTarget: number;
+  highlightSector: string | null;
+  /** A search pick, pinned like a hover until the user clicks anywhere. */
+  highlightCompany: string | null;
+  onClearHighlight: () => void;
+}) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
@@ -2702,7 +2738,7 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
   // One single-color path per company (discrete yearly bars). A dark stroke +
   // the 2px year gap separate bars horizontally and companies vertically.
   const shapes = useMemo(() => {
-    if (!plotW || !plotH || !scale) return [] as { fill: string; sector: string; d: string }[];
+    if (!plotW || !plotH || !scale) return [] as { fill: string; sector: string; name: string; d: string }[];
     // Intro transform (driven by the tuning controls): each bar slides up from
     // `posOffset` px low and grows in height (top eased down by `heightPct`% of its
     // final height), staggered left→right by month and slightly per company.
@@ -2732,7 +2768,7 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
         up = nu;
         lo = nl;
       }
-      return { fill: b.color, sector: b.sector, d: barsPath(xLeft, barW, up, lo, b.values, M) };
+      return { fill: b.color, sector: b.sector, name: b.name, d: barsPath(xLeft, barW, up, lo, b.values, M) };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bands, stacks, plotW, plotH, scale, barW, slotW, M, intro]);
@@ -2744,6 +2780,15 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
     return barsPath(xLeft, barW, stacks.upper[k], stacks.lower[k], bands[k].values, M);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hover, bands, stacks, scale, barW, slotW, M]);
+
+  // Outline of the company a search pick pinned (same shape as the hover outline).
+  const pinnedOutline = useMemo(() => {
+    if (!highlightCompany || !scale) return null;
+    const k = bands.findIndex((b) => b.name === highlightCompany);
+    if (k < 0) return null;
+    return barsPath(xLeft, barW, stacks.upper[k], stacks.lower[k], bands[k].values, M);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightCompany, bands, stacks, scale, barW, slotW, M]);
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -2762,6 +2807,10 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
   return (
     <div
       ref={wrapRef}
+      // A search pick stays pinned until the user clicks anywhere in the chart.
+      onClick={() => {
+        if (highlightCompany) onClearHighlight();
+      }}
       style={{
         position: "absolute",
         inset: 0,
@@ -2798,9 +2847,16 @@ function AggregateView({ active, data, zoomTarget, highlightSector }: { active: 
               stroke={AGG_GAP_STROKE}
               strokeWidth={0.75}
               shapeRendering="crispEdges"
-              style={{ opacity: highlightSector && s.sector !== highlightSector ? 0.12 : 1, transition: "opacity 160ms ease" }}
+              style={{
+                opacity:
+                  (highlightSector && s.sector !== highlightSector) || (highlightCompany && s.name !== highlightCompany)
+                    ? 0.12
+                    : 1,
+                transition: "opacity 160ms ease",
+              }}
             />
           ))}
+          {pinnedOutline && <path d={pinnedOutline} fill="none" stroke="#fff" strokeWidth={1.4} />}
           {hoverOutline && <path d={hoverOutline} fill="none" stroke="#fff" strokeWidth={1.2} />}
         </svg>
         {hover && hoverBand && (
@@ -3175,6 +3231,16 @@ export default function MediaMap() {
   // Name of the planet currently shown in the right-side detail panel.
   // Set on click in non-edit mode; cleared by the panel's close button.
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
+  // --- Search (top bar, beside the view tabs) ---
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Names matching the live query → everything else on the map dims. null = idle.
+  const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
+  // Aggregate view: the band a search result pinned (click anywhere to release).
+  const [aggHighlight, setAggHighlight] = useState<string | null>(null);
+  // List view: the row a search result scrolled to (token re-fires the same name).
+  const [listFocus, setListFocus] = useState<{ name: string; token: number } | null>(null);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const [tabsWidth, setTabsWidth] = useState(300);
   // Live-tunable layout knobs surfaced in the edit-mode toolbar so you can
   // drag-tweak planet size, spacing, and label size without redeploying.
   const [packingDensity, setPackingDensity] = useState(0.5);
@@ -3454,6 +3520,7 @@ export default function MediaMap() {
   const [layoutMode, setLayoutMode] = useState<"map" | "linear">("map");
   const selectView = (mode: AppViewMode) => {
     setViewMode(mode);
+    if (mode !== "aggregate") setAggHighlight(null); // an Aggregate search pin is Aggregate-only
     if (mode === "map" || mode === "linear") setLayoutMode(mode);
   };
   // List-view column sort. Default: largest valuation first.
@@ -4409,6 +4476,27 @@ export default function MediaMap() {
     return sectorCenterFor(sector, unknownIdx, unknownTotal, false);
   };
 
+  // LINEAR: let a vertical wheel scroll the strip sideways. The strip hides
+  // vertical overflow and the page doesn't scroll, so a mouse wheel (which only
+  // emits deltaY) previously did nothing — only trackpad sideways swipes and
+  // shift+wheel worked. Horizontal-dominant deltas are left to native scrolling
+  // so trackpad gestures keep their momentum. Registered natively with
+  // `passive: false` because React marks wheel listeners passive, which would
+  // make preventDefault() a no-op plus a console warning.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || layoutMode !== "linear") return;
+    const onWheelNative = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // sideways → native
+      // deltaMode: 0 = pixels, 1 = lines (Firefox mouse wheels), 2 = pages.
+      const step = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? el.clientWidth : 1;
+      el.scrollLeft += e.deltaY * step;
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheelNative, {passive: false});
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, [layoutMode]);
+
   const onWheel = (e: React.WheelEvent) => {
     // Pinch-to-zoom only: trackpad pinch sends a wheel event with ctrlKey set.
     // Plain two-finger scroll (no ctrlKey) is ignored, so it never zooms the map.
@@ -4527,6 +4615,27 @@ export default function MediaMap() {
       y: node.y - (canvas.y + canvas.h / 2),
     };
     animateView(targetZoom, targetPan);
+  };
+
+  // Bring a company into view the way the ACTIVE layout expects. Map zooms and
+  // pans to it. Linear has no pan — its zoom scales the whole strip from the left
+  // edge — so running the map routine there just zoomed toward the start of the
+  // strip (Apple) whatever was clicked. Linear scrolls the strip instead, centring
+  // the company in the part of the viewport the side panel won't cover.
+  const SIDE_PANEL_COVER_PX = 340 + 16 + 16; // panel width + its right margin + a gap
+  const travelToNode = (node: PlanetNode, panelWillOpen: boolean) => {
+    if (layoutMode !== "linear") {
+      focusOnPlanet(node);
+      return;
+    }
+    const el = containerRef.current;
+    if (!el || containerH <= 0) return;
+    const pxPerSlideUnit = (containerH * zoom) / canvas.h;
+    const visibleW = el.clientWidth - (panelWillOpen && !isMobile ? SIDE_PANEL_COVER_PX : 0);
+    el.scrollTo({
+      left: Math.max(0, (node.x - canvas.x) * pxPerSlideUnit - visibleW / 2),
+      behavior: "smooth",
+    });
   };
 
   // Reset to the default view, smoothly. In vertical mode the base view is
@@ -4669,6 +4778,117 @@ export default function MediaMap() {
     setEnabled(on ? new Set(allSectors) : new Set());
   };
 
+  // ---- Search: what's findable in the CURRENT view, and how a pick "travels" ----
+  const searchItems = useMemo<SearchItem[]>(() => {
+    const tick = sanity?.tickerByName ?? {};
+    const sectorColor = (sec: string) => {
+      const flat = flatStyleForSector(sec);
+      return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
+    };
+    const planetColor = (n: PlanetNode) => n.style?.fill ?? n.style?.stripes?.[0] ?? `hsl(${n.hue}, 70%, 55%)`;
+    // Aggregate spans every year, so its bands are the whole searchable set.
+    if (viewMode === "aggregate") {
+      return aggregateData.bands.map((b) => ({
+        name: b.name,
+        label: usdFlag(b.name).display,
+        sector: b.sector,
+        color: b.color,
+        ticker: tick[b.name],
+      }));
+    }
+    let onYear: SearchItem[];
+    if (viewMode === "list") {
+      onYear = listRows.map((r) => {
+        const n = nodeByName.get(r.name);
+        return {
+          name: r.name,
+          label: usdFlag(r.name).display,
+          sector: r.sector,
+          color: n ? planetColor(n) : sectorColor(r.sector),
+          valuation: r.valuation,
+          ticker: tick[r.name],
+        };
+      });
+    } else {
+      onYear = nodes.map((n) => ({
+        name: n.name,
+        label: n.labelText ?? n.name,
+        sector: n.sector,
+        color: planetColor(n),
+        valuation: n.isEntity ? undefined : n.valuation_b,
+        isEntity: n.isEntity,
+        ticker: tick[n.name],
+      }));
+    }
+    const present = new Set(onYear.map((i) => i.name));
+    const extra: SearchItem[] = [];
+    // On this year's map, but its sector is switched off in the panel.
+    for (const c of displayedCompanies) {
+      if (present.has(c.name) || enabled.has(c.sector)) continue;
+      present.add(c.name);
+      extra.push({
+        name: c.name,
+        label: usdFlag(c.name).display,
+        sector: c.sector,
+        color: sectorColor(c.sector),
+        ticker: tick[c.name],
+        offYearHint: `Hidden — the ${c.sector} sector is switched off`,
+      });
+    }
+    // On the roster, but not on the viewed year: findable, with when it appears.
+    const year = activeDate.year;
+    for (const c of sanityDocs?.companies ?? []) {
+      if (!c.name || present.has(c.name)) continue;
+      present.add(c.name);
+      const years = [...(c.slug ? (valData.get(c.slug)?.keys() ?? []) : [])].map(Number).sort((a, b) => a - b);
+      if (!years.length) continue;
+      const min = years[0], max = years[years.length - 1];
+      const sec = c.sector?.name ?? "";
+      extra.push({
+        name: c.name,
+        label: usdFlag(c.name).display,
+        sector: sec,
+        color: sectorColor(sec),
+        ticker: c.ticker,
+        offYearHint:
+          year < min
+            ? `Not on the ${year} map — appears from ${min}`
+            : year > max
+              ? `Not on the ${year} map — last appears in ${max}`
+              : `Not on the ${year} map`,
+      });
+    }
+    return [...onYear, ...extra];
+  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year]);
+
+  const onSearchSelect = (item: SearchItem) => {
+    setSearchMatches(null);
+    if (viewMode === "aggregate") {
+      setAggHighlight(item.name); // pinned like a hover; click anywhere releases it
+      return;
+    }
+    if (viewMode === "list") {
+      // Incrementing token (not a timestamp) so picking the same row again re-fires.
+      setListFocus((prev) => ({ name: item.name, token: (prev?.token ?? 0) + 1 }));
+      return;
+    }
+    const node = nodeByName.get(item.name);
+    if (!node) return;
+    travelToNode(node, !node.isEntity);
+    if (!node.isEntity) setInspectedPlanet(node.name); // entities have no detail panel
+  };
+
+  // The search field grows to the width the tabs occupied. Observe rather than
+  // measure once: the tabs widen when the web font lands, and `scrollWidth` is the
+  // full content width even while they're collapsed behind the open search.
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setTabsWidth(el.scrollWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [timelineOpen]);
+
   const sectorPanelProps: SectorPanelProps = {
     sectors: allSectors,
     counts,
@@ -4804,6 +5024,12 @@ export default function MediaMap() {
             // all the way out. Planet clicks set the suppress flag so they focus.
             if (bgClickSuppressRef.current) { bgClickSuppressRef.current = false; return; }
             if (didDragRef.current) return;
+            if (layoutMode === "linear") {
+              // Linear's zoom is the user's chosen strip scale, not a "focused"
+              // state to back out of — just close the panel.
+              if (inspectedPlanet) setInspectedPlanet(null);
+              return;
+            }
             if (inspectedPlanet || zoom > MIN_ZOOM + 0.01) {
               setInspectedPlanet(null);
               resetView();
@@ -4879,7 +5105,8 @@ export default function MediaMap() {
               // Dim with the planets on sector-hover: a line stays lit if either
               // endpoint is in the hovered sector (its relationships), else it dims.
               const connDimmed =
-                hoveredSector !== null && a.sector !== hoveredSector && b.sector !== hoveredSector;
+                (hoveredSector !== null && a.sector !== hoveredSector && b.sector !== hoveredSector) ||
+                (searchMatches !== null && !searchMatches.has(a.name) && !searchMatches.has(b.name));
               return (
                 <g
                   key={`conn-${idx}`}
@@ -5003,11 +5230,15 @@ export default function MediaMap() {
                       }
                     } else if (!node.isEntity) {
                       // Entities (text-only sub-brands) have no detail panel.
-                      focusOnPlanet(node);
+                      travelToNode(node, true);
                       setInspectedPlanet(node.name);
                     }
                   }}
-                  dimmed={hoveredSector !== null && n.sector !== hoveredSector}
+                  dimmed={
+                    (hoveredSector !== null && n.sector !== hoveredSector) ||
+                    (searchMatches !== null && !searchMatches.has(n.name))
+                  }
+                  highlighted={searchMatches !== null && searchMatches.has(n.name)}
                   labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
                   isEditMode={isEditMode || mobileEdit}
                   isSelected={
@@ -5160,6 +5391,7 @@ export default function MediaMap() {
           onSort={handleListSort}
           active={viewMode === "list" && !timelineOpen}
           isMobile={isMobile}
+          focusRow={listFocus}
         />
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
@@ -5168,6 +5400,8 @@ export default function MediaMap() {
           data={aggregateData}
           zoomTarget={aggZoomTarget}
           highlightSector={hoveredSector}
+          highlightCompany={aggHighlight}
+          onClearHighlight={() => setAggHighlight(null)}
         />
 
         {/* Mobile layout editor toolbar — only with ?edit=mobile. */}
@@ -5249,6 +5483,8 @@ export default function MediaMap() {
         {!timelineOpen && (
           <div
             style={{
+              // Positioned, so it's also the containing block the search
+              // dropdown stretches to (see SearchBar) — keep it that way.
               position: "absolute",
               top: 16,
               // Mobile: anchor to the left edge; desktop: keep it upper-right.
@@ -5261,8 +5497,24 @@ export default function MediaMap() {
               padding: 4,
               backdropFilter: "blur(6px)",
               gap: 2,
+              alignItems: "center",
             }}
           >
+            {/* The tabs collapse leftwards while search is open; the search field
+                grows over the space they leave. */}
+            <div
+              ref={tabsRef}
+              aria-hidden={searchOpen}
+              style={{
+                display: "flex",
+                gap: 2,
+                overflow: "hidden",
+                maxWidth: searchOpen ? 0 : tabsWidth + 8,
+                opacity: searchOpen ? 0 : 1,
+                pointerEvents: searchOpen ? "none" : "auto",
+                transition: "max-width 260ms cubic-bezier(0.4, 0, 0.2, 1), opacity 160ms ease",
+              }}
+            >
             {(["map", "linear", "aggregate", "list"] as AppViewMode[]).map(mode => {
               const active = viewMode === mode;
               return (
@@ -5282,6 +5534,8 @@ export default function MediaMap() {
                     fontWeight: 500,
                     letterSpacing: 1.2,
                     cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flex: "0 0 auto",
                     transition: "background 160ms, color 160ms, box-shadow 160ms",
                   }}
                 >
@@ -5289,6 +5543,19 @@ export default function MediaMap() {
                 </button>
               );
             })}
+            </div>
+            <SearchBar
+              open={searchOpen}
+              onOpenChange={(o) => {
+                setSearchOpen(o);
+                if (!o) setSearchMatches(null);
+              }}
+              items={searchItems}
+              onMatchesChange={setSearchMatches}
+              onSelect={onSearchSelect}
+              expandedWidth={tabsWidth + 32}
+              isMobile={isMobile}
+            />
           </div>
         )}
 
@@ -5663,7 +5930,10 @@ export default function MediaMap() {
         lastUpdated={inspectedPlanet ? lastUpdatedByName.get(inspectedPlanet) : undefined}
         history={inspectedHistory}
         isPresent={activeDate.year === currentDate.year}
-        onClose={() => { setInspectedPlanet(null); resetView(); }}
+        onClose={() => {
+          setInspectedPlanet(null);
+          if (layoutMode !== "linear") resetView(); // Linear keeps its strip zoom
+        }}
       />
 
       {/* Connection hover tooltip — follows the cursor along a hovered line. */}
