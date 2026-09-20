@@ -19,6 +19,10 @@ export type PlanetInspectorProps = {
   onSetPosition: (x: number, y: number) => void
   /** Remove the override at the current global moment (no-op if none exists). */
   onClearAtCurrentMoment: () => void
+  /** Remove ANY override in the history — including an undated "Always" entry,
+   *  which "Clear override at <year>" can't reach (that only targets the viewed
+   *  year). Without this a stray undated override was visible but unremovable. */
+  onDeleteOverride: (o: ResolvedOverride) => void
   onClose: () => void
   /** Drag offset shared with the Changes panel, so the two move together. */
   offset?: {dx: number; dy: number}
@@ -119,6 +123,7 @@ export function PlanetInspector({
   onTogglePin,
   onSetPosition,
   onClearAtCurrentMoment,
+  onDeleteOverride,
   onClose,
   offset = {dx: 0, dy: 0},
 }: PlanetInspectorProps) {
@@ -223,11 +228,22 @@ export function PlanetInspector({
             At {momentLabel}
           </Text>
           {activeOverride ? (
-            <PositionEditor
-              key={activeOverride.key}
-              override={activeOverride}
-              onSet={onSetPosition}
-            />
+            <>
+              <PositionEditor
+                key={activeOverride.key}
+                override={activeOverride}
+                onSet={onSetPosition}
+              />
+              {/* An undated entry reads as "Always" in the history, which doesn't
+                  say "this is an override pulling the planet here" — spell it out. */}
+              {activeOverride.moment === '' && (
+                <Text size={0} style={{color: 'rgba(255,224,102,0.85)', lineHeight: 1.4}}>
+                  This is an undated position override — it applies to every year
+                  {activeOverride.pin ? '' : ' and, unpinned, acts as this planet’s gravity target'}. Remove it in
+                  the history below to let the planet float with its sector.
+                </Text>
+              )}
+            </>
           ) : (
             <Text size={1} muted>
               No position yet — drag to place, or pin it where it sits now.
@@ -316,16 +332,31 @@ export function PlanetInspector({
                       {formatMomentYear(o.moment)}
                       {ORIGIN_LABEL[o.origin]}
                     </Text>
-                    <Text
-                      size={0}
-                      style={{
-                        color: 'rgba(255,255,255,0.55)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      ({Math.round(o.x)}, {Math.round(o.y)})
-                      {o.pin ? ' 📌' : ''}
-                    </Text>
+                    <Flex align="center" gap={1}>
+                      <Text
+                        size={0}
+                        style={{
+                          color: 'rgba(255,255,255,0.55)',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        ({Math.round(o.x)}, {Math.round(o.y)})
+                        {o.pin ? ' 📌' : ''}
+                      </Text>
+                      {/* Delete this entry (staged like any edit — Save commits,
+                          Reset undoes). The only way to remove an "Always" one. */}
+                      {o.origin !== 'sanity-deleted-pending' && (
+                        <Button
+                          mode="bleed"
+                          tone="critical"
+                          text="✕"
+                          title={`Remove this position (${formatMomentYear(o.moment)})`}
+                          onClick={() => onDeleteOverride(o)}
+                          padding={1}
+                          fontSize={0}
+                        />
+                      )}
+                    </Flex>
                   </Flex>
                 )
               })}
