@@ -129,7 +129,12 @@ export function computeExportLayout(
     };
   });
 
+  // Big pinned planets ("heavy") are effectively immovable. They also sit partly
+  // off-canvas by design (Apple / Space X / Anthropic hug the edges), so they are
+  // exempt from bounds clamping — otherwise one overlap could yank Apple inward.
+  const heavyOf = new Map(nodes.map((n) => [n.name, n.pinned && !n.isEntity && n.targetR >= EXPORT_HEAVY_R]));
   const keepInBounds = (s: ExportShape) => {
+    if (heavyOf.get(s.name)) return;
     const ex = Math.max(s.hw, s.r);
     const ey = Math.max(s.hh, s.r);
     s.x = clamp(s.x, bounds.x0 + ex, bounds.x1 - ex);
@@ -202,7 +207,12 @@ export function computeExportLayout(
     let moved = 0;
     for (const m of mtvs) {
       if (!m) continue;
-      const shareA = a.weight / (a.weight + b.weight);
+      // Heavy (big pinned) planets are EXACTLY fixed: the light partner absorbs
+      // the whole correction. Splitting by mass gave a heavy planet only ~0.06%
+      // of each push, but a stuck neighbour pushes every sweep — over 150 sweeps
+      // that crept Apple ~100 units in the export.
+      const aHeavy = heavyOf.get(a.name), bHeavy = heavyOf.get(b.name);
+      const shareA = aHeavy && !bHeavy ? 0 : bHeavy && !aHeavy ? 1 : a.weight / (a.weight + b.weight);
       const mx = m[0] * relax;
       const my = m[1] * relax;
       a.x -= mx * shareA;
@@ -223,7 +233,6 @@ export function computeExportLayout(
   // a planet ejected off a big pinned one isn't pushed straight back in by a
   // neighbour later in the same sweep. Heavy–heavy pairs are left alone (only
   // authoring can fix two big pins on top of each other) and just reported.
-  const heavyOf = new Map(nodes.map((n) => [n.name, n.pinned && !n.isEntity && n.targetR >= EXPORT_HEAVY_R]));
   const light = shapes.filter((s) => !heavyOf.get(s.name));
   const heavy = shapes.filter((s) => heavyOf.get(s.name));
 
@@ -259,11 +268,57 @@ export function computeExportLayout(
     });
   }
 
-  // Report what's still overlapping (both effectively immovable).
+  // Rescue pass. Pairwise corrections can't free a light node wedged between
+  // heavy planets and the canvas edge — every push points into a wall (seen in
+  // practice: the Publishing pocket between Apple, META and the bottom edge).
+  // Relocate each still-colliding light node to the NEAREST free spot instead:
+  // sample rings of growing radius around it and take the first spot that
+  // clears every other shape and the bounds. Two passes, since freeing one node
+  // can free its neighbour.
+  const heavySet = new Set(heavy);
+  const fits = (s: ExportShape, x: number, y: number) => {
+    const ex = Math.max(s.hw, s.r), ey = Math.max(s.hh, s.r);
+    if (x - ex < bounds.x0 || x + ex > bounds.x1 || y - ey < bounds.y0 || y + ey > bounds.y1) return false;
+    const t = { ...s, x, y };
+    for (const o of shapes) if (o !== s && isOverlapping(t, o, 0)) return false;
+    return true;
+  };
+  for (let pass = 0; pass < 2; pass++) {
+    let moved = 0;
+    for (const s of light) {
+      if (!shapes.some((o) => o !== s && isOverlapping(s, o, REPORT_EPS))) continue;
+      let placed = false;
+      for (let ring = 40; ring <= 800 && !placed; ring += 40) {
+        const steps = Math.max(8, Math.round((2 * Math.PI * ring) / 60));
+        for (let k = 0; k < steps && !placed; k++) {
+          const a = (k / steps) * 2 * Math.PI;
+          const x = s.x + ring * Math.cos(a), y = s.y + ring * Math.sin(a);
+          if (fits(s, x, y)) {
+            s.x = x;
+            s.y = y;
+            placed = true;
+            moved++;
+          }
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // Report what's still overlapping. Two heavy (big pinned) planets are only a
+  // problem if their CIRCLES actually intersect — a merely tight gap between
+  // two pins is an authoring choice, not an overlap — so test those raw
+  // (deflating the circle gap); everything else against the padded shapes.
   const unresolved: Array<[string, string]> = [];
   for (let i = 0; i < shapes.length; i++)
-    for (let j = i + 1; j < shapes.length; j++)
-      if (isOverlapping(shapes[i], shapes[j], REPORT_EPS)) unresolved.push([shapes[i].name, shapes[j].name]);
+    for (let j = i + 1; j < shapes.length; j++) {
+      const a = shapes[i], b = shapes[j];
+      const hit =
+        heavySet.has(a) && heavySet.has(b)
+          ? !!circleCircle(a, b, EXPORT_CIRCLE_GAP)
+          : isOverlapping(a, b, REPORT_EPS);
+      if (hit) unresolved.push([a.name, b.name]);
+    }
 
   return { pos: new Map(shapes.map((s) => [s.name, { x: s.x, y: s.y }])), unresolved, sweeps: sweepsRun };
 }
@@ -463,7 +518,7 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
   const { pos, unresolved } = computeExportLayout(input.nodes, labelPx, EXPORT_SLIDE_UNITS_PER_PX, input.bounds);
   if (unresolved.length) {
     console.info(
-      `[media-map] export: ${unresolved.length} label/planet overlap(s) could not be separated (both immovable — adjust in Sanity):`,
+      `[media-map] export: ${unresolved.length} overlap(s) could not be resolved — two pinned planets whose circles intersect, or a planet with no free space within 800 units. Adjust these in Sanity:`,
       unresolved.map(([a, b]) => `${a} ↔ ${b}`),
     );
   }
