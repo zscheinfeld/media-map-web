@@ -11,7 +11,7 @@ Purple data cell = Google finance formula, don't edit
 Hyphen ""-"" with grey box = company does not exist at this year",,,,,,,,,,,,,,,,,,,,,,
 Slug,Name 🔒,Sector 🔒,Data Type 🔒,Data Source 🔒,Ticker 🔒,Exchange 🔒,Currency 🔒,FX_to_USD 🔒,Vetting Status ✏️,Link to Data Source ✏️,Notes ✏️,Last Updated ⏱️,2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015
 accenture,Accenture,Advertising,market_cap,Google Finance,ACN,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/accenture/marketcap/,,2026-09-19,110.9389973,168.11,222.78,220.01,168.17,261.99,173.06,133.91,93.97,97.45,75.42,68.02
-alibaba,Alibaba,Large Cap,market_cap,Google Finance,9988,HKG,HKD,0.127468914,Needs approval,https://companiesmarketcap.com/alibaba/marketcap/,,2026-09-19,35.87892292,363.25,202.57,198.56,233.22,330.67,648.31,570.94,352.53,442.42,219.52,202.8
+alibaba,Alibaba,Large Cap,market_cap,Google Finance,9988,HKG,USD,1,Needs approval,https://companiesmarketcap.com/alibaba/marketcap/,,2026-09-19,281.4719432,363.25,202.57,198.56,233.22,330.67,648.31,570.94,352.53,442.42,219.52,202.8
 alphabet,Alphabet,Large Cap,market_cap,Google Finance,GOOG,NASDAQ,USD,1,Needs approval,https://companiesmarketcap.com/alphabet-google/marketcap/,,2026-09-19,4254.573021,3802,2365,1756,1145,1917,1185,921.13,723.55,729.45,539.06,528.16
 amazon,Amazon,Large Cap,market_cap,Google Finance,AMZN,NASDAQ,USD,1,Needs approval,https://companiesmarketcap.com/amazon/marketcap/,,2026-09-19,2736.594783,2485,2352,1570,856.94,1691,1634,920.22,737.46,563.53,356.31,318.34
 amc,AMC Entertainment,Exhibition,market_cap,Google Finance,AMC,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/amc-entertainment/marketcap/,,2026-09-19,2.410031922,0.86,1.52,1.51,2.08,13.97,0.45,0.75,1.27,1.92,3.7,2.33
@@ -95,7 +95,7 @@ sega-sammy,Sega Sammy,Gaming,market_cap,Google Finance,SGAMY,OTCMKTS,JPY,0.00637
 sinclair,Sinclair,Local TV,market_cap,Google Finance,SBGI,NASDAQ,USD,1,Needs approval,https://companiesmarketcap.com/sinclair-broadcast/marketcap/,,2026-09-19,0.945920219,1.06,1.05,0.82,1.07,1.99,2.35,3.05,2.49,3.85,3.02,3.08
 sirius,Sirius,Audio,market_cap,Google Finance,SIRI,NASDAQ,USD,1,Needs approval,https://companiesmarketcap.com/sirius-xm/marketcap/,,2026-09-19,9.205294127,6.93,7.84,21.01,22.71,25.19,27.06,31.54,24.81,24.63,21.47,20.95
 snap,Snap,Social/Creator,market_cap,Google Finance,SNAP,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/snap/marketcap/,,2026-09-19,9.352319764,13.51,18.43,27.87,14.43,75.7,74.6,23.11,7.26,17.59,-,-
-sony,Sony,Gaming,market_cap,Google Finance,SONY,NYSE,JPY,0.006374502,Needs approval,https://companiesmarketcap.com/sony/marketcap/,,2026-09-19,0.9013966545,153.97,129.92,116.64,96.02,155.91,123.3,83.35,61.27,56.88,35.55,31.42
+sony,Sony,Gaming,market_cap,Google Finance,SONY,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/sony/marketcap/,,2026-09-19,141.4066,153.97,129.92,116.64,96.02,155.91,123.3,83.35,61.27,56.88,35.55,31.42
 space-x,Space X,AI,market_cap,Google Finance,SPCX,NASDAQ,USD,1,Needs approval,https://companiesmarketcap.com/spacex/marketcap/,,2026-09-19,2072.706,-,-,-,-,-,-,-,-,-,-,-
 sphere,Sphere,Exhibition,market_cap,Google Finance,SPHR,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/sphere-entertainment/marketcap/,,2026-09-19,5.214295671,3.37,1.44,1.19,1.55,2.4,2.53,-,-,-,-,-
 spotify,Spotify,Audio,market_cap,Google Finance,SPOT,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/spotify/marketcap/,,2026-09-19,104.7093498,120.31,92.24,36.66,15.24,44.82,59.65,27.56,20.52,-,-,-
