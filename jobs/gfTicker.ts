@@ -110,14 +110,47 @@ export function fxFormula(currencyCol: number, row1: number): string {
   return `=IF(${c}="USD",1,IFERROR(GOOGLEFINANCE("CURRENCY:"&${c}&"USD"),""))`
 }
 
-/** Current-year cell formula: market cap × FX ÷ 1e9 (billions USD). The sheet
- *  keeps Ticker BARE (e.g. AAPL) and Exchange separate (NASDAQ), so the GF symbol
- *  is built inline: EXCH:TICKER when an exchange is present, else the bare ticker.
- *  References the row's exchange + ticker + FX_to_USD cells. */
-export function marketCapFormula(exchangeCol: number, tickerCol: number, fxCol: number, row1: number): string {
+/** Current-year cell formula: market cap → billions USD.
+ *
+ *  GOOGLEFINANCE's `marketcap` attribute is NOT returned in a stable currency for
+ *  dual-listed tickers — even with an exchange prefix. Observed on `HKG:9988`
+ *  (Alibaba): USD one day, HKD the next, USD again the day after; `NYSE:SONY` went
+ *  JPY → USD in a day. A hand-set Currency column can't follow that, so the map
+ *  showed $2,159B / $36B / $0.90B on those days.
+ *
+ *  So the formula computes BOTH readings — "this is local currency" (× FX) and
+ *  "this is already USD" (× 1) — and keeps whichever is closer to LAST YEAR's
+ *  value in the same row. A flip is never subtle (8× for HKD, 150× for JPY, 1,400×
+ *  for KRW), so the choice is unambiguous where it matters. Currencies near
+ *  parity (EUR, GBP, CAD, AUD — rate between ½ and 2) are deliberately LEFT
+ *  ALONE: there a flip is only a 15–40% error, which is indistinguishable from a
+ *  genuine year-over-year move, and simulating against the live roster showed the
+ *  test would "correct" real changes on those rows. With no prior-year number (a
+ *  new company, or a `-`), also falls back to the local reading — i.e. the
+ *  previous behaviour.
+ *
+ *  The sheet keeps Ticker BARE (e.g. AAPL) and Exchange separate (NASDAQ), so the
+ *  GF symbol is built inline: EXCH:TICKER when an exchange is present, else the
+ *  bare ticker. References the row's exchange + ticker + FX_to_USD + prior-year
+ *  cells. `prevYearCol` < 0 → no disambiguation (plain local reading). */
+export function marketCapFormula(
+  exchangeCol: number,
+  tickerCol: number,
+  fxCol: number,
+  row1: number,
+  prevYearCol = -1,
+): string {
   const t = `${colLetter(tickerCol)}${row1}`
   const fx = `${colLetter(fxCol)}${row1}`
   const ex = exchangeCol >= 0 ? `${colLetter(exchangeCol)}${row1}` : ''
   const sym = ex ? `IF(${ex}="",${t},${ex}&":"&${t})` : t
-  return `=IFERROR(GOOGLEFINANCE(${sym},"marketcap")*${fx}/1e9,"")`
+  if (prevYearCol < 0) return `=IFERROR(GOOGLEFINANCE(${sym},"marketcap")*${fx}/1e9,"")`
+  const prev = `${colLetter(prevYearCol)}${row1}`
+  // raw = Google's number in billions; loc = read as local currency; usd = read as
+  // already-USD. Pick by log-distance to last year so 8× and ⅛× are treated alike.
+  return (
+    `=IFERROR(LET(raw,GOOGLEFINANCE(${sym},"marketcap")/1e9,loc,raw*${fx},prev,${prev},` +
+    `IF(OR(NOT(ISNUMBER(prev)),prev<=0,ABS(LN(${fx}))<LN(2)),loc,` +
+    `IF(ABS(LN(loc/prev))<=ABS(LN(raw/prev)),loc,raw))),"")`
+  )
 }
