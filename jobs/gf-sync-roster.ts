@@ -169,6 +169,9 @@ async function main() {
   const yearCols = H.map((h, i) => ({i, h})).filter(({h}) => /^\d{4}$/.test(h))
   const currentYear = new Date().getFullYear()
   const curYearCol = yearCols.find((y) => y.h === String(currentYear))?.i ?? -1
+  // Prior-year column: the current-year formula compares against it to catch
+  // GOOGLEFINANCE returning the market cap in the wrong currency (see gfTicker).
+  const prevYearCol = yearCols.find((y) => y.h === String(currentYear - 1))?.i ?? -1
 
   // Existing rows by slug (+ duplicate detection). Track the last row that
   // actually has a slug so appends land right after the real data, not after any
@@ -225,7 +228,7 @@ async function main() {
         // Refresh the current-year formula for api companies (reconciler owns it).
         formulaUpdates.push({
           range: `${t.tab}!${colLetter(curYearCol)}${existing.row1}`,
-          value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1),
+          value: marketCapFormula(col.exchange, col.ticker, col.fx, existing.row1, prevYearCol),
         })
         // Also refresh the FX_to_USD formula so it always matches the currency and
         // self-heals any stale/corrupt cell (e.g. a literal "USD" left in the cell).
@@ -255,7 +258,7 @@ async function main() {
     }
     if (col.currency >= 0 && col.fx >= 0) cells[col.fx] = fxFormula(col.currency, row1)
     if (wantsGfFormula(c) && curYearCol >= 0 && col.ticker >= 0 && col.fx >= 0) {
-      cells[curYearCol] = marketCapFormula(col.exchange, col.ticker, col.fx, row1)
+      cells[curYearCol] = marketCapFormula(col.exchange, col.ticker, col.fx, row1, prevYearCol)
     }
     return cells
   })

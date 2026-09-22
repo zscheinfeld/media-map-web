@@ -246,3 +246,42 @@ turned red (no live value → the "not live-sourced" flag). Now:
 publish time. Moving the current-year values to a scheduled job that writes
 plain numbers into the sheet (or serving the snapshot as the primary source and
 refreshing it hourly) would remove the flakiness entirely rather than heal it.
+
+## Currency flips in `marketcap` (and the self-correcting formula)
+
+GOOGLEFINANCE's `marketcap` attribute is **not** returned in a stable currency for
+dual-listed tickers, and it flips without warning — **even with an exchange
+prefix** (`HKG:9988` is already prefixed). Observed 2026-09-19…21: Alibaba USD →
+HKD → USD on consecutive days; `NYSE:SONY` JPY → USD; `OTCMKTS:SGAMY` JPY → USD.
+A hand-set `Currency` column can't follow that, so the map showed $2,159B, $36B,
+$0.90B and $0.03B on those days.
+
+The current-year formula (`marketCapFormula` in [jobs/gfTicker.ts](../jobs/gfTicker.ts))
+now computes **both readings** — the number × FX ("it's local currency") and the
+number × 1 ("it's already USD") — and keeps whichever is closer, by log-distance,
+to **last year's value in the same row**:
+
+```
+=IFERROR(LET(raw,GOOGLEFINANCE(<sym>,"marketcap")/1e9, loc,raw*<FX>, prev,<last year>,
+  IF(OR(NOT(ISNUMBER(prev)),prev<=0,ABS(LN(<FX>))<LN(2)), loc,
+     IF(ABS(LN(loc/prev))<=ABS(LN(raw/prev)), loc, raw))),"")
+```
+
+- A flip is never subtle (8× for HKD, 150× for JPY, 1,400× for KRW), so the pick
+  is unambiguous where it matters.
+- **Near-parity currencies (EUR, GBP, CAD, AUD — rate between ½ and 2) are left
+  alone.** A flip there is only a 15–40% error, indistinguishable from a genuine
+  year-over-year move; simulating against the roster showed the test would
+  "correct" real changes on those rows. They keep the plain local reading.
+- No prior-year value (a new company, or a `-`) → local reading, as before.
+- Simulated against the live roster on 2026-09-21: changed exactly the two rows
+  that were broken that day (Alibaba, Sega Sammy) and none of the other 107.
+
+**Rule for the `Currency` field: set the company's HOME currency, never USD as a
+patch.** With USD (rate 1) both readings are identical and there is nothing to
+choose between — so Sony must be `JPY`, Alibaba `HKD`, Sega Sammy `JPY`. (WPP,
+Publicis and Deutsche Telekom keep USD: Google has been consistently USD for them
+and their currencies are near parity, where the formula defers anyway.)
+
+The reconciler rewrites every api row's current-year formula on each run, so a
+formula change rolls out by running the **GF sync roster** workflow once.
