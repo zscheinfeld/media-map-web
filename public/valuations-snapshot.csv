@@ -10,127 +10,126 @@
 Purple data cell = Google finance formula, don't edit
 Hyphen ""-"" with grey box = company does not exist at this year",,,,,,,,,,,,,,,,,,,,,,
 Slug,Name 🔒,Sector 🔒,Data Type 🔒,Data Source 🔒,Ticker 🔒,Exchange 🔒,Currency 🔒,FX_to_USD 🔒,Vetting Status ✏️,Link to Data Source ✏️,Notes ✏️,Last Updated ⏱️,2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015
-accenture,Accenture,Advertising,market_cap,Google Finance,ACN,NYSE,USD,1,Approved,https://companiesmarketcap.com/accenture/marketcap/,,2026-09-23,112.4259482,168.11,222.78,220.01,168.17,261.99,173.06,133.91,93.97,97.45,75.42,68.02
-alibaba,Alibaba,Large Cap,market_cap,Google Finance,9988,HKG,HKD,0.1274893,Approved,https://companiesmarketcap.com/alibaba/marketcap/,,2026-09-23,274.4937252,363.25,202.57,198.56,233.22,330.67,648.31,570.94,352.53,442.42,219.52,202.8
-alphabet,Alphabet,Large Cap,market_cap,Google Finance,GOOG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/alphabet-google/marketcap/,,2026-09-23,4272.26879,3802,2365,1756,1145,1917,1185,921.13,723.55,729.45,539.06,528.16
-amazon,Amazon,Large Cap,market_cap,Google Finance,AMZN,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/amazon/marketcap/,,2026-09-23,2750.293278,2485,2352,1570,856.94,1691,1634,920.22,737.46,563.53,356.31,318.34
-amc,AMC Entertainment,Exhibition,market_cap,Google Finance,AMC,NYSE,USD,1,Approved,https://companiesmarketcap.com/amc-entertainment/marketcap/,,2026-09-23,2.651035093,0.86,1.52,1.51,2.08,13.97,0.45,0.75,1.27,1.92,3.7,2.33
-amcn,AMC Networks,Studio,market_cap,Google Finance,AMCX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/amc-networks/marketcap/,,2026-09-23,0.498299513,0.42,0.41,0.81,0.67,1.45,1.47,2.19,3.08,3.34,3.68,5.4
-angel,Angel Studios Inc,Studio,market_cap,Google Finance,ANGX,NYSE,USD,1,Approved,https://finance.yahoo.com/quote/ANGX/,,2026-09-23,0.952457112,-,-,-,-,-,-,-,-,-,-,-
-apollo,Apollo,HoldingCo,market_cap,Google Finance,APO,NYSE,USD,1,Approved,https://companiesmarketcap.com/apollo-global-management/marketcap/,,2026-09-23,74.49000092,86.2,96.34,52.89,38.27,17.85,11.2,10.63,4.94,6.47,3.59,2.74
-apple,Apple,Large Cap,market_cap,Google Finance,AAPL,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/apple/marketcap/,,2026-09-23,4958.369258,3997,3766,2994,2066,2901,2255,1287,746.07,860.88,608.96,583.61
-asmodee,Asmodee,Gaming,market_cap,Google Finance,ASMDEE-B,STO,SEK,0.101368218,Approved,https://companiesmarketcap.com/asmodee-group-ab/marketcap/,,2026-09-23,3.87321712,2.67,-,-,-,-,-,-,-,-,-,-
-at-t,AT&T,Telecom,market_cap,Google Finance,T,NYSE,USD,1,Approved,https://companiesmarketcap.com/att/marketcap/,,2026-09-23,171.9948661,176.25,164.02,119.97,131.2,175.66,204.94,283.5,207.81,238.68,261.17,211.44
-bandai,Bandai Namco,Gaming,market_cap,Google Finance,NCBDF,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/bandai-namco/marketcap/,,2026-09-23,22.83829726,17.47,15.71,13.23,13.67,17.17,19.01,13.38,9.8,7.17,6.09,4.67
-banijay-convert-to-usd,Banijay,Studio,market_cap,Google Finance,BNJ,EPA,EUR,1.142465,Approved,https://finance.yahoo.com/quote/BNJ.AS/,,2026-09-23,4.148912532,3.94,4.11,4.03,3.96,1.71,1.83,1.68,0.44,0.46,0.4,0.38
-bell-canada,Bell Canada,MVPD/BB,market_cap,Google Finance,BCE,NYSE,USD,1,Approved,https://companiesmarketcap.com/bce/marketcap/,,2026-09-23,20.31645862,21.49,20.73,35.99,40.07,46.9,38.6,41.62,35.56,43.26,37.45,33.34
-Bending Spoons,Bending Spoons,AI,market_cap,Google Finance,BSP,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/bending-spoons/marketcap/,,2026-09-23,22.9758773,-,-,-,-,-,-,-,-,-,-,-
-canal-convert-to-usd,Canal+,Studio,market_cap,Google Finance,CAN,LON,GBP,1.331285,Needs attention,https://finance.yahoo.com/quote/CAN.L/,How to show Vivendi in previous years? ,2026-09-23,3.236918659,3.25,2.88,-,-,-,-,-,-,-,-,-
-charter,Charter,MVPD/BB,market_cap,Google Finance,CHTR,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/charter-communications/marketcap/,,2026-09-23,13.43534617,28.29,49.57,57.49,52.78,112.62,132.22,101.85,64.21,83.94,77.39,20.58
-cinemark,Cinemark,Exhibition,market_cap,Google Finance,CNK,NYSE,USD,1,Approved,https://companiesmarketcap.com/cinemark-theatres/marketcap/,,2026-09-23,4.158915507,2.68,3.78,1.71,1.04,1.92,2.05,3.96,4.18,4.05,4.45,3.87
-cineplex,Cineplex,Exhibition,market_cap,Google Finance,CGX,TSE,CAD,0.709925,Approved,https://companiesmarketcap.com/cineplex/marketcap/,,2026-09-23,0.5716588974,0.49,0.54,0.39,0.37,0.67,0.46,1.64,1.18,1.88,2.41,2.17
-comcast,Comcast,MVPD/BB,market_cap,Google Finance,CMCSA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/comcast/marketcap/,,2026-09-23,79.56041939,109.51,145.14,176.49,150.85,229.95,239.74,204.74,154.1,187.18,164.89,137.55
-comscore,Comscore,Advertising,market_cap,Google Finance,SCOR,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/comscore/marketcap/,,2026-09-23,0.073492111,0.03395,0.02821,0.07941,0.1,0.3,0.18,0.34,0.85,1.63,1.23,1.6
-dentsu,Dentsu,Advertising,market_cap,Google Finance,DNTUF,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/dentsu/marketcap/,,2026-09-23,6.050251906,5.59,6.33,6.78,8.2,9.76,8.15,9.59,12.53,12.06,13.48,15.81
-Deutsche Telekom,Deutsche Telekom,Telecom,market_cap,Google Finance,DTE,ETR,USD,1,Approved,https://companiesmarketcap.com/deutsche-telekom/marketcap/,,2026-09-23,132.1563173,161.08,150.5,119.47,98.88,92.04,87.25,77.41,80.72,82.27,80.52,83.68
-disney,Disney,Studio,market_cap,Google Finance,DIS,NYSE,USD,1,Approved,https://companiesmarketcap.com/walt-disney/marketcap/,,2026-09-23,179.2646438,204.17,202.01,165.25,158.43,281.53,328.02,257.58,164.47,162.04,165.86,173.71
-djt,DJT,Social/Creator,market_cap,Google Finance,DJT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/trump-media-technology-group/marketcap/,,2026-09-23,2.607088487,3.85,7.82,-,-,-,-,-,-,-,-,-
+accenture,Accenture,Advertising,market_cap,Google Finance,ACN,NYSE,USD,1,Approved,https://companiesmarketcap.com/accenture/marketcap/,,2026-09-24,112.3035985,168.11,222.78,220.01,168.17,261.99,173.06,133.91,93.97,97.45,75.42,68.02
+alibaba,Alibaba,Large Cap,market_cap,Google Finance,9988,HKG,HKD,0.127491,Approved,https://companiesmarketcap.com/alibaba/marketcap/,,2026-09-24,276.9910537,363.25,202.57,198.56,233.22,330.67,648.31,570.94,352.53,442.42,219.52,202.8
+alphabet,Alphabet,Large Cap,market_cap,Google Finance,GOOG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/alphabet-google/marketcap/,,2026-09-24,4111.718632,3802,2365,1756,1145,1917,1185,921.13,723.55,729.45,539.06,528.16
+amazon,Amazon,Large Cap,market_cap,Google Finance,AMZN,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/amazon/marketcap/,,2026-09-24,2688.70354,2485,2352,1570,856.94,1691,1634,920.22,737.46,563.53,356.31,318.34
+amc,AMC Entertainment,Exhibition,market_cap,Google Finance,AMC,NYSE,USD,1,Approved,https://companiesmarketcap.com/amc-entertainment/marketcap/,,2026-09-24,2.561775386,0.86,1.52,1.51,2.08,13.97,0.45,0.75,1.27,1.92,3.7,2.33
+amcn,AMC Networks,Studio,market_cap,Google Finance,AMCX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/amc-networks/marketcap/,,2026-09-24,0.49499964,0.42,0.41,0.81,0.67,1.45,1.47,2.19,3.08,3.34,3.68,5.4
+angel,Angel Studios Inc,Studio,market_cap,Google Finance,ANGX,NYSE,USD,1,Approved,https://finance.yahoo.com/quote/ANGX/,,2026-09-24,0.905768037,-,-,-,-,-,-,-,-,-,-,-
+apollo,Apollo,HoldingCo,market_cap,Google Finance,APO,NYSE,USD,1,Approved,https://companiesmarketcap.com/apollo-global-management/marketcap/,,2026-09-24,74.61600037,86.2,96.34,52.89,38.27,17.85,11.2,10.63,4.94,6.47,3.59,2.74
+apple,Apple,Large Cap,market_cap,Google Finance,AAPL,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/apple/marketcap/,,2026-09-24,4918.530383,3997,3766,2994,2066,2901,2255,1287,746.07,860.88,608.96,583.61
+asmodee,Asmodee,Gaming,market_cap,Google Finance,ASMDEE-B,STO,SEK,0.1008474,Approved,https://companiesmarketcap.com/asmodee-group-ab/marketcap/,,2026-09-24,3.821889845,2.67,-,-,-,-,-,-,-,-,-,-
+at-t,AT&T,Telecom,market_cap,Google Finance,T,NYSE,USD,1,Approved,https://companiesmarketcap.com/att/marketcap/,,2026-09-24,173.3653606,176.25,164.02,119.97,131.2,175.66,204.94,283.5,207.81,238.68,261.17,211.44
+bandai,Bandai Namco,Gaming,market_cap,Google Finance,NCBDF,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/bandai-namco/marketcap/,,2026-09-24,22.30574439,17.47,15.71,13.23,13.67,17.17,19.01,13.38,9.8,7.17,6.09,4.67
+banijay-convert-to-usd,Banijay,Studio,market_cap,Google Finance,BNJ,EPA,EUR,1.138605,Approved,https://finance.yahoo.com/quote/BNJ.AS/,,2026-09-24,4.125142902,3.94,4.11,4.03,3.96,1.71,1.83,1.68,0.44,0.46,0.4,0.38
+bell-canada,Bell Canada,MVPD/BB,market_cap,Google Finance,BCE,NYSE,USD,1,Approved,https://companiesmarketcap.com/bce/marketcap/,,2026-09-24,20.18994264,21.49,20.73,35.99,40.07,46.9,38.6,41.62,35.56,43.26,37.45,33.34
+Bending Spoons,Bending Spoons,AI,market_cap,Google Finance,BSP,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/bending-spoons/marketcap/,,2026-09-24,22.0039927,-,-,-,-,-,-,-,-,-,-,-
+canal-convert-to-usd,Canal+,Studio,market_cap,Google Finance,CAN,LON,GBP,1.32417,Needs attention,https://finance.yahoo.com/quote/CAN.L/,How to show Vivendi in previous years? ,2026-09-24,3.058153867,3.25,2.88,-,-,-,-,-,-,-,-,-
+charter,Charter,MVPD/BB,market_cap,Google Finance,CHTR,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/charter-communications/marketcap/,,2026-09-24,13.36088234,28.29,49.57,57.49,52.78,112.62,132.22,101.85,64.21,83.94,77.39,20.58
+cinemark,Cinemark,Exhibition,market_cap,Google Finance,CNK,NYSE,USD,1,Approved,https://companiesmarketcap.com/cinemark-theatres/marketcap/,,2026-09-24,4.148483428,2.68,3.78,1.71,1.04,1.92,2.05,3.96,4.18,4.05,4.45,3.87
+cineplex,Cineplex,Exhibition,market_cap,Google Finance,CGX,TSE,CAD,0.709071506,Approved,https://companiesmarketcap.com/cineplex/marketcap/,,2026-09-24,0.5472505161,0.49,0.54,0.39,0.37,0.67,0.46,1.64,1.18,1.88,2.41,2.17
+comcast,Comcast,MVPD/BB,market_cap,Google Finance,CMCSA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/comcast/marketcap/,,2026-09-24,80.02173909,109.51,145.14,176.49,150.85,229.95,239.74,204.74,154.1,187.18,164.89,137.55
+comscore,Comscore,Advertising,market_cap,Google Finance,SCOR,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/comscore/marketcap/,,2026-09-24,0.075010541,0.03395,0.02821,0.07941,0.1,0.3,0.18,0.34,0.85,1.63,1.23,1.6
+dentsu,Dentsu,Advertising,market_cap,Google Finance,DNTUF,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/dentsu/marketcap/,,2026-09-24,5.974239877,5.59,6.33,6.78,8.2,9.76,8.15,9.59,12.53,12.06,13.48,15.81
+Deutsche Telekom,Deutsche Telekom,Telecom,market_cap,Google Finance,DTE,ETR,USD,1,Approved,https://companiesmarketcap.com/deutsche-telekom/marketcap/,,2026-09-24,129.6366,161.08,150.5,119.47,98.88,92.04,87.25,77.41,80.72,82.27,80.52,83.68
+disney,Disney,Studio,market_cap,Google Finance,DIS,NYSE,USD,1,Approved,https://companiesmarketcap.com/walt-disney/marketcap/,,2026-09-24,178.642932,204.17,202.01,165.25,158.43,281.53,328.02,257.58,164.47,162.04,165.86,173.71
+djt,DJT,Social/Creator,market_cap,Google Finance,DJT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/trump-media-technology-group/marketcap/,,2026-09-24,2.518147388,3.85,7.82,-,-,-,-,-,-,-,-,-
 ea,EA,Gaming,fundraising_valuation,Manual entry,,,,,Approved,"https://companiesmarketcap.com/electronic-arts/marketcap/
 https://www.bbc.com/news/articles/cjejyl34345o","JUST SOLD TO PRIVATE COMPANY IN AUGUST 2026. 2026 number is valuation, all other years is market cap",2026-09-17,55,51.21,38.84,36.79,33.73,37.3,41.62,31.28,23.75,32.35,23.76,21.3
-echostar-dish,Echostar/Dish,MVPD/BB,market_cap,Google Finance,ECHO,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/echostar/marketcap/,,2026-09-23,27.761276,31.39,6.55,1.39,1.38,2.27,2.05,4.23,3.5,5.73,4.83,3.64
-esports,eSports,Gaming,yearly_revenue,Manual entry,,,,,Needs attention,https://finance.yahoo.com/news/esports-market-size-worth-usd-120800611.html,Remove ,2026-09-22,3.3,2.6,2.1,1.72,1.38,1.08,0.95,0.8,0.68,0.52,0.38,0.28
-ews-ion,EWS/ION,Local TV,market_cap,Google Finance,SSP,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/ew-scripps-company/marketcap/,,2026-09-23,0.289127238,0.35,0.17,0.67,1.1,1.59,1.24,1.27,1.26,1.28,1.6,1.59
-f1,F1,Sports Leagues,market_cap,Google Finance,FWONK,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/formula-one-group/marketcap/,,2026-09-23,23.55369871,24.28,23.1,14.67,13.8,14.5,9.75,10.58,7.06,7.8,2.62,12.85
-fox,Fox,Studio,market_cap,Google Finance,FOX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/fox-corporation/marketcap/,,2026-09-23,25.58765888,30.8,21.93,13.85,16.03,20.36,17.27,22.45,-,-,-,-
-fubo,Fubo,MVPD/BB,market_cap,Google Finance,FUBO,NYSE,USD,1,Needs attention,https://companiesmarketcap.com/fubotv/marketcap/,,2026-09-23,1.106162583,0.9,0.45,0.93,0.33,2.48,2.56,0.25,0.05084,0.02468,0.00013,0.00012
-fuji-tv,Fuji TV,Content Platform,market_cap,Google Finance,FJTNY,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/fuji-media-holdings/marketcap/,,2026-09-23,4.329914748,4.83,2.29,2.45,1.82,2.14,2.43,3.13,4.07,3.63,3.23,2.77
-gamestop,Gamestop,Gaming,market_cap,Google Finance,GME,NYSE,USD,1,Approved,https://companiesmarketcap.com/gamestop/marketcap/,,2026-09-23,12.12315457,9.44,14.38,5.35,5.62,11.32,1.31,0.4,1.28,1.81,2.57,2.93
-gray-tv,Gray Media,Local TV,market_cap,Google Finance,GTN,NYSE,USD,1,Approved,https://companiesmarketcap.com/gray-television/marketcap/,,2026-09-23,0.485035929,0.55,0.33,0.85,1.03,1.91,1.71,2.12,1.29,1.48,0.78,1.16
-group-m6,Group M6,Studio,market_cap,Google Finance,MMT,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/metropole-television-groupe-m6/marketcap/,,2026-09-23,1.620435063,1.77,1.46,1.79,2.06,2.45,2.05,2.36,2.01,3.24,2.35,2.18
-grupo-televisa,Grupo Televisa,Studio,market_cap,Google Finance,TV,NYSE,USD,1,Approved,https://companiesmarketcap.com/televisa/marketcap/,,2026-09-23,1.490932363,1.57,0.94,1.86,2.57,5.24,4.64,6.76,7.27,10.92,12.18,15.74
-hasbro,Hasbro,Gaming,market_cap,Google Finance,HAS,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/hasbro/marketcap/,,2026-09-23,12.25816932,11.58,7.9,7.08,8.42,14.04,12.81,14.45,10.24,11.32,9.68,8.4
-hisense,Hisense,Hardware/Physical,market_cap,Google Finance,0921,HKG,HKD,0.1274893,Approved,https://companiesmarketcap.com/hisense-visual-technology/marketcap/,,2026-09-23,4.982260685,4.42,3.6,3.84,2.53,2.76,2.3,-,-,-,-,-
-hybe,HYBE,Audio,market_cap,Google Finance,352820,KRX,KRW,0.0007340543,Approved,https://companiesmarketcap.com/hybe/marketcap/,,2026-09-23,4.961583815,9.05,5.41,7.51,5.65,12.12,4.98,-,-,-,-,-
-iac,IAC,Publishing,market_cap,Google Finance,PPLI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/iac/marketcap/,,2026-09-23,2.753675727,3.21,3.72,4.49,3.94,11.7,16.8,-,-,-,-,-
-iheart,iHeart,Audio,market_cap,Google Finance,IHRT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/iheartmedia/marketcap/,,2026-09-23,0.373818969,0.66,0.28,0.37,0.74,2.98,0.92,1.09,-,-,-,-
+echostar-dish,Echostar/Dish,MVPD/BB,market_cap,Google Finance,ECHO,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/echostar/marketcap/,,2026-09-24,26.96444133,31.39,6.55,1.39,1.38,2.27,2.05,4.23,3.5,5.73,4.83,3.64
+ews-ion,EWS/ION,Local TV,market_cap,Google Finance,SSP,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/ew-scripps-company/marketcap/,,2026-09-24,0.279860378,0.35,0.17,0.67,1.1,1.59,1.24,1.27,1.26,1.28,1.6,1.59
+f1,F1,Sports Leagues,market_cap,Google Finance,FWONK,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/formula-one-group/marketcap/,,2026-09-24,23.22404143,24.28,23.1,14.67,13.8,14.5,9.75,10.58,7.06,7.8,2.62,12.85
+fox,Fox,Studio,market_cap,Google Finance,FOX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/fox-corporation/marketcap/,,2026-09-24,25.45080933,30.8,21.93,13.85,16.03,20.36,17.27,22.45,-,-,-,-
+fubo,Fubo,MVPD/BB,market_cap,Google Finance,FUBO,NYSE,USD,1,Approved,https://companiesmarketcap.com/fubotv/marketcap/,,2026-09-24,1.051565196,0.9,0.45,0.93,0.33,2.48,2.56,0.25,0.05084,0.02468,0.00013,0.00012
+fuji-tv,Fuji TV,Content Platform,market_cap,Google Finance,FJTNY,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/fuji-media-holdings/marketcap/,,2026-09-24,4.376141806,4.83,2.29,2.45,1.82,2.14,2.43,3.13,4.07,3.63,3.23,2.77
+gamestop,Gamestop,Gaming,market_cap,Google Finance,GME,NYSE,USD,1,Approved,https://companiesmarketcap.com/gamestop/marketcap/,,2026-09-24,12.20892458,9.44,14.38,5.35,5.62,11.32,1.31,0.4,1.28,1.81,2.57,2.93
+gray-tv,Gray Media,Local TV,market_cap,Google Finance,GTN,NYSE,USD,1,Approved,https://companiesmarketcap.com/gray-television/marketcap/,,2026-09-24,0.477014778,0.55,0.33,0.85,1.03,1.91,1.71,2.12,1.29,1.48,0.78,1.16
+group-m6,Group M6,Studio,market_cap,Google Finance,MMT,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/metropole-television-groupe-m6/marketcap/,,2026-09-24,1.592003077,1.77,1.46,1.79,2.06,2.45,2.05,2.36,2.01,3.24,2.35,2.18
+grupo-televisa,Grupo Televisa,Studio,market_cap,Google Finance,TV,NYSE,USD,1,Approved,https://companiesmarketcap.com/televisa/marketcap/,,2026-09-24,1.479536887,1.57,0.94,1.86,2.57,5.24,4.64,6.76,7.27,10.92,12.18,15.74
+hasbro,Hasbro,Gaming,market_cap,Google Finance,HAS,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/hasbro/marketcap/,,2026-09-24,12.20316101,11.58,7.9,7.08,8.42,14.04,12.81,14.45,10.24,11.32,9.68,8.4
+hisense,Hisense,Hardware/Physical,market_cap,Google Finance,0921,HKG,HKD,0.127491,Approved,https://companiesmarketcap.com/hisense-visual-technology/marketcap/,,2026-09-24,4.937480422,4.42,3.6,3.84,2.53,2.76,2.3,-,-,-,-,-
+hybe,HYBE,Audio,market_cap,Google Finance,352820,KRX,KRW,0.0007303698,Approved,https://companiesmarketcap.com/hybe/marketcap/,,2026-09-24,4.936679723,9.05,5.41,7.51,5.65,12.12,4.98,-,-,-,-,-
+iac,IAC,Publishing,market_cap,Google Finance,PPLI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/iac/marketcap/,,2026-09-24,2.678467293,3.21,3.72,4.49,3.94,11.7,16.8,-,-,-,-,-
+iheart,iHeart,Audio,market_cap,Google Finance,IHRT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/iheartmedia/marketcap/,,2026-09-24,0.36375437,0.66,0.28,0.37,0.74,2.98,0.92,1.09,-,-,-,-
 ipg,IPG,Advertising,market_cap,Manual entry,,,,,Approved,https://companiesmarketcap.com/ipg/marketcap/,2026 is valuation. Company sold in 2025. ,2026-09-22,-,8.99,10.47,12.5,12.94,14.74,9.17,8.93,7.91,7.83,9.29,9.38
-ipsos,IPSOS,Advertising,market_cap,Google Finance,IPS,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/ispos/marketcap/,,2026-09-23,1.73987578,1.71,2.07,2.71,2.75,2.05,1.49,1.42,1.02,1.57,1.42,1.05
-itv,ITV,Content Platform,market_cap,Google Finance,ITV,LON,GBP,1.331285,Approved,https://companiesmarketcap.com/itv/marketcap/,,2026-09-23,3.421352496,4.1,3.43,3.27,3.66,6,5.86,7.97,6.37,8.95,10.2,16.5
-lagardere,Lagardere,Publishing,market_cap,Google Finance,MMB,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/groupe-lagardere/marketcap/,,2026-09-23,2.961662032,3.08,2.92,2.93,3,3.86,3.26,2.8,3.27,4.12,3.59,3.87
-lg,LG,Hardware/Physical,market_cap,Google Finance,066570,KRX,KRW,0.0007340543,Approved,LG Electronics (066570.KS) - Market capitalization,,2026-09-23,25.89660299,11.43,9.83,13.41,11.82,14.72,17.42,8.97,7.42,13.2,5.74,6.11
-liberty-global,Liberty Global,HoldingCo,market_cap,Google Finance,LBTYB,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/liberty-global/marketcap/,,2026-09-23,3.404896665,3.74,4.8,7.25,8.89,15.18,13.9,13.97,15.55,28.22,27.16,34.94
-lionsgate,Lionsgate,Studio,market_cap,Google Finance,LION,NYSE,USD,1,Approved,https://companiesmarketcap.com/lionsgate-studios/marketcap/,,2026-09-23,3.380276953,2.69,2.08,-,-,-,-,-,-,-,-,-
-live-nation,Live Nation,Exhibition,market_cap,Google Finance,LYV,NYSE,USD,1,Approved,https://companiesmarketcap.com/live-nation/marketcap/,,2026-09-23,39.56584063,33.85,30.4,21.55,16.1,26.88,15.68,15.27,10.34,8.8,5.41,4.97
-meta,META,Large Cap,market_cap,Google Finance,META,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/meta-platforms/marketcap/,,2026-09-23,1876.466849,1671,1514,909.62,319.88,921.93,778.23,585.37,374.13,512.75,331.59,296.6
-mfe,MFE,Studio,market_cap,Google Finance,MFEA,BIT,EUR,1.142465,Approved,https://companiesmarketcap.com/mfe-mediaforeurope/marketcap/,,2026-09-23,2.12769603,2.73,1.98,1.69,1.23,1.59,2.92,3.39,-,-,4.93,4.76
-microsoft,Microsoft,Large Cap,market_cap,Google Finance,MSFT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/microsoft/marketcap/,,2026-09-23,3697.92141,3625,3200,2794,1787,2522,1681,1200,780.36,659.9,483.16,439.67
-msge,MSGE,Exhibition,market_cap,Google Finance,MSGE,NYSE,USD,1,Approved,https://companiesmarketcap.com/madison-square-garden/marketcap/,,2026-09-23,3.792460202,2.55,1.61,1.52,1.55,2.4,2.53,-,-,-,-,-
-multichoice-group,Multichoice Group,MVPD/BB,market_cap,Google Finance,MCHOY,,USD,1,Needs attention,https://companiesmarketcap.com/multichoice-group/marketcap/,should bubble dissappear after year it joined Canal+? ,2026-09-23,,3.18,2.64,1.89,2.93,3.17,3.47,3.12,-,-,-,-
-ncmi,NCMI,Exhibition,market_cap,Google Finance,NCMI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/national-cinemedia/marketcap/,,2026-09-23,0.208836379,0.36,0.62,0.4,-,-,-,-,-,-,-,-
-netflix,Netflix,Large Cap,market_cap,Google Finance,NFLX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/netflix/marketcap/,,2026-09-23,300.4698535,400.29,387.93,213.09,131.22,267.46,238.89,141.98,116.85,83.06,53.12,48.94
-newscorp,NewsCorp,Publishing,market_cap,Google Finance,NWSA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/news-corp/marketcap/,,2026-09-23,16.38768105,16.66,16.37,14.19,10.52,12.05,10.57,8.39,6.67,9.52,6.73,7.88
-newsmax,NewsMax,Studio,market_cap,Google Finance,NMAX,NYSE,USD,1,Approved,https://companiesmarketcap.com/newsmax/marketcap/,,2026-09-23,1.44789033,1.11,-,-,-,-,-,-,-,-,-,-
-nexstar,Nexstar,Local TV,market_cap,Google Finance,NXST,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/nexstar-media/marketcap/,,2026-09-23,5.161312786,6.21,4.93,5.31,6.6,6.17,4.8,5.36,3.58,3.56,1.94,1.79
-nine,NINE,Publishing,market_cap,Google Finance,NEC,ASX,AUD,0.708920201,Approved,https://companiesmarketcap.com/nine-entertainment-co-holdings/marketcap/,,2026-09-23,0.8095959345,1.21,1.22,2.24,2.09,3.59,3.04,2.03,1.42,1.04,0.66,1
-nintendo,Nintendo,Gaming,market_cap,Google Finance,NTDOY,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/nintendo/marketcap/,,2026-09-23,68.04297968,80.54,69.19,60.96,48.32,54.7,76.04,48.11,31.88,43.83,25.35,16.46
-nippon-tv,Nippon TV,Content Platform,market_cap,Google Finance,NPTVF,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/nippon-television-holdings/marketcap/,,2026-09-23,4.982322719,6.08,4.43,2.78,2.03,2.58,2.78,3.35,4.45,4.34,4.6,4.43
-nvidia,Nvidia,Large Cap,market_cap,Google Finance,NVDA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/nvidia/marketcap/,,2026-09-23,5515.766882,4638,3288,1223,364.18,735.27,323.24,144,81.43,117.26,57.53,17.73
-nyt,NYT,Publishing,market_cap,Google Finance,NYT,NYSE,USD,1,Approved,https://companiesmarketcap.com/new-york-times/marketcap/,,2026-09-23,10.55600458,11.42,8.72,8.05,5.36,8.07,8.61,5.32,3.66,2.98,2.13,2.15
-omnicom,Omnicom,Advertising,market_cap,Google Finance,OMC,NYSE,USD,1,Approved,https://companiesmarketcap.com/omnicom/marketcap/,,2026-09-23,20.6692191,25.39,16.98,17.12,16.63,15.57,13.4,17.58,16.39,16.78,20.07,18.13
-altice-us-now-optimum,Optimum,MVPD/BB,market_cap,Google Finance,OPTU,NYSE,USD,1,Approved,https://companiesmarketcap.com/altice-usa/marketcap/,,2026-09-23,0.4119461,0.85,1.11,1.47,2.09,7.35,21.32,17.3,11.71,15.64,-,-
-oracle,Oracle,Large Cap,market_cap,Google Finance,ORCL,NYSE,USD,1,Approved,https://companiesmarketcap.com/oracle/marketcap/,,2026-09-23,451.1412528,568.85,472.57,289.81,220.39,232.88,190.44,169.94,162.03,195.72,157.73,153.47
-paramount-skydance,Paramount Global,Studio,market_cap,Google Finance,PSKY,NASDAQ,USD,1,Needs attention,https://companiesmarketcap.com/paramount-skydance/marketcap/,Updated name,2026-09-23,11.34286356,14.99,7.01,9.65,10.96,19.55,22.98,25.82,16.3,22.59,26.21,21.82
-pinterest,Pinterest,Social/Creator,market_cap,Google Finance,PINS,NYSE,USD,1,Approved,https://companiesmarketcap.com/pinterest/marketcap/,,2026-09-23,10.41449572,17.77,19.97,24.97,16.46,23.7,40.73,10.62,-,-,-,-
-prosieben,ProSieben,Studio,market_cap,Google Finance,PSM,ETR,EUR,1.142465,Approved,https://companiesmarketcap.com/prosiebensat1-media/marketcap/,,2026-09-23,0.8986970247,1.29,1.19,1.37,2,3.6,3.81,3.52,4,7.85,8.85,11
-publicis,Publicis,Advertising,market_cap,Google Finance,PUB,EPA,USD,1,Approved,https://companiesmarketcap.com/publicis-groupe/marketcap/,,2026-09-23,24.7852278,26.01,26.98,23.37,15.85,16.71,12.3,10.71,13.24,15.3,15.4,14.85
-quebecor,Quebecor,MVPD/BB,market_cap,Google Finance,QBR.B,TSE,CAD,0.709925,Approved,https://companiesmarketcap.com/quebecor/marketcap/,,2026-09-23,10.10999488,8.8,5.08,5.66,5.18,5.38,6.37,6.45,5.4,4.53,3.38,2.98
-reddit,Reddit,Social/Creator,market_cap,Google Finance,RDDT,NYSE,USD,1,Approved,https://companiesmarketcap.com/reddit/marketcap/,,2026-09-23,29.9503628,42.78,30.46,-,-,-,-,-,-,-,-,-
-reliance,Reliance,Large Cap,market_cap,Google Finance,RELIANCE,NSE,INR,0.01044472,Approved,https://companiesmarketcap.com/reliance-industries/marketcap/,,2026-09-23,176.7973434,234.89,193.5,210.29,208.29,215.27,183.56,134.59,101.64,91.05,46.97,49.44
-roblox,Roblox,Gaming,market_cap,Google Finance,RBLX,NYSE,USD,1,Approved,https://companiesmarketcap.com/roblox/marketcap/,,2026-09-23,35.62593036,57.71,39.01,28.51,17.09,59.71,-,-,-,-,-,-
-rogers,Rogers,MVPD/BB,market_cap,Google Finance,RCI,NYSE,USD,1,Approved,https://companiesmarketcap.com/rogers-communication/marketcap/,,2026-09-23,18.10411029,20.32,16.52,24.73,23.58,23.97,23.66,24.98,26.45,26.23,19.81,17.75
-roku,Roku,Hardware/Physical,market_cap,Google Finance,ROKU,NASDAQ,USD,1,Needs attention,https://companiesmarketcap.com/roku/marketcap/,need to track sale to FOX - this will happen late 2026/early 2027,2026-09-23,22.90776005,16.56,11.18,13.06,5.66,30.66,42.14,16.05,3.36,5.06,-,-
-samsung,Samsung,Large Cap,market_cap,Google Finance,005930,KRX,KRW,0.0007340543,Approved,https://companiesmarketcap.com/samsung/marketcap/,,2026-09-23,1352.869933,542.11,242.97,401.54,293,442.07,500.83,319.73,230.36,319.26,203.99,153.77
+ipsos,IPSOS,Advertising,market_cap,Google Finance,IPS,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/ispos/marketcap/,,2026-09-24,1.737572817,1.71,2.07,2.71,2.75,2.05,1.49,1.42,1.02,1.57,1.42,1.05
+itv,ITV,Content Platform,market_cap,Google Finance,ITV,LON,GBP,1.32417,Approved,https://companiesmarketcap.com/itv/marketcap/,,2026-09-24,3.348714698,4.1,3.43,3.27,3.66,6,5.86,7.97,6.37,8.95,10.2,16.5
+lagardere,Lagardere,Publishing,market_cap,Google Finance,MMB,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/groupe-lagardere/marketcap/,,2026-09-24,2.931935355,3.08,2.92,2.93,3,3.86,3.26,2.8,3.27,4.12,3.59,3.87
+lg,LG,Hardware/Physical,market_cap,Google Finance,066570,KRX,KRW,0.0007303698,Approved,LG Electronics (066570.KS) - Market capitalization,,2026-09-24,25.73973683,11.43,9.83,13.41,11.82,14.72,17.42,8.97,7.42,13.2,5.74,6.11
+liberty-global,Liberty Global,HoldingCo,market_cap,Google Finance,LBTYB,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/liberty-global/marketcap/,,2026-09-24,3.228308616,3.74,4.8,7.25,8.89,15.18,13.9,13.97,15.55,28.22,27.16,34.94
+lionsgate,Lionsgate,Studio,market_cap,Google Finance,LION,NYSE,USD,1,Approved,https://companiesmarketcap.com/lionsgate-studios/marketcap/,,2026-09-24,3.317789426,2.69,2.08,-,-,-,-,-,-,-,-,-
+live-nation,Live Nation,Exhibition,market_cap,Google Finance,LYV,NYSE,USD,1,Approved,https://companiesmarketcap.com/live-nation/marketcap/,,2026-09-24,39.3771271,33.85,30.4,21.55,16.1,26.88,15.68,15.27,10.34,8.8,5.41,4.97
+meta,META,Large Cap,market_cap,Google Finance,META,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/meta-platforms/marketcap/,,2026-09-24,1895.585759,1671,1514,909.62,319.88,921.93,778.23,585.37,374.13,512.75,331.59,296.6
+mfe,MFE,Studio,market_cap,Google Finance,MFEA,BIT,EUR,1.138605,Approved,https://companiesmarketcap.com/mfe-mediaforeurope/marketcap/,,2026-09-24,2.072368461,2.73,1.98,1.69,1.23,1.59,2.92,3.39,-,-,4.93,4.76
+microsoft,Microsoft,Large Cap,market_cap,Google Finance,MSFT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/microsoft/marketcap/,,2026-09-24,3717.154045,3625,3200,2794,1787,2522,1681,1200,780.36,659.9,483.16,439.67
+msge,MSGE,Exhibition,market_cap,Google Finance,MSGE,NYSE,USD,1,Approved,https://companiesmarketcap.com/madison-square-garden/marketcap/,,2026-09-24,3.712987401,2.55,1.61,1.52,1.55,2.4,2.53,-,-,-,-,-
+multichoice-group,Multichoice Group,MVPD/BB,market_cap,Google Finance,MCHOY,,USD,1,Needs attention,https://companiesmarketcap.com/multichoice-group/marketcap/,should bubble dissappear after year it joined Canal+? ,2026-09-24,,3.18,2.64,1.89,2.93,3.17,3.47,3.12,-,-,-,-
+ncmi,NCMI,Exhibition,market_cap,Google Finance,NCMI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/national-cinemedia/marketcap/,,2026-09-24,0.206954994,0.36,0.62,0.4,-,-,-,-,-,-,-,-
+netflix,Netflix,Large Cap,market_cap,Google Finance,NFLX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/netflix/marketcap/,,2026-09-24,297.1386896,400.29,387.93,213.09,131.22,267.46,238.89,141.98,116.85,83.06,53.12,48.94
+newscorp,NewsCorp,Publishing,market_cap,Google Finance,NWSA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/news-corp/marketcap/,,2026-09-24,15.75768642,16.66,16.37,14.19,10.52,12.05,10.57,8.39,6.67,9.52,6.73,7.88
+newsmax,NewsMax,Studio,market_cap,Google Finance,NMAX,NYSE,USD,1,Approved,https://companiesmarketcap.com/newsmax/marketcap/,,2026-09-24,1.40785049,1.11,-,-,-,-,-,-,-,-,-,-
+nexstar,Nexstar,Local TV,market_cap,Google Finance,NXST,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/nexstar-media/marketcap/,,2026-09-24,5.1009288,6.21,4.93,5.31,6.6,6.17,4.8,5.36,3.58,3.56,1.94,1.79
+nine,NINE,Publishing,market_cap,Google Finance,NEC,ASX,AUD,0.70343,Approved,https://companiesmarketcap.com/nine-entertainment-co-holdings/marketcap/,,2026-09-24,0.7423166768,1.21,1.22,2.24,2.09,3.59,3.04,2.03,1.42,1.04,0.66,1
+nintendo,Nintendo,Gaming,market_cap,Google Finance,NTDOY,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/nintendo/marketcap/,,2026-09-24,66.63286009,80.54,69.19,60.96,48.32,54.7,76.04,48.11,31.88,43.83,25.35,16.46
+nippon-tv,Nippon TV,Content Platform,market_cap,Google Finance,NPTVF,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/nippon-television-holdings/marketcap/,,2026-09-24,4.850706144,6.08,4.43,2.78,2.03,2.58,2.78,3.35,4.45,4.34,4.6,4.43
+nvidia,Nvidia,Large Cap,market_cap,Google Finance,NVDA,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/nvidia/marketcap/,,2026-09-24,5434.790868,4638,3288,1223,364.18,735.27,323.24,144,81.43,117.26,57.53,17.73
+nyt,NYT,Publishing,market_cap,Google Finance,NYT,NYSE,USD,1,Approved,https://companiesmarketcap.com/new-york-times/marketcap/,,2026-09-24,9.981835716,11.42,8.72,8.05,5.36,8.07,8.61,5.32,3.66,2.98,2.13,2.15
+omnicom,Omnicom,Advertising,market_cap,Google Finance,OMC,NYSE,USD,1,Approved,https://companiesmarketcap.com/omnicom/marketcap/,,2026-09-24,20.71036386,25.39,16.98,17.12,16.63,15.57,13.4,17.58,16.39,16.78,20.07,18.13
+altice-us-now-optimum,Optimum,MVPD/BB,market_cap,Google Finance,OPTU,NYSE,USD,1,Approved,https://companiesmarketcap.com/altice-usa/marketcap/,,2026-09-24,0.4310177,0.85,1.11,1.47,2.09,7.35,21.32,17.3,11.71,15.64,-,-
+oracle,Oracle,Large Cap,market_cap,Google Finance,ORCL,NYSE,USD,1,Approved,https://companiesmarketcap.com/oracle/marketcap/,,2026-09-24,437.1111242,568.85,472.57,289.81,220.39,232.88,190.44,169.94,162.03,195.72,157.73,153.47
+paramount-skydance,Paramount Global,Studio,market_cap,Google Finance,PSKY,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/paramount-skydance/marketcap/,Updated name,2026-09-24,11.17457224,14.99,7.01,9.65,10.96,19.55,22.98,25.82,16.3,22.59,26.21,21.82
+pinterest,Pinterest,Social/Creator,market_cap,Google Finance,PINS,NYSE,USD,1,Approved,https://companiesmarketcap.com/pinterest/marketcap/,,2026-09-24,10.44847897,17.77,19.97,24.97,16.46,23.7,40.73,10.62,-,-,-,-
+prosieben,ProSieben,Studio,market_cap,Google Finance,PSM,ETR,EUR,1.138605,Approved,https://companiesmarketcap.com/prosiebensat1-media/marketcap/,,2026-09-24,0.8731593748,1.29,1.19,1.37,2,3.6,3.81,3.52,4,7.85,8.85,11
+publicis,Publicis,Advertising,market_cap,Google Finance,PUB,EPA,USD,1,Approved,https://companiesmarketcap.com/publicis-groupe/marketcap/,,2026-09-24,24.7088199,26.01,26.98,23.37,15.85,16.71,12.3,10.71,13.24,15.3,15.4,14.85
+quebecor,Quebecor,MVPD/BB,market_cap,Google Finance,QBR.B,TSE,CAD,0.709071506,Approved,https://companiesmarketcap.com/quebecor/marketcap/,,2026-09-24,7.056908599,8.8,5.08,5.66,5.18,5.38,6.37,6.45,5.4,4.53,3.38,2.98
+reddit,Reddit,Social/Creator,market_cap,Google Finance,RDDT,NYSE,USD,1,Approved,https://companiesmarketcap.com/reddit/marketcap/,,2026-09-24,29.24041925,42.78,30.46,-,-,-,-,-,-,-,-,-
+reliance,Reliance,Large Cap,market_cap,Google Finance,RELIANCE,NSE,INR,0.01042719,Approved,https://companiesmarketcap.com/reliance-industries/marketcap/,,2026-09-24,173.1432754,234.89,193.5,210.29,208.29,215.27,183.56,134.59,101.64,91.05,46.97,49.44
+roblox,Roblox,Gaming,market_cap,Google Finance,RBLX,NYSE,USD,1,Approved,https://companiesmarketcap.com/roblox/marketcap/,,2026-09-24,34.99727654,57.71,39.01,28.51,17.09,59.71,-,-,-,-,-,-
+rogers,Rogers,MVPD/BB,market_cap,Google Finance,RCI,NYSE,USD,1,Approved,https://companiesmarketcap.com/rogers-communication/marketcap/,,2026-09-24,18.07989182,20.32,16.52,24.73,23.58,23.97,23.66,24.98,26.45,26.23,19.81,17.75
+roku,Roku,Hardware/Physical,market_cap,Google Finance,ROKU,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/roku/marketcap/,need to track sale to FOX - this will happen late 2026/early 2027,2026-09-24,22.79489281,16.56,11.18,13.06,5.66,30.66,42.14,16.05,3.36,5.06,-,-
+samsung,Samsung,Large Cap,market_cap,Google Finance,005930,KRX,KRW,0.0007303698,Approved,https://companiesmarketcap.com/samsung/marketcap/,,2026-09-24,1347.048772,542.11,242.97,401.54,293,442.07,500.83,319.73,230.36,319.26,203.99,153.77
 schibsted,Schibsted,Publishing,market_cap,Manual entry,,,,,Approved,https://companiesmarketcap.com/schibsted/marketcap/,No longer public. This company will exist only in historical maps. ,2026-09-22,-,7.14,6.94,6.28,4.33,8.4,9.33,6.84,7.52,6.51,5,7.38
-sega-sammy,Sega Sammy,Gaming,market_cap,Google Finance,SGAMY,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/sega-sammy-holdings/marketcap/,,2026-09-23,4.351101584,3.31,4.24,3.06,3.29,3.63,3.7,3.41,3.26,2.9,3.5,2.2
-sinclair,Sinclair,Local TV,market_cap,Google Finance,SBGI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/sinclair-broadcast/marketcap/,,2026-09-23,0.952428855,1.06,1.05,0.82,1.07,1.99,2.35,3.05,2.49,3.85,3.02,3.08
-sirius,Sirius,Audio,market_cap,Google Finance,SIRI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/sirius-xm/marketcap/,,2026-09-23,8.942382435,6.93,7.84,21.01,22.71,25.19,27.06,31.54,24.81,24.63,21.47,20.95
-snap,Snap,Social/Creator,market_cap,Google Finance,SNAP,NYSE,USD,1,Approved,https://companiesmarketcap.com/snap/marketcap/,,2026-09-23,9.504526946,13.51,18.43,27.87,14.43,75.7,74.6,23.11,7.26,17.59,-,-
-sony,Sony,Gaming,market_cap,Google Finance,SONY,NYSE,JPY,0.006338742,Approved,https://companiesmarketcap.com/sony/marketcap/,,2026-09-23,141.4066,153.97,129.92,116.64,96.02,155.91,123.3,83.35,61.27,56.88,35.55,31.42
-space-x,Space X,AI,market_cap,Google Finance,SPCX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/spacex/marketcap/,,2026-09-23,2099.986727,-,-,-,-,-,-,-,-,-,-,-
-sphere,Sphere,Exhibition,market_cap,Google Finance,SPHR,NYSE,USD,1,Approved,https://companiesmarketcap.com/sphere-entertainment/marketcap/,,2026-09-23,5.096499107,3.37,1.44,1.19,1.55,2.4,2.53,-,-,-,-,-
-spotify,Spotify,Audio,market_cap,Google Finance,SPOT,NYSE,USD,1,Approved,https://companiesmarketcap.com/spotify/marketcap/,,2026-09-23,103.0342418,120.31,92.24,36.66,15.24,44.82,59.65,27.56,20.52,-,-,-
-square-enix,Square Enix,Gaming,market_cap,Google Finance,SQNXF,OTCMKTS,JPY,0.006338742,Approved,https://companiesmarketcap.com/square-enix/marketcap/,,2026-09-23,6.976287159,6.68,4.75,4.29,5.48,6.12,7.24,5.94,3.22,5.65,3.15,2.97
-stagwell,Stagwell,Advertising,market_cap,Google Finance,STGW,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/stagwell/marketcap/,,2026-09-23,2.080485709,1.28,1.74,1.8,2.95,0.98,-,-,-,-,-,-
-starz,STARZ,Studio,market_cap,Google Finance,STRZ,NASDAQ,USD,1,Needs attention,https://finance.yahoo.com/quote/STRZ/,source here but no historical data. ,2026-09-23,0.440262395,-,-,-,-,-,-,-,-,-,-,-
-sun-tv,Sun TV,Studio,market_cap,Google Finance,SUNTV,NSE,INR,0.01044472,Approved,https://companiesmarketcap.com/sun-tv-network/marketcap/,,2026-09-23,2.015449446,2.5,3.16,3.37,2.31,2.64,2.59,2.43,3.43,6.09,2.85,2.52
-t-mobile,T-mobile,Telecom,market_cap,Google Finance,TMUS,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/t-mobile-us/marketcap/,,2026-09-23,174.212501,226.2,258.81,185.41,174.18,144.86,167.37,67.19,54.07,52.83,47.38,32.01
-take-two,Take Two,Gaming,market_cap,Google Finance,TTWO,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/take-2-interactive/marketcap/,,2026-09-23,38.43008138,47.32,32.74,27.37,17.47,20.49,23.91,13.87,11.64,12.52,4.26,3.03
-tcl,TCL,Hardware/Physical,market_cap,Google Finance,000100,SHE,CNY,0.1492582,Needs approval,https://companiesmarketcap.com/tcl-technology-group-corporation/marketcap/,,2026-09-23,16.64046835,13.18,12.94,11.42,9.2,13.58,15.23,8.65,4.82,8.1,5.8,8.03
-tegna,TEGNA,Local TV,market_cap,Google Finance,TGNA,NYSE,USD,1,Needs approval,https://companiesmarketcap.com/tegna/marketcap/,,2026-09-23,,3.12,2.96,3.01,4.73,4.1,3.05,3.62,2.34,3.03,4.58,5.6
-telus,Telus,MVPD/BB,market_cap,Google Finance,TU,NYSE,USD,1,Approved,https://companiesmarketcap.com/telus/marketcap/,,2026-09-23,13.42980198,20,20.12,25.91,27.42,32.07,25.54,23.41,19.84,22.51,18.8,16.43
-tencent,Tencent,Large Cap,market_cap,Google Finance,0700,HKG,HKD,0.1274893,Approved,https://companiesmarketcap.com/tencent/marketcap/,,2026-09-23,511.3510311,705.58,489.75,358.92,405.09,562.84,699.78,460.66,381.65,493.31,230,184.98
-tf1,TF1,Studio,market_cap,Google Finance,TFI,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/tf1/marketcap/,,2026-09-23,1.558791101,2.03,1.6,1.66,1.6,2.07,1.7,1.74,1.7,3.07,2.09,2.34
-the-trade-desk,The Trade Desk,Advertising,market_cap,Google Finance,TTD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/the-trade-desk/marketcap/,,2026-09-23,6.231439562,18.73,59.91,35.28,21.94,44.04,37.61,11.81,5.09,1.87,1.06,-
-thomson-reuters,Thomson Reuters,Publishing,market_cap,Google Finance,TRI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/thomson-reuters/marketcap/,,2026-09-23,41.70290207,60.21,73.02,66.71,54.68,57.76,40.61,35.37,24.27,31.02,32.02,28.87
-tko-ufc-wwe,TKO (UFC+WWE),Sports Leagues,market_cap,Google Finance,TKO,NYSE,USD,1,Approved,https://companiesmarketcap.com/tko-group/marketcap/,,2026-09-23,35.74736731,17.85,11.69,6.69,-,-,-,-,-,-,-,-
-tpg,TPG,HoldingCo,market_cap,Google Finance,TPG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/tpg/marketcap/,,2026-09-23,17.5420164,25.08,23.68,13.35,8.59,-,-,-,-,-,-,-
-ubisoft,Ubisoft,Gaming,market_cap,Google Finance,UBI,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/ubisoft/marketcap/,,2026-09-23,0.8622671679,1.01,1.75,3.34,3.52,5.98,11.94,8.25,8.86,8.67,3.88,3.17
-umg,UMG,Audio,market_cap,Google Finance,UMG,AMS,EUR,1.142465,Approved,https://companiesmarketcap.com/universal-music-group/marketcap/,,2026-09-23,30.69817968,47.56,47.1,51.9,43.54,50.87,-,-,-,-,-,-
-unity,Unity,Gaming,market_cap,Google Finance,U,NYSE,USD,1,Approved,https://companiesmarketcap.com/unity-software/marketcap/,,2026-09-23,18.97222844,19.32,9.2,15.53,11.52,41.78,41.55,-,-,-,-,-
-USA Today,USA Today,Publishing,market_cap,Google Finance,TDAY,NYSE,USD,1,Approved,https://companiesmarketcap.com/usa-today-co/marketcap/,,2026-09-23,0.963125415,0.73,0.74,0.34,0.29,0.75,0.46,0.82,0.69,0.89,0.85,0.87
-verizon,Verizon,Telecom,market_cap,Google Finance,VZ,NYSE,USD,1,Approved,https://companiesmarketcap.com/verizon/marketcap/,,2026-09-23,192.9893019,170.68,168.04,158.49,165.47,218.11,243.11,253.93,232.3,215.92,217.61,188.26
-versant,Versant,Content Platform,market_cap,Google Finance,VSNT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/versant-media-group/marketcap/,,2026-09-23,4.663586466,6.5,-,-,-,-,-,-,-,-,-,-
-viaplay,Viaplay,Studio,market_cap,Google Finance,VPLAY-B,STO,SEK,0.101368218,Approved,https://companiesmarketcap.com/viaplay/marketcap/,,2026-09-23,0.6060588271,0.44,0.28,0.04038,1.48,4.04,3.77,2.18,-,-,-,-
-vivendi,Vivendi,Studio,market_cap,Google Finance,VIV,EPA,EUR,1.142465,Approved,https://companiesmarketcap.com/vivendi/marketcap/,,2026-09-23,1.690599245,2.77,2.62,10.95,9.74,14.07,35.45,33.85,30.86,33.63,24.03,29.14
-walmart,Walmart,Large Cap,market_cap,Google Finance,WMT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/walmart/marketcap/,,2026-09-23,873.6641313,890.88,736.34,424.43,382.37,401.35,407.84,337.16,270.62,292.53,212.41,196.27
-wbd,WBD,Studio,market_cap,Google Finance,WBD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/warner-bros-discovery/marketcap/,,2026-09-23,77.4049733,71.37,25.53,27.39,22.81,-,-,-,-,-,-,-
-wmg,WMG,Audio,market_cap,Google Finance,WMG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/warner-music-group/marketcap/,,2026-09-23,14.32797436,15.64,16.29,18.46,18.03,22.21,19.37,-,-,-,-,-
-wpp,WPP,Advertising,market_cap,Google Finance,WPP,LON,USD,1,Approved,https://companiesmarketcap.com/wpp/marketcap/,,2026-09-23,4.090213189,4.85,11.23,10.27,10.52,17.43,13.35,17.58,13.55,22.88,28.57,29.98
-XIACF,Xiaomi,Hardware/Physical,market_cap,Google Finance,XIACF,OTCMKTS,HKD,0.1274893,Approved,https://companiesmarketcap.com/xiaomi/marketcap/,Zach switched currency to HKD (in sanity),2026-09-23,86.41904111,133.3,108.78,50.72,35.82,60.52,107.37,33.18,38.97,-,-,-
-zee,Zee,Studio,market_cap,Google Finance,ZEEL,NSE,INR,0.01044472,Approved,https://companiesmarketcap.com/zee-entertainment/marketcap/,,2026-09-23,0.7808708563,0.97,1.4,3.17,2.78,4.13,2.93,3.93,6.54,8.72,6.4,6.31
-ziff-davis,Ziff Davis,Publishing,market_cap,Google Finance,ZD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/ziff-davis/marketcap/,,2026-09-23,2.806449432,1.46,2.36,3.08,3.73,5.34,4.33,4.46,3.29,3.63,3.93,3.94
-zoom,Zoom,Telecom,market_cap,Google Finance,ZM,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/zoom/marketcap/,,2026-09-23,26.53772662,26.34,25.69,21.89,19.8,54.8,96.47,18.8,-,-,-,-
-a24,A24,Studio,fundraising_valuation,Manual entry,,,,,Needs approval,"https://finance.yahoo.com/news/a24-valuation-jumps-3-5-110050443.html  
+sega-sammy,Sega Sammy,Gaming,market_cap,Google Finance,SGAMY,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/sega-sammy-holdings/marketcap/,,2026-09-24,4.394033094,3.31,4.24,3.06,3.29,3.63,3.7,3.41,3.26,2.9,3.5,2.2
+sinclair,Sinclair,Local TV,market_cap,Google Finance,SBGI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/sinclair-broadcast/marketcap/,,2026-09-24,0.930733295,1.06,1.05,0.82,1.07,1.99,2.35,3.05,2.49,3.85,3.02,3.08
+sirius,Sirius,Audio,market_cap,Google Finance,SIRI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/sirius-xm/marketcap/,,2026-09-24,8.858118363,6.93,7.84,21.01,22.71,25.19,27.06,31.54,24.81,24.63,21.47,20.95
+snap,Snap,Social/Creator,market_cap,Google Finance,SNAP,NYSE,USD,1,Approved,https://companiesmarketcap.com/snap/marketcap/,,2026-09-24,8.946432065,13.51,18.43,27.87,14.43,75.7,74.6,23.11,7.26,17.59,-,-
+sony,Sony,Gaming,market_cap,Google Finance,SONY,NYSE,JPY,0.006311836,Approved,https://companiesmarketcap.com/sony/marketcap/,,2026-09-24,137.9196056,153.97,129.92,116.64,96.02,155.91,123.3,83.35,61.27,56.88,35.55,31.42
+space-x,Space X,AI,market_cap,Google Finance,SPCX,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/spacex/marketcap/,,2026-09-24,2013.663583,-,-,-,-,-,-,-,-,-,-,-
+sphere,Sphere,Exhibition,market_cap,Google Finance,SPHR,NYSE,USD,1,Approved,https://companiesmarketcap.com/sphere-entertainment/marketcap/,,2026-09-24,4.880299082,3.37,1.44,1.19,1.55,2.4,2.53,-,-,-,-,-
+spotify,Spotify,Audio,market_cap,Google Finance,SPOT,NYSE,USD,1,Approved,https://companiesmarketcap.com/spotify/marketcap/,,2026-09-24,104.9046544,120.31,92.24,36.66,15.24,44.82,59.65,27.56,20.52,-,-,-
+square-enix,Square Enix,Gaming,market_cap,Google Finance,SQNXF,OTCMKTS,JPY,0.006311836,Approved,https://companiesmarketcap.com/square-enix/marketcap/,,2026-09-24,6.877067145,6.68,4.75,4.29,5.48,6.12,7.24,5.94,3.22,5.65,3.15,2.97
+stagwell,Stagwell,Advertising,market_cap,Google Finance,STGW,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/stagwell/marketcap/,,2026-09-24,2.07315128,1.28,1.74,1.8,2.95,0.98,-,-,-,-,-,-
+starz,STARZ,Studio,market_cap,Google Finance,STRZ,NASDAQ,USD,1,Approved,https://finance.yahoo.com/quote/STRZ/,source here but no historical data. ,2026-09-24,0.400876817,0.195,-,-,-,-,-,-,-,-,-,3.51
+sun-tv,Sun TV,Studio,market_cap,Google Finance,SUNTV,NSE,INR,0.01042719,Approved,https://companiesmarketcap.com/sun-tv-network/marketcap/,,2026-09-24,2.120339952,2.5,3.16,3.37,2.31,2.64,2.59,2.43,3.43,6.09,2.85,2.52
+t-mobile,T-mobile,Telecom,market_cap,Google Finance,TMUS,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/t-mobile-us/marketcap/,,2026-09-24,177.6986818,226.2,258.81,185.41,174.18,144.86,167.37,67.19,54.07,52.83,47.38,32.01
+take-two,Take Two,Gaming,market_cap,Google Finance,TTWO,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/take-2-interactive/marketcap/,,2026-09-24,38.5777975,47.32,32.74,27.37,17.47,20.49,23.91,13.87,11.64,12.52,4.26,3.03
+tcl,TCL,Hardware/Physical,market_cap,Google Finance,000100,SHE,CNY,0.1490013,Approved,https://companiesmarketcap.com/tcl-technology-group-corporation/marketcap/,,2026-09-24,16.44832801,13.18,12.94,11.42,9.2,13.58,15.23,8.65,4.82,8.1,5.8,8.03
+tegna,TEGNA,Local TV,market_cap,Google Finance,TGNA,NYSE,USD,1,Approved,https://companiesmarketcap.com/tegna/marketcap/,owned but not yet approved - so still need to show separately,2026-09-24,,3.12,2.96,3.01,4.73,4.1,3.05,3.62,2.34,3.03,4.58,5.6
+telus,Telus,MVPD/BB,market_cap,Google Finance,TU,NYSE,USD,1,Approved,https://companiesmarketcap.com/telus/marketcap/,,2026-09-24,13.3045825,20,20.12,25.91,27.42,32.07,25.54,23.41,19.84,22.51,18.8,16.43
+tencent,Tencent,Large Cap,market_cap,Google Finance,0700,HKG,HKD,0.127491,Approved,https://companiesmarketcap.com/tencent/marketcap/,,2026-09-24,507.6473024,705.58,489.75,358.92,405.09,562.84,699.78,460.66,381.65,493.31,230,184.98
+tf1,TF1,Studio,market_cap,Google Finance,TFI,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/tf1/marketcap/,,2026-09-24,1.510066633,2.03,1.6,1.66,1.6,2.07,1.7,1.74,1.7,3.07,2.09,2.34
+the-trade-desk,The Trade Desk,Advertising,market_cap,Google Finance,TTD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/the-trade-desk/marketcap/,,2026-09-24,5.995040744,18.73,59.91,35.28,21.94,44.04,37.61,11.81,5.09,1.87,1.06,-
+thomson-reuters,Thomson Reuters,Publishing,market_cap,Google Finance,TRI,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/thomson-reuters/marketcap/,,2026-09-24,42.93494941,60.21,73.02,66.71,54.68,57.76,40.61,35.37,24.27,31.02,32.02,28.87
+tko-ufc-wwe,TKO (UFC+WWE),Sports Leagues,market_cap,Google Finance,TKO,NYSE,USD,1,Approved,https://companiesmarketcap.com/tko-group/marketcap/,,2026-09-24,35.78711522,17.85,11.69,6.69,-,-,-,-,-,-,-,-
+tpg,TPG,HoldingCo,market_cap,Google Finance,TPG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/tpg/marketcap/,,2026-09-24,17.27669489,25.08,23.68,13.35,8.59,-,-,-,-,-,-,-
+ubisoft,Ubisoft,Gaming,market_cap,Google Finance,UBI,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/ubisoft/marketcap/,,2026-09-24,0.8533277746,1.01,1.75,3.34,3.52,5.98,11.94,8.25,8.86,8.67,3.88,3.17
+umg,UMG,Audio,market_cap,Google Finance,UMG,AMS,EUR,1.138605,Approved,https://companiesmarketcap.com/universal-music-group/marketcap/,,2026-09-24,30.22828886,47.56,47.1,51.9,43.54,50.87,-,-,-,-,-,-
+unity,Unity,Gaming,market_cap,Google Finance,U,NYSE,USD,1,Approved,https://companiesmarketcap.com/unity-software/marketcap/,,2026-09-24,19.40791541,19.32,9.2,15.53,11.52,41.78,41.55,-,-,-,-,-
+USA Today,USA Today,Publishing,market_cap,Google Finance,TDAY,NYSE,USD,1,Approved,https://companiesmarketcap.com/usa-today-co/marketcap/,,2026-09-24,0.938166361,0.73,0.74,0.34,0.29,0.75,0.46,0.82,0.69,0.89,0.85,0.87
+verizon,Verizon,Telecom,market_cap,Google Finance,VZ,NYSE,USD,1,Approved,https://companiesmarketcap.com/verizon/marketcap/,,2026-09-24,193.2801349,170.68,168.04,158.49,165.47,218.11,243.11,253.93,232.3,215.92,217.61,188.26
+versant,Versant,Content Platform,market_cap,Google Finance,VSNT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/versant-media-group/marketcap/,,2026-09-24,4.598176927,6.5,-,-,-,-,-,-,-,-,-,-
+viaplay,Viaplay,Studio,market_cap,Google Finance,VPLAY-B,STO,SEK,0.1008474,Approved,https://companiesmarketcap.com/viaplay/marketcap/,,2026-09-24,0.5775587107,0.44,0.28,0.04038,1.48,4.04,3.77,2.18,-,-,-,-
+vivendi,Vivendi,Studio,market_cap,Google Finance,VIV,EPA,EUR,1.138605,Approved,https://companiesmarketcap.com/vivendi/marketcap/,,2026-09-24,1.653507397,2.77,2.62,10.95,9.74,14.07,35.45,33.85,30.86,33.63,24.03,29.14
+walmart,Walmart,Large Cap,market_cap,Google Finance,WMT,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/walmart/marketcap/,,2026-09-24,876.9168252,890.88,736.34,424.43,382.37,401.35,407.84,337.16,270.62,292.53,212.41,196.27
+wbd,WBD,Studio,market_cap,Google Finance,WBD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/warner-bros-discovery/marketcap/,,2026-09-24,77.22922485,71.37,25.53,27.39,22.81,-,-,-,-,-,-,-
+wmg,WMG,Audio,market_cap,Google Finance,WMG,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/warner-music-group/marketcap/,,2026-09-24,14.20766209,15.64,16.29,18.46,18.03,22.21,19.37,-,-,-,-,-
+wpp,WPP,Advertising,market_cap,Google Finance,WPP,LON,USD,1,Approved,https://companiesmarketcap.com/wpp/marketcap/,,2026-09-24,4.141520812,4.85,11.23,10.27,10.52,17.43,13.35,17.58,13.55,22.88,28.57,29.98
+XIACF,Xiaomi,Hardware/Physical,market_cap,Google Finance,XIACF,OTCMKTS,HKD,0.127491,Approved,https://companiesmarketcap.com/xiaomi/marketcap/,Zach switched currency to HKD (in sanity),2026-09-24,87.34025863,133.3,108.78,50.72,35.82,60.52,107.37,33.18,38.97,-,-,-
+zee,Zee,Studio,market_cap,Google Finance,ZEEL,NSE,INR,0.01042719,Approved,https://companiesmarketcap.com/zee-entertainment/marketcap/,,2026-09-24,0.7881211581,0.97,1.4,3.17,2.78,4.13,2.93,3.93,6.54,8.72,6.4,6.31
+ziff-davis,Ziff Davis,Publishing,market_cap,Google Finance,ZD,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/ziff-davis/marketcap/,,2026-09-24,2.736529265,1.46,2.36,3.08,3.73,5.34,4.33,4.46,3.29,3.63,3.93,3.94
+zoom,Zoom,Telecom,market_cap,Google Finance,ZM,NASDAQ,USD,1,Approved,https://companiesmarketcap.com/zoom/marketcap/,,2026-09-24,26.81492248,26.34,25.69,21.89,19.8,54.8,96.47,18.8,-,-,-,-
+a24,A24,Studio,fundraising_valuation,Manual entry,,,,,Approved,"https://finance.yahoo.com/news/a24-valuation-jumps-3-5-110050443.html  
 ","gemini generated 
 2026: Carried forward the 3.50 post-money equity valuation benchmark established during the Thrive Capital investment round. 
 2025: Carried forward the 3.50 post-money equity valuation following continued global theatrical distribution and streaming output expansion. 
@@ -138,8 +137,8 @@ a24,A24,Studio,fundraising_valuation,Manual entry,,,,,Needs approval,"https://fi
 2023: Carried forward the 2.5 post-money equity valuation from the 2022 institutional funding round amidst record box office and awards performance (*Everything Everywhere All at Once*). 
 2022: Reached a 2.50 valuation after securing a $225M minority equity investment in March 2022 led by Stripes and Neuberger Berman (A24's first primary priced equity round since inception). (Sources: *[Variety](https://variety.com)*, *[Complex](https://www.complex.com/pop-culture/a/j-rose/a24-valued-2-5-billion-securing-225-million-investment)*)
 2021: Placed at 2.75 based on the exact median of a reported $2.50B to $3.00B valuation range when A24 engaged investment bankers to explore a potential acquisition by major media suitors. (Sources: *[Variety](https://variety.com)*, *[Complex](https://www.complex.com/pop-culture/a/j-rose/a24-reportedly-floated-around-3-billion-offer-price-for-company)*)
-",2026-09-19,3.5,3.5,3.5,2.5,2.5,2.75,-,-,-,-,-,-
-abc-australia,ABC AUSTRALIA,PSM,yearly_revenue,Manual entry,,,,,Needs approval,https://www.abc.net.au/about/plans-reports-and-submissions/annual-reports/abc-annual-report-2024-25/105943122,financial statements,2026-09-18,0.928,1.72,0.87,0.76,0.76,0.76,0.75,0.75,0.74,0.78,0.83,0.9
+",2026-09-23,3.5,3.5,3.5,2.5,2.5,2.75,-,-,-,-,-,-
+abc-australia,ABC AUSTRALIA,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.abc.net.au/about/plans-reports-and-submissions/annual-reports/abc-annual-report-2024-25/105943122,financial statements,2026-09-23,0.928,1.72,0.87,0.76,0.76,0.76,0.75,0.75,0.74,0.78,0.83,0.9
 access,Access,HoldingCo,market_cap,Manual entry,,,,,Needs attention,https://www.gurufocus.com/insider/17542/access-industries-holdings-llc,,2026-09-18,6,6,-,-,-,-,-,-,-,-,-,-
 AEG,AEG,Exhibition,fundraising_valuation,Manual entry,,,,,Approved,"https://www.cnbc.com/2025/07/08/cnbcs-most-valuable-sports-empires-2025-how-the-worlds-top-20-empires-rank.html 
 ","gemini generated
@@ -176,32 +175,11 @@ art-mis,Artémis,HoldingCo,fundraising_valuation,Manual entry,,,,,Approved,https
 2017: Valued at 15.70 as turnarounds at Gucci and Saint Laurent accelerated equity value creation across Artémis' controlling stakes. (Sources: Forbes, Bloomberg)
 2016: Placed at 11.50 reflecting baseline net holding equity during structural portfolio transitions and retail divesting. (Sources: Forbes, Reuters)
 2015: Stood at 13.70 anchored by the acquisition of luxury cruise operator Ponant, Château Latour wine holdings, and dividend flows from PPR/Kering. (Sources: Forbes, The Wall Street Journal)",2026-09-22,32.35,32.35,40.,40.,67.03,87.5,100.96,85.38,57.69,56.53,31.15,23.08
-audacy,Audacy,Audio,market_cap,Manual entry,,,,,Needs approval,https://companiesmarketcap.com/audacy/marketcap/,"Went bankrupt in 2023, emerged from bankruptcy",2026-09-22,0.5,-,0.5,1.02,32.65,0.37,0.34,0.63,0.78,1.5,0.58,0.42
+audacy,Audacy,Audio,market_cap,Manual entry,,,,,Approved,"https://www.google.com/search?q=valuation+company+audacy+2026&oq=valuation+company+audacy+2026&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigATIHCAIQIRigATIHCAMQIRigAdIBCTEwNTQ1ajBqNKgCArACAeIDEBIMb21uaWJveF9mbG93IGjiAwYSAjg5IGk&sourceid=chrome&source=chrome.ob&ie=UTF-8
+https://companiesmarketcap.com/audacy/marketcap/","Went bankrupt in 2023, emerged from bankruptcy",2026-09-23,0.78,-,0.5,1.02,32.65,0.37,0.34,0.63,0.78,1.5,0.58,0.42
 bbc,BBC,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.bbc.co.uk/aboutthebbc/annualreport2025-2026/our-finances,,2026-09-22,7.08,6.99,6.9,7.1,6.61,6.99,6.33,6.25,6.73,6.39,6.37,7.33
 bertelsmann,Bertelsmann,HoldingCo,fundraising_valuation,Manual entry,,,,,Approved,https://companiesmarketcap.com/bertelsmann-se-co-kgaa/marketcap/ ,Not in Google Finance. ,2026-09-22,11.99,12.22,11.35,-,-,-,-,-,-,-,-,-
-bloomberg,Bloomberg,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: Pure standalone Enterprise Value (EV) reaches 105.00 ($105.00B) based on an estimated $14.90B in annual revenue and ~$5.6B in EBITDA (~38% operating margin). Applying public financial peer multiples (FactSet, S&P Global, MSCI trading at 18x–22x EV/EBITDA) prices the underlying business assets at over $100 billion without individual equity share attribution. (Sources: StoneX Financial Analysis, FactSet / MSCI Peer Comps)
-
-2025: Standalone EV marked at 98.00 ($98.00B) on $14.40B in revenue (~$5.3B EBITDA), with core Terminal subscriptions (350,000+ units generating ~$10.6B) and enterprise B-PIPE feeds establishing a 6.8x revenue multiple. (Sources: Financial Times / BCG Expand Report, Semafor Corporate Disclosures)
-
-2024: Standalone EV marked at 88.00 ($88.00B) on $13.50B in revenue, reflecting multiple expansion across private financial data providers and institutional index licensing growth. (Sources: Forbes Private Enterprise Benchmarks)
-
-2023: Standalone EV reaches 80.00 ($80.00B) on $12.50B in revenue (~$4.5B EBITDA); Wall Street investment banking consensus published by Semafor and Financial Times placed the enterprise value between $80B and $100B based purely on un-leveraged cash flows. (Sources: Semafor Corporate Audit, Financial Times)
-
-2022: Standalone EV marked at 72.00 ($72.00B) on $12.00B in revenue (~$4.2B EBITDA), supported by near-zero churn in institutional subscription software. (Sources: Financial Times)
-
-2021: Standalone EV reaches 66.00 ($66.00B) on $11.00B in revenue (~$3.8B EBITDA), as post-pandemic capital market volatility increased global trading seat demand across buy-side and sell-side firms. (Sources: Forbes Private Company Directory)
-
-2020: Standalone EV marked at 55.00 ($55.00B) on $10.50B in revenue (~$3.6B EBITDA), using a conservative 5.2x EV/Revenue multiple during pandemic macro adjustments. (Sources: CNBC Financial Reports)
-
-2019: Standalone EV reaches 52.00 ($52.00B) on $10.00B in revenue as installed Terminal count crossed 325,000 units globally. (Sources: The Week / CNBC Market Analysis)
-
-2018: Standalone EV marked at 48.00 ($48.00B) on $9.80B in revenue (~$3.3B EBITDA) based on steady 33%+ EBITDA margins across enterprise technology pipelines. (Sources: Forbes Industry Audits)
-
-2017: Standalone EV reaches 45.00 ($45.00B) on $9.50B in revenue (~$3.1B EBITDA), using market peer multiples from Thomson Reuters and FactSet. (Sources: FactSet / Thomson Reuters Peer Comparisons)
-
-2016: Standalone EV marked at 41.00 ($41.00B) on $9.20B in revenue, supported by a ~70% market share in institutional trading terminals. (Sources: BCG Financial Data)
-
-2015: Standalone EV marked at 38.00 ($38.00B) on $9.00B in revenue (~$2.9B EBITDA), establishing the baseline at a 4.2x EV/Revenue multiple. (Sources: Forbes Enterprise Archives)",2026-09-22,80,98,88,80,72,66,55,52,48,45,41,38
+bloomberg,Bloomberg,Publishing,fundraising_valuation,Manual entry,,,,,Approved,https://www.google.com/search?q=what+is+bloomberg+llc+valuation&sca_esv=fbc157f34a1607bb&biw=1470&bih=715&sxsrf=APpeQnu4L9QnmrSXwCCKowC9P8ZfN3Nnjw%3A1789837834442&ei=CsKuao_HGq_liLMP1qWcuAQ&ved=2ahUKEwiP9M7CkfuWAxWvMmIAHdYSB0cQ4dUDegQIBhAM&uact=5&oq=what+is+bloomberg+llc+valuation&gs_lp=Egxnd3Mtd2l6LXNlcnAiH3doYXQgaXMgYmxvb21iZXJnIGxsYyB2YWx1YXRpb25I1TpQzANYsDhwAXgBkAEAmAHVAaABoxmqAQcxOC4xMi4xuAEDyAEA-AEBmAIXoALWEqgCFMICEBAjGPAFGJ4GGKIHGOoCGCfCAhAQIxiiBxieBhjwBRjqAhgnwgIHECMY6gIYJ8ICFxAAGIAEGIoFGJECGOcGGOoCGLQC2AEBwgIdEC4YxwEYkQIY0QMYgAQYigUY5wYY6gIYtALYAQHCAhAQLhgDGI8BGOoCGLQC2AEBwgIQEAAYAxiPARjqAhi0AtgBAcICBBAjGCfCAgsQABiABBiKBRiRAsICCxAAGIAEGLEDGIMBwgILEC4YgAQYsQMYgwHCAg0QIxjwBRieBhiiBxgnwgINECMYogcYngYY8AUYJ8ICERAAGIAEGIoFGLEDGIMBGLQHwgIREC4YgwEYsQMYgAQYigUYtAfCAggQABiABBi0B8ICDhAAGIAEGIoFGJECGLQHwgIKEAAYgAQYFBiHAsICCBAAGIAEGLEDwgIFEAAYgATCAg0QABiABBgUGIcCGLQHwgIGEAAYFhgewgILEAAYgAQYigUYhgPCAggQABiABBiiBMICCBAAGIkFGKIEwgIFEAAY7wWYAwPxBSAZbjgQuf9GugYGCAEQARgBkgcGMTMuOS4xoAeHugGyBwYxMi45LjG4B9MSwgcHMC4xMi4xMcgHRYAIAQ&sclient=gws-wiz-serp,need to use an estiamte here. $80 bil is the median estiamte,2026-09-23,80,98,88,80,72,66,55,52,48,45,41,38
 bytedance,ByteDance,Large Cap,fundraising_valuation,Manual entry,,,,,Approved,https://www.reuters.com/world/china/bytedance-valued-550-billion-proposed-share-sale-by-general-atlantic-sources-say-2026-02-25/,"2026: Reached 550.00 as General Atlantic explored marketing its private equity stake at a $550 billion valuation following the restructuring of TikTok’s U.S. operations. (Source: TechFundingNews ByteDance Valuation Report)2025: Reached 480.00 following private secondary market stake markups by major institutional backers including SoftBank Vision Fund, Fidelity, and T. Rowe Price. (Source: Advisor Perspectives / Bloomberg Report)  2024: Reached 300.00 in November 2024 based on an institutional investor share buyback offer ($180.70 per share). (Source: The Business Standard / Reuters Report)  2023: Reached 268.00 in December 2023 following a $5.0 billion share buyback program ($160 per share) for external shareholders. (Source: TechNode Buyback Coverage)  2022: Reached 300.00 in September 2022 based on a $3.0 billion share repurchase offer ($155 per share) to provide shareholder liquidity. (Source: Straits Times / Bloomberg Coverage)2021: Reached 400.00 driven by private secondary market transactions and institutional revaluation marks. (Source: Advisor Perspectives Private Valuation Review)  2020: Reached 180.00 in November 2020 during pre-IPO capital raise discussions with Sequoia Capital and General Atlantic. (Source: The National News Financing Report)  2019: Carried forward the 75.00 primary post-money equity valuation benchmark from its late-2018 financing round. (Source: Tech in Asia Investment Report)2018: Reached 75.00 in October 2018 following a $3.0 billion Series E round led by SoftBank Vision Fund, General Atlantic, and KKR. (Source: Tech in Asia Funding Analysis)2017: Reached 20.00 following General Atlantic's initial equity investment in ByteDance. (Source: Angel One Unlisted Analysis)  2016: Reached 11.00 in late 2016 following a $1.0 billion round backed by Sequoia Capital and CCB International. (Source: China Daily Financing Report)  2015: Carried forward the 0.50 ($500 million) post-money valuation benchmark established in June 2014 during its Series C round led by Sequoia Capital. (Source: 36Kr Global Venture History)",2026-09-18,550.,480.,300.,268.,300.,400.,180.,75.,75.,20.,11,0.5
 cbc,CBC,PSM,yearly_revenue,Manual entry,,,,,Approved,https://cbc.radio-canada.ca/en/impact-and-accountability/finance/annual-reports,,2026-09-17,1.41,1.46,1.43,1.34,1.48,1.52,1.29,1.28,1.37,1.26,1.18,1.34
 channel-4,Channel 4,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.channel4.com/corporate/performance/reporting/reporting-library,,2026-09-17,1.35,1.32,1.33,1.27,1.41,1.61,1.2,1.26,1.3,1.24,1.34,1.5
@@ -217,7 +195,7 @@ Public Technologies (PUBT)
 2017 ($1.00B Enterprise Value Mark): Concord acquired Netherlands-based music publisher Imagem for ~$560 million, tripling its publishing catalog to over 380,000 copyrights and crossing the $1.0B enterprise valuation mark.
 
 2015 ($0.50B Formation Base): Formed through the merger of Concord Music Group and The Bicycle Music Company, backed by an initial $100M capital injection from the State of Michigan Retirement Systems (SMRS) at an initial baseline valuation of ~$500M.",2026-09-22,5.8,4.5,4.2,4.,4.,2.5,1.8,1.4,1.2,1.,0.6,0.5
-cox,COX,MVPD/BB,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.forbes.com/companies/cox-enterprises/?sh=503fa2075ef4,Cox Enterprises sold 74% of Cox Communications to Charter.Now own other businesses,2026-09-22,23.1,23.5,23.1,22.1,20.9,19.2,21.1,21.,20.4,20.1,18.1,17.1
+cox,COX,MVPD/BB,fundraising_valuation,Manual entry,,,,,Needs attention,https://www.forbes.com/companies/cox-enterprises/?sh=503fa2075ef4,Cox Enterprises sold 74% of Cox Communications to Charter.Now own other businesses,2026-09-23,23.1,23.5,23.1,22.1,20.9,19.2,21.1,21.,20.4,20.1,18.1,17.1
 daily-mail,Daily Mail,Publishing,yearly_revenue,Manual entry,,,,,Approved,https://www.dmgt.com/investors/annual-reports/,,2026-09-22,1.41,1.41,1.41,1.24,1.25,1.58,1.55,1.71,1.9,2.02,2.59,2.83
 discord,Discord,Social/Creator,fundraising_valuation,Manual entry,,,,,Approved,https://finance.yahoo.com/quote/DISO.PVT/,"gemini generated
 2026: Marked at an implied secondary valuation of 8.53 ($8.53B per Forge Global data) as Discord confidentially filed for a U.S. IPO in early 2026, with full-year revenues projected to cross $1.06 billion. (Sources: Forge Global Insights, Resourcera Revenue Audit)
@@ -484,30 +462,30 @@ patreon,Patreon,Social/Creator,fundraising_valuation,Manual entry,,,,,Approved,h
 
 2015: Marked at 0.08 ($75M–$80M baseline) established following its Series A funding round. (Sources: Tracxn Profile, Access IPOs)",2026-09-22,1.8,1.5,1,1.2,2.5,4,1,0.6,0.45,0.42,0.16,0.08
 pbs,PBS,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.pbs.org/about/about-pbs/financials/,,2026-09-22,0.7,0.7,0.56,0.54,0.54,0.5,0.55,0.46,0.54,0.53,0.46,0.47
-penske,Penske Media Corporation,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: Maintained an implied equity valuation mark of 0.40 ($400M) and projected annual business revenue of 0.17 ($170M), supported by FOX Sports' complete network broadcast package, expanded track attendance, and commercial entitlement growth across the NTT IndyCar Series. (Sources: SportsPro Media, Grand Prix 247)
+penske,Penske Media Corporation,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: Reached an implied enterprise valuation of 3.40 ($3.40B) after acquiring Vox Media's remaining digital sports and tech publishing brands (SB Nation, Polygon) and expanding long-term broadcast licensing for Dick Clark Productions (Golden Globes on CBS), pushing consolidated annual revenues toward ~$920 million. (Sources: TheWrap Digital Media Report, Awful Announcing Market Audit)
 
-2025: Reached an implied platform valuation of 0.39 ($390M / $375M–$400M range) and annual revenue of 0.16 ($160M) after Fox Corporation acquired a 33% minority stake in Penske Entertainment for $125M–$135M alongside a multi-year media rights extension. (Sources: The Wall Street Journal, On3 Sports Deals, SportsPro Media)
+2025: Valued at an enterprise mark of 3.10 ($3.10B) as live event IP (SXSW, Golden Globes, LA3C) and B2B subscription licensing across Variety, WWD, and Billboard generated over $850 million in top-line revenue. (Sources: Forbes Media Index, Penske Media Updates)
 
-2024: Carried forward 0.33 ($330M) equity mark with annual revenue of 0.14 ($140M) driven by NBC broadcast rights, title sponsor contributions (NTT, Gallagher, Hy-Vee), and Indianapolis Motor Speedway (IMS) ticket sales. (Sources: IndyStar Finance Archives, SportsPro Media)
+2024: Marked at 2.85 ($2.85B) supported by a 5-year broadcast contract with CBS for the Golden Globe Awards and live event commercial integration across Dick Clark Productions properties. (Sources: Variety Corporate Release, Deadline)
 
-2023: Carried forward 0.33 ($330M) equity mark with annual revenue reaching 0.13 ($130M) as Month of May grandstand attendance and corporate hospitality returned to near-record levels post-pandemic. (Sources: BlackBook Motorsport, Indianapolis Business Journal)
+2023: Reached 2.50 ($2.50B) in February 2023 after PMC executed a $100 million strategic investment in Vox Media at a $500 million valuation to become its largest shareholder, while restructuring PMRC alongside Todd Boehly's Eldridge Industries to take full operational control of Dick Clark Productions (Golden Globes, American Music Awards, New Year's Rockin' Eve). (Sources: The Rebooting Analysis, Hollywood Reporter Disclosures)
 
-2022: Carried forward 0.33 ($330M) equity mark with annual revenue recovering to 0.12 ($120M) following full capacity reopening at IMS and expanded sponsor activations. (Sources: BlackBook Motorsport, IndyCar News)
+2022: Marked at 2.10 ($2.10B) following the December 2022 acquisition of international art journal Artforum and full post-lockdown attendance recovery across South by Southwest (SXSW). (Sources: Artforum Announcement, The Wall Street Journal)
 
-2021: Carried forward 0.33 ($330M) equity mark with annual revenue at 0.09 ($90M) due to partial grandstand capacity limits and reduced corporate hospitality. (Sources: The Associated Press, IndyStar)
+2021: Marked at 1.80 ($1.80B) after acquiring a 50% controlling equity stake in South by Southwest (SXSW) in April 2021, alongside acquiring the Life Magazine photographic archives and a stake in Music Business Worldwide. (Sources: Variety SXSW Coverage, Eldridge Press Releases)
 
-2020: Reached 0.33 ($325M–$350M acquisition price range) as Penske Entertainment Corp officially closed its acquisition of IMS, the NTT IndyCar Series, and IMS Productions on January 6, 2020. Annual revenue dropped to 0.05 ($50M) due to COVID-19 lockdowns (104th Indy 500 ran with zero fans in attendance). (Sources: The Associated Press, CBS News Deal Coverage, The Drive)
+2020: Reached 1.50 ($1.50B) in September 2020 upon forming PMRC, a landmark joint venture with Eldridge Industries / Media Rights Capital (MRC) that brought major entertainment trade publications The Hollywood Reporter, Billboard, and Vibe under PMC's management alongside Variety, Deadline, and Rolling Stone. (Sources: Media Play News, The Wall Street Journal)
 
-2019: Marked at 0.33 ($325M–$350M) in November 2019 when Roger Penske / Penske Corporation signed an agreement to purchase IMS, IndyCar, and IMS Productions from the Hulman-George family; final year revenue under Hulman & Co held at 0.12 ($120M). (Sources: The Drive, Sports Business Journal)
+2019: Reached 1.10 ($1.10B) after acquiring the remaining 49% stake in Rolling Stone from Singapore-based BandLab Technologies to secure 100% equity ownership. (Sources: TechCrunch, Billboard)
 
-2018: Marked at an estimated market valuation of 0.25 ($250M) and annual revenue of 0.11 ($110M) under Hulman & Co management. (Sources: The Drive, SportsBusiness Journal)
+2018: Reached 1.00 ($1.00B post-money unicorn status) in February 2018 following a $200 million primary growth investment from Saudi Research and Media Group (SRMG) for a ~20% equity stake, alongside acquiring digital publisher She Media (SheKnows, BlogHer). (Sources: WWD Corporate Disclosures, Zippia Financing Index)
 
-2017: Marked at an estimated market valuation of 0.25 ($250M) and annual revenue of 0.11 ($110M). (Sources: IndyStar Archives)
+2017: Reached 1.00 ($1.00B baseline) in December 2017 after acquiring a 51% majority controlling stake in Rolling Stone publisher Wenner Media from Jann Wenner for ~$100 million (valuing the iconic publication at ~$200M). (Sources: The Wall Street Journal, Deadline)
 
-2016: Marked at an estimated market valuation of 0.22 ($220M) and annual revenue of 0.12 ($120M) driven by ticket and hospitality demand for the 100th Running of the Indianapolis 500. (Sources: Indianapolis Motor Speedway Archives)
+2016: Marked at 0.45 ($450M) after acquiring luxury lifestyle media brand Robb Report (joint venture, later 100%) and acquiring film trade IndieWire from SnagFilms in January 2016. (Sources: Variety, TechCrunch)
 
-2015: Marked at an estimated market valuation of 0.20 ($200M) and annual revenue of 0.10 ($100M). (Sources: SportsBusiness Journal)",2026-09-18,4.5,4.,3.5,3.5,3.,2.5,1.5,1.,1.,1.,0.5,0.5
-premiere-league,Premiere League,Sports Leagues,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.transfermarkt.com/premier-league/startseite/wettbewerb/GB1,"gemini generated
+2015: Marked at 0.35 ($350M) carrying forward momentum from the late-2014 acquisition of Fairchild Fashion Media (Women's Wear Daily / WWD, Footwear News) from Condé Nast for $100 million, alongside anchor assets Variety (acquired 2012 for $25M) and Deadline (acquired 2009). (Sources: The New York Times, Wikipedia / PMC Overview)",2026-09-23,3.4,3.1,2.85,2.5,2.1,1.8,1.5,1.1,1.,1.,0.5,0.35
+premiere-league,Premiere League,Sports Leagues,fundraising_valuation,Manual entry,,,,,Approved,https://www.transfermarkt.com/premier-league/startseite/wettbewerb/GB1,"gemini generated
 2026: Aggregate enterprise valuation of all 20 top-flight clubs reached 36.50 ($36.50B / ~£28.5B) as total league revenue surpassed 9.50 ($9.50B / ~£7.1B), supported by the launch of the expanded £6.7B ($9.0B) domestic media rights deal and surging international TV distributions. (Sources: Deloitte Football Finance Review 2026, SportsPro Media Analysis)
 
 2025: Aggregate valuation reached 33.80 ($33.80B) with combined club revenues hitting 9.22 ($9.22B / £6.8B), driven by a 13% YoY growth in commercial income (£2.4B) and matchday revenues exceeding £1.0B for the first time. (Sources: Deloitte Football Finance Review, FC Business)
@@ -530,9 +508,9 @@ premiere-league,Premiere League,Sports Leagues,fundraising_valuation,Manual entr
 
 2016: Marked at 14.20 ($14.20B) valuation and 4.90 ($4.90B / £3.6B) annual revenue following Leicester City's Premier League title victory and global audience distribution expansion. (Sources: BBC News)
 
-2015: Marked at 12.50 ($12.50B) aggregate valuation and 4.50 ($4.50B / £3.3B) revenue prior to the 2016–2019 media cycle acceleration. (Sources: Deloitte Archives)",2026-09-18,36.5,33.8,31.5,29,25.5,22,19.5,20.5,18.2,16,14.2,12.5
-rai,RAI,PSM,yearly_revenue,Manual entry,,,,,Needs approval,https://www.raiway.it/en/investors/reports-and-results,,2026-09-18,3,2.97,3.08,2.96,2.88,3.17,2.69,2.78,2.83,2.85,2.84,2.6
-red-bird,Red Bird,HoldingCo,fundraising_valuation,Manual entry,,,,,Needs approval,https://redbirdcap.com/about/,"2026: Reached 15.00 ($15.00B AUM) following the £600M acquisition of Telegraph Media Group, All3Media consolidation, a strategic growth investment in digital publisher Puck at a $250M valuation, and corporate structuring in media consolidation. (Sources: Altss PE Industry Overview, Reuters Puck Report)
+2015: Marked at 12.50 ($12.50B) aggregate valuation and 4.50 ($4.50B / £3.3B) revenue prior to the 2016–2019 media cycle acceleration. (Sources: Deloitte Archives)",2026-09-23,36.5,33.8,31.5,29,25.5,22,19.5,20.5,18.2,16,14.2,12.5
+rai,RAI,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.raiway.it/en/investors/reports-and-results,,2026-09-23,3,2.97,3.08,2.96,2.88,3.17,2.69,2.78,2.83,2.85,2.84,2.6
+red-bird,Red Bird,HoldingCo,fundraising_valuation,Manual entry,,,,,Approved,https://redbirdcap.com/about/,"2026: Reached 15.00 ($15.00B AUM) following the £600M acquisition of Telegraph Media Group, All3Media consolidation, a strategic growth investment in digital publisher Puck at a $250M valuation, and corporate structuring in media consolidation. (Sources: Altss PE Industry Overview, Reuters Puck Report)
 
 2025: Reached 14.00 ($14.00B AUM) upon the regulatory approval and close of the $8.4B Skydance–Paramount Global merger (where RedBird contributed a $2.0B equity check for 22.5% voting rights), while wealth platform Arax scaled past $40B in assets. (Sources: RedBird Capital Official Profile, Wikipedia RedBird Profile)
 
@@ -554,9 +532,9 @@ red-bird,Red Bird,HoldingCo,fundraising_valuation,Manual entry,,,,,Needs approva
 
 2016: Marked at 1.20 ($1.20B AUM) executing growth equity strategies in enterprise sports tech and distribution. (Sources: RedBird Capital Profiles)
 
-2015: Marked at 0.68 ($675M / $0.68B AUM) representing total capital deployed under Gerry Cardinale's inaugural Fund I following the firm's late-2014 founding. (Sources: RedBird Capital Official Profile)",2026-09-18,15.,14.,10.,10.,7.5,5.,4.,3.,2.5,1.8,1.2,0.68
-reelshort,ReelShort,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs attention,,Also not in original media maps,2026-09-18,3.5,2.6,1.5,0.6,0.25,0.15,0.1,0.06,0.03,0.01,-,-
-riot,Riot,Gaming,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: Reached an implied standalone valuation midpoint of 22.50 ($22.50B, within an $18B–$26B peer-multiple corridor) on estimated global revenues of $3.80B across League of Legends, Valorant, Teamfight Tactics, Wild Rift, and esports/media licensing. (Sources: LoLTheory Institutional Financial Audit, Tencent Games Financial Disclosures)
+2015: Marked at 0.68 ($675M / $0.68B AUM) representing total capital deployed under Gerry Cardinale's inaugural Fund I following the firm's late-2014 founding. (Sources: RedBird Capital Official Profile)",2026-09-23,15.,14.,10.,10.,7.5,5.,4.,3.,2.5,1.8,1.2,0.68
+reelshort,ReelShort,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs approval,,Also not in original media maps,2026-09-23,3.5,2.6,1.5,0.6,0.25,0.15,0.1,0.06,0.03,0.01,-,-
+riot,Riot,Gaming,fundraising_valuation,Manual entry,,,,,Approved,,"2026: Reached an implied standalone valuation midpoint of 22.50 ($22.50B, within an $18B–$26B peer-multiple corridor) on estimated global revenues of $3.80B across League of Legends, Valorant, Teamfight Tactics, Wild Rift, and esports/media licensing. (Sources: LoLTheory Institutional Financial Audit, Tencent Games Financial Disclosures)
 
 2025: Valued at an implied mark of 21.50 ($21.50B) on estimated global revenues of $3.60B following Arcane Season 2's global release and Valorant console platform expansion. (Sources: Tencent International Games Segment Reports, GamesIndustry.biz)
 
@@ -578,9 +556,9 @@ riot,Riot,Gaming,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: R
 
 2016: Marked at 6.00 ($6.00B) as League of Legends generated $1.75B in gross digital software sales. (Sources: SuperData Games Report 2016)
 
-2015: Marked at 4.50 ($4.50B) in December 2015 when Tencent acquired the remaining ~7% equity stake in Riot Games (taking 100% ownership) following $1.62B in annual League of Legends revenue. (Sources: SEC / Tencent Corporate Disclosures, Riot Games Wikipedia / Acquisition History)",2026-09-18,22.5,21.5,19.5,17.5,16.,14.,11.,8.,7.,8.,6.,4.5
-rtve,RTVE,PSM,yearly_revenue,Manual entry,,,,,Needs approval,https://www.rtve.es/rtve/20231016/transparencia-cuentas/943360.shtml,,2026-09-18,1.35,1.34,1.36,1.23,1.16,1.47,1.14,1.11,1.16,1.1,1.08,1.05
-runway,Runway,AI,fundraising_valuation,Manual entry,,,,,Needs approval,https://techcrunch.com/2026/02/10/ai-video-startup-runway-raises-315m-at-5-3b-valuation-eyes-more-capable-world-models/,"2026: Reached 5.30 ($5.30B post-money valuation) in February 2026 after closing a $315 million Series E funding round led by General Atlantic, with participation from Nvidia, Adobe Ventures, AMD Ventures, Fidelity, AllianceBernstein, and Premji Invest. (Sources: TechCrunch Series E Report, Bloomberg Intelligence)
+2015: Marked at 4.50 ($4.50B) in December 2015 when Tencent acquired the remaining ~7% equity stake in Riot Games (taking 100% ownership) following $1.62B in annual League of Legends revenue. (Sources: SEC / Tencent Corporate Disclosures, Riot Games Wikipedia / Acquisition History)",2026-09-23,22.5,21.5,19.5,17.5,16.,14.,11.,8.,7.,8.,6.,4.5
+rtve,RTVE,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.rtve.es/rtve/20231016/transparencia-cuentas/943360.shtml,,2026-09-23,1.35,1.34,1.36,1.23,1.16,1.47,1.14,1.11,1.16,1.1,1.08,1.05
+runway,Runway,AI,fundraising_valuation,Manual entry,,,,,Approved,https://techcrunch.com/2026/02/10/ai-video-startup-runway-raises-315m-at-5-3b-valuation-eyes-more-capable-world-models/,"2026: Reached 5.30 ($5.30B post-money valuation) in February 2026 after closing a $315 million Series E funding round led by General Atlantic, with participation from Nvidia, Adobe Ventures, AMD Ventures, Fidelity, AllianceBernstein, and Premji Invest. (Sources: TechCrunch Series E Report, Bloomberg Intelligence)
 
 2025: Reached 3.00 ($3.00B post-money valuation) in April 2025 following a $308 million Series D funding round led by General Atlantic alongside Baillie Gifford, SoftBank Group, and Fidelity Investments. (Sources: The Verge, TechCrunch Series D Announcement)
 
@@ -598,8 +576,8 @@ runway,Runway,AI,fundraising_valuation,Manual entry,,,,,Needs approval,https://t
 
 2018: Marked at 0.00 ($0.008B / $8M post-money) upon raising a $2 million Seed round led by Compound and Amplify Partners following its founding in New York by Cristóbal Valenzuela, Alejandro Matamala, and Anastasis Germanidis. (Sources: Crunchbase Data)
 
-2017–2015: Marked at 0.00 (Pre-incorporation / research stage at NYU Tisch School of the Arts).",2026-09-18,5.3,3.,1.5,1.5,0.5,0.2,0.04,0.01,-,-,-,-
-spotter,Spotter,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs approval,https://techcrunch.com/2024/09/10/creator-startup-spotter-raises-another-7-4m/,"2024: Marked at 1.70 ($1.70B) following a strategic Series D extension investment from Amazon in October 2024, as total cumulative creator payouts crossed $940 million across top YouTube channels (MrBeast, Dude Perfect, Ryan Trahan). (Sources: Variety Strategic Investment Report, Tracxn Financial Profiles)
+2017–2015: Marked at 0.00 (Pre-incorporation / research stage at NYU Tisch School of the Arts).",2026-09-23,5.3,3.,1.5,1.5,0.5,0.2,0.04,0.01,-,-,-,-
+spotter,Spotter,Social/Creator,fundraising_valuation,Manual entry,,,,,Approved,https://techcrunch.com/2024/09/10/creator-startup-spotter-raises-another-7-4m/,"2024: Marked at 1.70 ($1.70B) following a strategic Series D extension investment from Amazon in October 2024, as total cumulative creator payouts crossed $940 million across top YouTube channels (MrBeast, Dude Perfect, Ryan Trahan). (Sources: Variety Strategic Investment Report, Tracxn Financial Profiles)
 
 2023: Maintained 1.70 ($1.70B) valuation baseline in private secondary transactions (Forge Global) amid steady cash flows from YouTube back-catalog ad monetization rights. (Sources: Forge Global Spotter Stock Profile)
 
@@ -611,8 +589,8 @@ spotter,Spotter,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs appr
 
 2019: Marked at 0.05 ($50M) upon raising a $10.6 million Series B round in August 2019 following incorporation in Los Angeles by co-founders Aaron DeBevoise and Nic Paul. (Sources: Tracxn Profile, Growjo Financial Index)
 
-2018–2015: Marked at 0.00 (Pre-incorporation).",2026-09-18,1.7,1.7,1.7,1.7,1.7,0.4,0.2,0.05,-,-,-,-
-substack,Substack,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,https://techcrunch.com/2025/07/17/substack-raises-100m-from-chernin-group-andreessen-horowitz-skims-ceo-and-more/,"2025: Reached 1.10 ($1.10B post-money valuation) in July 2025 after securing $100 million in Series C funding co-led by BOND Capital and The Chernin Group (TCG), officially elevating the company to unicorn status. (Sources: Tracxn Substack Profile, Sacra Substack Report)
+2018–2015: Marked at 0.00 (Pre-incorporation).",2026-09-23,1.7,1.7,1.7,1.7,1.7,0.4,0.2,0.05,-,-,-,-
+substack,Substack,Publishing,fundraising_valuation,Manual entry,,,,,Approved,https://techcrunch.com/2025/07/17/substack-raises-100m-from-chernin-group-andreessen-horowitz-skims-ceo-and-more/,"2025: Reached 1.10 ($1.10B post-money valuation) in July 2025 after securing $100 million in Series C funding co-led by BOND Capital and The Chernin Group (TCG), officially elevating the company to unicorn status. (Sources: Tracxn Substack Profile, Sacra Substack Report)
 
 2024: Marked at 0.80 ($800M) in private secondary valuations supported by $37 million in annual revenues (+23% YoY growth) and over 3 million paid writer subscriptions across text, podcasting, and video formats. (Sources: Sacra Valuation Data, PM Insights)
 
@@ -630,8 +608,8 @@ substack,Substack,Publishing,fundraising_valuation,Manual entry,,,,,Needs approv
 
 2017: Marked at 0.00 ($0.002B / $2M pre-money) upon incorporation in San Francisco by co-founders Chris Best, Hamish McKenzie, and Jairaj Sethi. (Sources: RevenueMemo Substack Report)
 
-2016–2015: Marked at 0.00 (Pre-incorporation).",2026-09-18,1.1,1.1,0.593,0.593,0.65,0.65,0.054,0.054,0.015,-,-,-
-synthesia,Synthesia,AI,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.cnbc.com/2026/01/26/nvidia-alphabet-vc-arms-back-synthesia.html,"2026: Reached 4.00 ($4.00B post-money valuation) in January 2026 following a $200 million Series E funding round led by Google Ventures (GV), NVentures (Nvidia), Accel, and FirstMark, while conducting employee secondary share liquidity via NASDAQ. (Sources: Seedcamp Announcement, The Guardian)
+2016–2015: Marked at 0.00 (Pre-incorporation).",2026-09-23,1.1,1.1,0.593,0.593,0.65,0.65,0.054,0.054,0.015,-,-,-
+synthesia,Synthesia,AI,fundraising_valuation,Manual entry,,,,,Approved,https://www.cnbc.com/2026/01/26/nvidia-alphabet-vc-arms-back-synthesia.html,"2026: Reached 4.00 ($4.00B post-money valuation) in January 2026 following a $200 million Series E funding round led by Google Ventures (GV), NVentures (Nvidia), Accel, and FirstMark, while conducting employee secondary share liquidity via NASDAQ. (Sources: Seedcamp Announcement, The Guardian)
 
 2025: Reached 2.10 ($2.10B post-money valuation) in January 2025 via a $180 million Series D led by New Enterprise Associates (NEA), Atlassian Ventures, and World Innovation Lab (WiL); in mid-2025, Synthesia rejected a $3.0 billion takeover offer from Adobe to remain independent. (Sources: CNBC, The Times)
 
@@ -649,34 +627,10 @@ synthesia,Synthesia,AI,fundraising_valuation,Manual entry,,,,,Needs approval,htt
 
 2018: Marked at 0.01 ($10M) during early pre-seed algorithm development and synthetic video rendering trials. (Sources: Dealroom Profile)
 
-2017: Marked at 0.00 ($0.002B / $2M) upon incorporation in London by co-founders Victor Riparbelli, Steffen Tjerrild, Matthias Niessner, and Lourdes Agapito. (Sources: UK Companies House)",2026-09-18,4,2.1,1,1,0.3,0.3,0.05,0.02,0.01,-,-,-
-twitter,Twitter,Social/Creator,market_cap,Manual entry,,,,,Needs approval,https://companiesmarketcap.com/twitter/marketcap/,,2026-09-18,-,-,-,-,38.17,34.55,43.06,24.98,21.96,17.83,11.65,16.06
-valve,Valve,Gaming,fundraising_valuation,Manual entry,,,,,Needs approval,https://levvvel.com/statistics/valve/,"gemini generated an ""implied valuation"" using current revenue given the listed $3.2B is based on a report from 2012. 
-
-2026: Reached an implied valuation mark of 22.50 ($22.50B) on estimated net annual revenues of $5.80B, as platform gross transactions exceeded $15.0B in the first eight months of 2026 alone ($11.1B in H1 2026). (Sources: GamesIndustry.biz / Alinea Analytics Report, Infinite Start 2026 Data)
-
-2025: Valued at an implied equity mark of 19.50 ($19.50B) with gross Steam platform spend surpassing $16.2B ($4.0B+ in net platform commissions) and an operating workforce of ~340 employees. (Sources: SaaStr Financial Analysis, VG Insights)
-
-2024: Marked at an implied valuation of 16.50 ($16.50B) on $4.50B in net platform revenues, backed by $15.4B in gross Steam game sales and a 55% YoY increase in revenue generated by new title launches. (Sources: VG Insights 2024 PC Market Report, Forbes Financial Profiles)
-
-2023: Reached an implied valuation mark of 13.50 ($13.50B) and net revenues of $4.00B with ~40-50% operating margins, driven by Counter-Strike 2 in-game marketplace liquidity and a 60%+ share of global PC digital software distribution. (Sources: Forbes Private Enterprise Audit, RevenueMemo Financial Profile)
-
-2022: Valued at 10.50 ($10.50B) with net revenue reaching $3.20B following the commercial rollout and supply-chain scaling of the Steam Deck hardware line. (Sources: Bloomberg Intelligence, Wedbush Securities Valuation Model)
-
-2021: Marked at an implied equity mark of 9.00 ($9.00B) and net revenue of $2.80B. Unsealed court documents from FTC v. Microsoft litigation confirmed Valve's annual gross run-rate crossed $6.5B with a total headcount of ~350 employees (~79 devoted to core Steam platform operations). (Sources: US Federal Trade Commission v. Microsoft Disclosures, Tom's Hardware Analysis)
-
-2020: Reached 8.00 ($8.00B) valuation and $2.30B net revenue as COVID-19 lockdowns drove record concurrent player peaks (26M+ MAU) and digital PC software expansion. (Sources: Deloitte Media Benchmarks, LEVVVEL Statistics)
-
-2019: Marked at an implied valuation of 7.50 ($7.50B) and net revenue of $1.90B following the launch of the Valve Index VR ecosystem and Chinese regional Steam storefront integration. (Sources: Bloomberg Market Data)
-
-2018: Marked at 7.00 ($7.00B) valuation and $1.60B net revenue as Valve adjusted its platform revenue share from a flat 30% cut to a tiered 25%/20% model for titles exceeding $10M and $50M thresholds. (Sources: Game Developer Archives, The Verge)
-
-2017: Marked at 6.20 ($6.20B) valuation and $1.40B net revenue as gross paid game sales on Steam crossed $4.3B, driven by early access multiplayer titles like PUBG. (Sources: LEVVVEL Industry Report, SteamSpy Data)
-
-2016: Marked at 5.20 ($5.20B) valuation and $1.20B net revenue on $3.5B in gross platform transactions. (Sources: SteamSpy Annual Recap)
-
-2015: Marked at 4.20 ($4.20B) valuation and $1.00B net revenue following the launch of the global automated Steam refund system. (Sources: TechCrunch, LearnPlayThrive Analysis)",2026-09-18,22.5,19.5,16.5,13.5,10.5,9,8,7.5,7,6.2,5.2,4.2
-videoamp,VideoAmp,Advertising,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.forbes.com/sites/mattcraig/2025/10/30/why-videoamp-thinks-it-can-bust-nielsens-tv-ratings-monopoly/,"gemini generated
+2017: Marked at 0.00 ($0.002B / $2M) upon incorporation in London by co-founders Victor Riparbelli, Steffen Tjerrild, Matthias Niessner, and Lourdes Agapito. (Sources: UK Companies House)",2026-09-23,4,2.1,1,1,0.3,0.3,0.05,0.02,0.01,-,-,-
+twitter,Twitter,Social/Creator,market_cap,Manual entry,,,,,Needs approval,https://techcrunch.com/2024/09/29/fidelity-has-cut-xs-value-by-79-since-musk-purchase/,,2026-09-23,9.8,-,-,-,38.17,34.55,43.06,24.98,21.96,17.83,11.65,16.06
+valve,Valve,Gaming,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.revenuememo.com/p/who-owns-valve,,2026-09-23,7.5,7.5,6.9,7.7,7.7,7.8,11,11,11,11,-,-
+videoamp,VideoAmp,Advertising,fundraising_valuation,Manual entry,,,,,Approved,https://www.forbes.com/sites/mattcraig/2025/10/30/why-videoamp-thinks-it-can-bust-nielsens-tv-ratings-monopoly/,"gemini generated
 2026: Reached 1.50 ($1.50B) in secondary market valuations as national TV currency adoption expanded across major media holding groups and streaming platforms. (Sources: Forge Global VideoAmp Data, Startup Intros Profile)
 
 2025: Marked at 1.46 ($1.46B) holding steady post-Series F-2 extension, on estimated annual revenues of ~$164 million. (Sources: Growjo VideoAmp Profile, GetLatka SaaS Database)
@@ -699,8 +653,8 @@ videoamp,VideoAmp,Advertising,fundraising_valuation,Manual entry,,,,,Needs appro
 
 2016: Marked at 0.06 ($56.62M post-money) carrying forward Series A baseline capital. (Sources: Forge Global Data)
 
-2015: Reached 0.06 ($56.62M post-money valuation) in November 2015 following a $13.31M Series A funding round led by Anthem Venture Partners, RTL Group, and Wavemaker Partners. (Sources: Forge Global Data, Tracxn Funding Profile)",2026-09-18,1.5,1.46,1.46,1.46,1.4,1.4,0.28,0.21,0.13,0.08,0.06,0.06
-vox,VOX,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,https://www.axios.com/2026/05/20/vox-media-lupa-systems-james-murdoch,"gemini generated
+2015: Reached 0.06 ($56.62M post-money valuation) in November 2015 following a $13.31M Series A funding round led by Anthem Venture Partners, RTL Group, and Wavemaker Partners. (Sources: Forge Global Data, Tracxn Funding Profile)",2026-09-23,1.5,1.46,1.46,1.46,1.4,1.4,0.28,0.21,0.13,0.08,0.06,0.06
+vox,VOX,Publishing,fundraising_valuation,Manual entry,,,,,Approved,https://www.axios.com/2026/05/20/vox-media-lupa-systems-james-murdoch,"gemini generated
 2026 ($0.65B Aggregate Transaction Mark): Verified. In mid-2026, Vox Media executed a strategic corporate split. James Murdoch’s Lupa Systems acquired ~50% of the company (New York Magazine, Vox.com, and the Vox Media Podcast Network) for over $300M, while Penske Media Corporation (PMC) acquired the remaining digital publications (The Verge, Eater, SB Nation, PopSugar, The Dodo, Thrillist, and the Concert ad network) to establish PMX Global.
 
 2023 ($0.50B Primary Mark): Verified. PMC completed a $100M direct cash injection for a 20% minority stake, setting Vox Media’s post-money valuation at $500M ($400M pre-money). This represented a 50% valuation down-round from its 2015 peak.
@@ -709,9 +663,9 @@ vox,VOX,Publishing,fundraising_valuation,Manual entry,,,,,Needs approval,https:/
 
 2019 ($0.75B Implied Mark): Verified. Vox Media acquired New York Media (New York Magazine, Vulture, The Cut, Grub Street) in an all-stock transaction that valued the combined entity at ~$750M.
 
-2015 ($1.00B Primary Peak): Verified. NBCUniversal made a $200M primary Series F equity investment into Vox Media at an $850M pre-money valuation, establishing the company’s peak $1.00B post-money valuation mark.",2026-09-18,0.65,0.55,0.5,0.5,0.62,0.75,0.7,0.75,0.85,0.9,0.95,1
-weigel,Weigel,Local TV,fundraising_valuation,Manual entry,,,,,Needs attention,,Realzing this is not in original media maps. Do we want to keep? ,2026-09-18,0.55,0.52,0.48,0.42,0.38,0.35,0.3,0.28,0.25,0.22,0.2,0.18
-whalar,Whalar,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs approval,,"gemini generated
+2015 ($1.00B Primary Peak): Verified. NBCUniversal made a $200M primary Series F equity investment into Vox Media at an $850M pre-money valuation, establishing the company’s peak $1.00B post-money valuation mark.",2026-09-23,0.65,0.55,0.5,0.5,0.62,0.75,0.7,0.75,0.85,0.9,0.95,1
+weigel,Weigel,Local TV,fundraising_valuation,Manual entry,,,,,Approved,,,2026-09-23,0.55,0.52,0.48,0.42,0.38,0.35,0.3,0.28,0.25,0.22,0.2,0.18
+whalar,Whalar Group,Social/Creator,fundraising_valuation,Manual entry,,,,,Approved,,"gemini generated
 2026: Reached 0.52 ($520M+) in June 2026 when global consulting firm Accenture (via Accenture Song) acquired Whalar's creator and social agency business from Whalar Group in the largest creator economy M&A transaction on record, surpassing Publicis Groupe's $500M acquisition of Influential. (Sources: Tubefilter Transaction Report, Digiday Analysis, NetInfluencer Coverage)
 
 2025: Reached 0.40 ($400M) in May 2025 following a strategic funding round led by Salesforce CEO Marc Benioff, Shopify Inc., Fox Corporation, and film producer Neal H. Moritz. Whalar subsequently acquired Sir John Hegarty's Business of Creativity for $20M. (Sources: The Daily Upside, NetInfluencer Report, RockWater Analysis)
@@ -734,29 +688,6 @@ whalar,Whalar,Social/Creator,fundraising_valuation,Manual entry,,,,,Needs approv
 
 2016: Marked at 0.00 ($0.005B / $5M) upon founding in London by co-founders Neil Waller and James Layfield. (Sources: Dealroom Profile)
 
-2015: Marked at 0.00 (Pre-incorporation).",2026-09-18,0.5,0.4,0.35,0.28,0.2,0.12,0.06,0.04,0.02,0.005,0.001,-
-zdf,ZDF,PSM,yearly_revenue,Manual entry,,,,,Needs approval,https://www.zdf.de/unternehmen/organisation/finanzen-110.html,gemini generated,2026-09-18,2.86,2.86,2.74,2.76,2.59,2.83,2.54,2.5,2.63,2.5,2.44,2.42
-A+E,A+E Global Media,Studio,fundraising_valuation,Manual entry,,,,,Needs approval,,"2026: Valued at 2.40 based on the August 2026 definitive agreement where Hearst acquired Walt Disney's 50% stake in A+E Global Media for $1.20 billion in cash, setting total 100% equity value at $2.40 billion. (Sources: https://www.reuters.com/legal/transactional/disney-exits-ae-media-conglomerate-hearst-gains-full-ownership-12-billion-deal-2026-08-04/)
-
-2025: Carried forward the 19.15 primary post-money equity valuation benchmark from the last arm's-length equity transaction; Disney held its 50% stake at a ~$2.00B carrying value on paper (~$4.00B implied equity book mark) in SEC filings while exploring sale options. (Sources: BestMediaInfo, SEC Form 10-Q)
-
-2024: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: Variety)
-
-2023: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: The Hollywood Reporter)
-
-2022: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: Deadline)
-
-2021: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: Variety)
-
-2020: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: Bloomberg)
-
-2019: Carried forward the 19.15 primary post-money equity valuation benchmark following Disney's acquisition of 21st Century Fox assets. (Source: The Wall Street Journal)
-
-2018: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: The Hollywood Reporter)
-
-2017: Carried forward the 19.15 primary post-money equity valuation benchmark. (Source: Deadline)
-
-2016: Carried forward the 19.15 primary post-money equity valuation benchmark following Viceland's launch. (Source: Variety)
-
-2015: Carried forward the 19.15 primary post-money equity valuation benchmark established when NBCUniversal sold its 15.8% stake in A+E Networks to Disney and Hearst for $3.025 billion in cash. (Source: https://www.washingtoninformer.com/nbcuniversal-to-sell-ae-networks-stake-for-3-03-billion/)",2026-09-19,2.4,19.15,19.15,19.15,19.15,19.15,19.15,19.15,19.15,19.15,19.15,19.15
-Vend,Vend Marketplaces,Publishing,market_cap,Manual entry,,,,,,Not in google finance,,2026-09-19,3.63,-,-,-,-,-,-,-,-,-,-,-
+2015: Marked at 0.00 (Pre-incorporation).",2026-09-23,0.5,0.4,0.35,0.28,0.2,0.12,0.06,0.04,0.02,0.005,0.001,-
+zdf,ZDF,PSM,yearly_revenue,Manual entry,,,,,Approved,https://www.zdf.de/unternehmen/organisation/finanzen-110.html,gemini generated,2026-09-23,2.86,2.86,2.74,2.76,2.59,2.83,2.54,2.5,2.63,2.5,2.44,2.42
+Vend,Vend Marketplaces,Publishing,market_cap,Manual entry,,,,,Approved,Not in google finance,,2026-09-23,3.63,-,-,-,-,-,-,-,-,-,-,-
