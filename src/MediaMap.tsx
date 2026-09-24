@@ -213,6 +213,7 @@ function MobileViewSwitcher({
   viewType,
   onViewType,
   elevated = false,
+  hidden = false,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -220,6 +221,8 @@ function MobileViewSwitcher({
   onViewType: (t: MobileViewType) => void;
   /** Raise above the horizontal rotate-prompt overlay (z 40) so it stays usable. */
   elevated?: boolean;
+  /** Fade out (search is using the full top row). */
+  hidden?: boolean;
 }) {
   const fontStack = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
   return (
@@ -229,6 +232,9 @@ function MobileViewSwitcher({
         top: 16,
         right: 16,
         zIndex: elevated ? 45 : 14,
+        opacity: hidden ? 0 : 1,
+        pointerEvents: hidden ? "none" : "auto",
+        transition: "opacity 160ms ease",
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-end",
@@ -2537,6 +2543,14 @@ function CompanyListView({
   );
 }
 
+/** Material Symbols names for the mobile view tabs (desktop spells the words out). */
+const VIEW_ICONS: Record<AppViewMode, string> = {
+  map: "map",
+  linear: "linear_scale",
+  aggregate: "bar_chart",
+  list: "list",
+};
+
 // ---- Aggregate view (stacked market-cap-over-time chart) ----
 // A fourth view alongside map/linear/list. Every company is a vertical run of
 // yearly bars whose height = its valuation; bands are ordered PER YEAR (largest
@@ -2611,6 +2625,7 @@ function AggregateView({
   highlightSector,
   highlightCompany,
   onClearHighlight,
+  isMobile = false,
 }: {
   active: boolean;
   data: AggregateData;
@@ -2619,12 +2634,17 @@ function AggregateView({
   /** A search pick, pinned like a hover until the user clicks anywhere. */
   highlightCompany: string | null;
   onClearHighlight: () => void;
+  /** Mobile's view-tab pill sits top-left, over where the caption normally goes. */
+  isMobile?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<{ i: number; k: number | null; sx: number; sy: number } | null>(null);
-  const padL = 12, padR = 14, padT = 34, padB = 26;
+  // Mobile drops the caption below the view-tab pill (top 16 + ~40 tall) and lets
+  // it wrap to two lines, so the chart starts lower to clear it.
+  const captionTop = isMobile ? 66 : 12;
+  const padL = 12, padR = 14, padT = isMobile ? 108 : 34, padB = 26;
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -2885,7 +2905,7 @@ function AggregateView({
       </div>
 
       {maxTotal > 0 && dims.w > 0 && (
-        <div style={{ position: "absolute", top: 12, left: 14, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: captionTop, left: 14, right: 14, lineHeight: 1.35, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
           Total market cap over time · height relative to peak ({formatValuation(maxTotal)}, {formatDate(dates[peakIdx])})
         </div>
       )}
@@ -5402,6 +5422,7 @@ export default function MediaMap() {
           highlightSector={hoveredSector}
           highlightCompany={aggHighlight}
           onClearHighlight={() => setAggHighlight(null)}
+          isMobile={isMobile}
         />
 
         {/* Mobile layout editor toolbar — only with ?edit=mobile. */}
@@ -5522,13 +5543,15 @@ export default function MediaMap() {
                   key={mode}
                   onClick={() => selectView(mode)}
                   aria-pressed={active}
+                  aria-label={mode}
+                  title={isMobile ? mode.charAt(0).toUpperCase() + mode.slice(1) : undefined}
                   className="mm-hover"
                   style={{
                     background: active ? "rgba(255,255,255,0.18)" : "transparent",
                     color: active ? "white" : "rgba(255,255,255,0.65)",
                     border: "none",
                     borderRadius: 7,
-                    padding: "6px 14px",
+                    padding: isMobile ? "4px 10px" : "6px 14px",
                     fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                     fontSize: 12,
                     fontWeight: 500,
@@ -5539,7 +5562,22 @@ export default function MediaMap() {
                     transition: "background 160ms, color 160ms, box-shadow 160ms",
                   }}
                 >
-                  <span className="cap-center">{mode.toUpperCase()}</span>
+                  {isMobile ? (
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: 20,
+                        display: "block",
+                        lineHeight: 1,
+                        // linear_scale reads right-to-left in our strip (big → small).
+                        transform: mode === "linear" ? "rotate(180deg)" : undefined,
+                      }}
+                    >
+                      {VIEW_ICONS[mode]}
+                    </span>
+                  ) : (
+                    <span className="cap-center">{mode.toUpperCase()}</span>
+                  )}
                 </button>
               );
             })}
@@ -5548,12 +5586,16 @@ export default function MediaMap() {
               open={searchOpen}
               onOpenChange={(o) => {
                 setSearchOpen(o);
+                if (o) setSwitcherOpen(false); // its menu would sit under the results
                 if (!o) setSearchMatches(null);
               }}
               items={searchItems}
               onMatchesChange={setSearchMatches}
               onSelect={onSearchSelect}
-              expandedWidth={tabsWidth + 32}
+              // Mobile's icon tabs are narrow, so there the field takes the full
+              // row (screen minus gutters and the pill's padding + border); the
+              // settings button on the right fades out while search is open.
+              expandedWidth={isMobile ? Math.max(tabsWidth + 32, containerW - 42) : tabsWidth + 32}
               isMobile={isMobile}
             />
           </div>
@@ -5908,6 +5950,7 @@ export default function MediaMap() {
           viewType={mobileViewType}
           onViewType={(t) => { setMobileViewType(t); setSwitcherOpen(false); }}
           elevated={showRotatePrompt}
+          hidden={searchOpen}
         />
       )}
 
@@ -5918,6 +5961,9 @@ export default function MediaMap() {
       {isMobile && (
         <MobileSectorDrawer
           {...sectorPanelProps}
+          // The drawer covers the map on mobile, so zooming to a sector behind it
+          // is pointless — tapping the name just toggles the sector instead.
+          onFocusSector={sectorPanelProps.onToggle}
           open={mobileSectorsOpen}
           onClose={() => setMobileSectorsOpen(false)}
         />
