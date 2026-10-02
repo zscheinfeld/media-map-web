@@ -1,6 +1,6 @@
 import type {MouseEvent as ReactMouseEvent} from "react"
 import type {PlanetNode} from "./types.js"
-import {formatValuation, hexToRgba} from "./style.js"
+import {formatValuation, hexToRgba, ombreStripeColors} from "./style.js"
 
 export type PlanetProps = {
   node: PlanetNode
@@ -56,7 +56,14 @@ export function Planet({
   const glowFilterId = `planet-glow-${safeName}`
   const hue = node.hue
   const style = node.style
-  const stripes = style?.stripes && style.stripes.length >= 2 ? style.stripes : null
+  // Ombré recipe wins over a plain stripe list (style-lab experiment).
+  const ombre = style?.ombre && style.ombre.count >= 1 && style.ombre.stops.length >= 1 ? style.ombre : null
+  const ombreColors = ombre ? ombreStripeColors(ombre) : null
+  const stripes = ombreColors && ombreColors.length
+    ? ombreColors
+    : style?.stripes && style.stripes.length >= 2
+      ? style.stripes
+      : null
   const hasExplicitFill = !!(stripes || style?.fill)
   const glow = style?.glow ?? null
   const glowBlur = glow ? (glow.blurPx ?? 5) * slideUnitsPerPx : 0
@@ -177,14 +184,17 @@ export function Planet({
       : Math.max(1, node.r * 0.01)
   const hoverStrokeWidth = 2.5 * slideUnitsPerPx
 
-  // Default stripe orientation is vertical (90°).
-  const stripeAngle = stripes
-    ? style?.stripeOrientation === "horizontal"
-      ? 0
-      : style?.stripeOrientation === "diagonal"
-        ? 45
-        : 90
-    : 0
+  // Default stripe orientation is vertical (90°). Ombré carries its own angle.
+  const stripeAngle = ombre
+    ? ombre.angle
+    : stripes
+      ? style?.stripeOrientation === "horizontal"
+        ? 0
+        : style?.stripeOrientation === "diagonal"
+          ? 45
+          : 90
+      : 0
+  const stripeEdgePx = ombre?.stripeStrokePx ?? 0
 
   return (
     <g
@@ -239,6 +249,23 @@ export function Planet({
                   />
                 )
               })}
+              {/* Ombré: hairline between adjacent stripes, clipped to the circle. */}
+              {stripeEdgePx > 0 &&
+                stripes.slice(1).map((_, i) => {
+                  const y = -node.r + ((i + 1) * 2 * node.r) / stripes.length
+                  const half = Math.sqrt(Math.max(0, node.r * node.r - y * y))
+                  return (
+                    <line
+                      key={`edge-${i}`}
+                      x1={-half}
+                      y1={y}
+                      x2={half}
+                      y2={y}
+                      stroke={ombre?.stripeStrokeColor ?? baseStrokeColor}
+                      strokeWidth={stripeEdgePx * slideUnitsPerPx}
+                    />
+                  )
+                })}
             </g>
           </g>
           <circle

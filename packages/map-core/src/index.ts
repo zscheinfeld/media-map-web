@@ -7,6 +7,7 @@ export type {
   Connection,
   ConnectionStyle,
   LayoutInput,
+  OmbreStripes,
   PlanetGlow,
   PlanetNode,
   PlanetPosition,
@@ -24,7 +25,7 @@ export {
   sheetPlanetSize,
 } from "./sizing.js"
 
-export {formatValuation, hashHue, hexToRgba, mergeStyle} from "./style.js"
+export {formatValuation, hashHue, hexToRgba, mergeStyle, mixHex, ombreStripeColors} from "./style.js"
 
 export {CONNECTION_PULL, usePhysicsLayout, type PhysicsOptions} from "./usePhysicsLayout.js"
 
