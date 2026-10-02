@@ -1,6 +1,6 @@
 # Launch checklist — remaining steps
 
-*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-22.*
+*Working checklist of what's left to launch. Complements [LAUNCH_PLAN.md](LAUNCH_PLAN.md) (the schedule) and [PROJECT.md → Build status](PROJECT.md#build-status). Last reviewed: 2026-09-24.*
 
 The site is **live on the Google Finance sheet** (public app + hosted Studio + Sanity-webhook reconciler). The FMP→GF switch is **done** (§1); everything below it is polish/QA + optional cleanup.
 
@@ -13,9 +13,9 @@ The site is **live on the Google Finance sheet** (public app + hosted Studio + S
 **▶ Pick back up here (in order):**
 1. **Author the About Modal content** in Studio + fill the Substack / More-from-Eshap / Feedback links (Studio is redeployed, so the `about` singleton is available).
 2. ~~Add the `VALUATIONS_CSV_URL` GitHub secret + run the Snapshot valuations workflow; set `SANITY_STUDIO_VALUATIONS_SNAPSHOT_URL` + redeploy Studio~~ — ✅ done 2026-09-20. The daily snapshot is live and is now the map's first-paint baseline (see [GOOGLE_FINANCE.md → Resilience](GOOGLE_FINANCE.md#resilience-the-daily-snapshot-is-the-baseline-the-live-sheet-upgrades-it)).
-3. **Adobe Fonts kit** (§4c) — add the Netlify/prod domain(s) to the kit, and activate **Medium (500) + Demi (600)**. Until the domain is added, the *live* site renders the Libre Franklin fallback, not real Franklin Gothic.
+3. ~~**Adobe Fonts kit**~~ — ✅ not needed (2026-09-24): Libre Franklin (self-hosted) is the launch typeface; see §4c.
 4. **Historical maps on mobile** (§3) — adjust the year-transition layouts for the mobile/square view.
-5. Then the remaining launch features (§4b: search, dynamic news feed), launch infra (§4c), QA passes (§2/§3/§5), and decisions (paywall, domain, analytics).
+5. Then the remaining launch features (§4b: search, dynamic news feed), launch infra (§4c), QA passes (§2/§3/§5), and decisions (domain, analytics).
 
 ---
 
@@ -37,7 +37,7 @@ The site is **live on the Google Finance sheet** (public app + hosted Studio + S
 
 Touch is implemented: **one-finger pan, two-finger pinch-zoom, tap-to-focus**, gesture re-seating, mobile canvas swap, sector drawer, rotate prompt. Remaining:
 - [ ] **Real-device QA** across iOS + Android sizes.
-- [ ] *(Minor)* Edit-mode **planet dragging on touch** — the drag starts from `onMouseDown`, so authoring positions on a phone may not work (desktop authoring is fine).
+- *Map editing (Studio and `?edit=1`) is desktop-only — mouse/trackpad. Touch dragging deliberately not supported (decided 2026-09-24: no tablet editing planned).*
 
 ## 3. Historical-map editing — ✅ available; QA remaining
 
@@ -48,6 +48,9 @@ The Studio Map Editor's **year picker** scopes appearance windows, connections, 
 
 ## 4. Front-end polish
 - [ ] Restyle toward the light mockup; loading-moment animation; final responsive passes.
+
+## 3b. Content entry
+- [x] **Vitals entered** — ✅ done (2026-10-01). The client has entered company vitals (the time-bound fact tags, e.g. "Minecraft" / "230M MAU") in Studio; they show in the side panel for the present year.
 
 ## 4b. Launch features (targeted for launch — short plans)
 
@@ -69,17 +72,17 @@ Each is grounded in existing code, not a from-scratch build. Rough effort in bra
 
 ## 4c. Launch infra / SEO / analytics
 
-- [ ] **Adobe Fonts kit (ITC Franklin Gothic)** — the global typeface is now Franklin Gothic via a Typekit kit (family `"franklin-gothic"`; see [CLAUDE.md → Typography](../CLAUDE.md)). **Two Adobe-side steps:** (a) **add domains** (`localhost`, Netlify preview + the production domain) to the kit or the font silently falls back to Libre Franklin; (b) **activate the Medium (500) and Demi (600) styles** in the ITC Franklin Gothic family — the app already uses 500 (planet names, some headers) and 600 (modal title), which render as Book/Bold until those weights are activated.
+- [x] ~~**Adobe Fonts kit (ITC Franklin Gothic)**~~ — ✅ **not needed** (decided 2026-09-24): the self-hosted **Libre Franklin** looks right and is what the live site already renders (the Typekit kit isn't domain-allowlisted, so it falls back). No Adobe-side steps. *Optional cleanup:* remove the Typekit `<link>`s from [index.html](../index.html) so every environment renders the same face.
 
 - [ ] **Custom domain** — point the real launch URL at Netlify: add it in Netlify → Domain management, set the registrar DNS (CNAME/ALIAS or A records), let Netlify provision HTTPS (Let's Encrypt). **Do this early** — the OG tags (§4c) bake in the final URL. (The download QR points at Substack, so it doesn't depend on the domain.) *(Need: the domain name.)*
-- [ ] **Fix `<title>`** — [index.html](../index.html) still says `media-map-web` (the repo name); set it to the real product name (e.g. "Media Universe", matching `apple-mobile-web-app-title`). One-liner; also seeds the default OG/tab title.
+- [x] **Fix `<title>`** — ✅ set to **"ESHAP Media Universe"** (2026-09-24). The iOS home-screen label (`apple-mobile-web-app-title`) stays the shorter "Media Universe" so it isn't truncated under the icon.
 - [ ] **Proper favicon set** — a placeholder `/favicon.svg` exists; add a branded `favicon.svg` + a `favicon.ico` fallback (older browsers) + `apple-touch-icon.png` (180×180, iOS home screen) + optional `site.webmanifest` (PWA name/icons — the app already opts into standalone home-screen launch).
 - [ ] **OG / social share meta** — none exist. Add `og:title`, `og:description`, `og:url`, `og:image` + `twitter:card=summary_large_image` to [index.html](../index.html), and a **1200×630 OG image**. *(Synergy: the §4b exporter ([src/exportMap.tsx](../src/exportMap.tsx)) already renders a clean, branded map PNG — reuse it to generate the OG image.)* Verify with the Facebook/LinkedIn/Twitter debuggers post-deploy.
 - [ ] **Analytics** — none installed. **Decision first:** Google Analytics 4 (`gtag.js` + a `G-XXXXXXX` Measurement ID) — powerful but sets cookies, so it likely needs a consent banner (GDPR/UK). Cookieless alternatives (**Plausible**, **Netlify Analytics**, Fathom) need no banner and are far simpler — worth considering for a content site. Pick one, then wire the snippet into [index.html](../index.html). *(If GA4: need the Measurement ID + a call on the consent-banner requirement.)*
 
 ## 5. QA → launch
 - [ ] Full QA pass + bug bash against the checklist.
-- [ ] **Confirm the paid-gating decision** (freemium Time-Machine paywall) — launch requirement or post-launch? (Not started.)
+- [x] ~~**Confirm the paid-gating decision**~~ — ✅ decided 2026-09-24: **no paywall**. Everything stays free; the conversion path is the Substack subscribe pipeline (About modal buttons + the download's Substack QR).
 
 ---
 
@@ -109,6 +112,15 @@ Each is grounded in existing code, not a from-scratch build. Rough effort in bra
     5. **Accept it.** 7–16% on mid-size planets, a few days at a time.
   - **Whatever is chosen:** Deutsche Telekom's USD override should be revisited — at $151B it's the one that matters, and a flip back to EUR would read ~$173B until noticed.
 - [ ] **Plausibility check on Google Finance values** *(~½ day; roadmap, not blocking)*. `GOOGLEFINANCE("…","marketcap")` does not return a stable currency for dual-listed tickers — it may be the home currency or the listing currency, and it can **flip without warning**. Seen 2026-09-20: `NYSE:SONY` returned yen in the morning and dollars by evening, so the sheet's ×JPY rate turned $141B into **$0.90B**; same class as `LON:WPP` and `HKG:9988` (Alibaba showed $35.9B against $363B the year before). The daily snapshot does **not** protect against this — it faithfully copies the wrong number. Plan: in the app loader and `jobs/snapshot-valuations.ts`, distrust a **Google-Finance-sourced** current-year value that is more than ~5× off the previous year's (either direction) and keep the last good value instead; surface the flagged rows in `jobs/gf-audit-metadata.ts` and the console. **Manual rows must be exempt** — Anthropic (5.3×), Kobalt (5.8×) and A+E (0.13×) are real jumps. Until then the manual screen is: compare each company's current year to last year, and confirm suspects by implied share count (raw value ÷ share price in each candidate currency).
+
+## Roadmap — accessibility
+
+- [ ] **Accessibility controls** *(~1–2 days; roadmap, not blocking)*. Today the app has ARIA labels on its buttons/toggles and a keyboard-navigable search combobox, but the map itself is mouse/touch-only and there are no user-facing a11y settings. In rough priority order:
+  - **Reduced motion** — honour `prefers-reduced-motion` (skip the fly-in intro, year-transition tweens, Aggregate grow-up and focus-zoom easing; jump straight to the settled state) and expose a manual **"Reduce motion"** toggle for people who haven't set the OS preference. Cheapest and highest-value item.
+  - **Keyboard access to the map** — planets are plain SVG `<g onClick>` with no `tabIndex`/`role`, so a keyboard user can't reach them. Add `role="button"` + `tabIndex` + Enter/Space on each planet, a visible focus ring, and an "Esc closes the side panel" path. Search already gets keyboard users to a company, so this is the one that unlocks the rest.
+  - **Text size / contrast** — a **"Larger labels"** toggle (bumps `labelSizePx` + side-panel type) and a **high-contrast** mode (solid label backgrounds, stronger strokes, no dimmed non-matches). Check the grey-on-dark UI text (e.g. `rgba(255,255,255,0.55)` captions) against WCAG AA 4.5:1.
+  - **Screen-reader fallback** — the SVG is opaque to assistive tech. Give it an `aria-label` summary ("Media map: N companies across M sectors, sized by market cap") and point readers at the **List view**, which is already a real table — may just need `<th scope>`/caption polish.
+  - **Where the controls live:** a small "Accessibility" section in the existing settings/`tune` menu on mobile and the sidebar footer on desktop; persist in `localStorage`. Audit with Lighthouse + axe before calling it done.
 
 ## Post-launch / not blocking
 - Global "Latest from Eshap" feed (Substack/podcast RSS) — the per-company Eshap content stays manual (see §4b).
