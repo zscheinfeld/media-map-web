@@ -171,28 +171,35 @@ function readEnabled(): boolean {
   return v === "1" || v === "true";
 }
 
-function loadState(): StyleLabState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return normalizeState(JSON.parse(raw));
-  } catch {
-    /* private mode / blocked storage — fall through */
+// Saved edits only count in the editing view (?style=1). A plain visitor —
+// the client on a deploy preview — always gets the baked preset, so a newly
+// pushed preset isn't shadowed by whatever their browser stored on an earlier
+// visit.
+function loadState(editing: boolean): StyleLabState {
+  if (editing) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return normalizeState(JSON.parse(raw));
+    } catch {
+      /* private mode / blocked storage — fall through */
+    }
   }
   return normalizeState(LAB_PRESET ?? EMPTY_STATE);
 }
 
 export function useStyleLab() {
   const enabled = useMemo(() => readEnabled(), []);
-  const [state, setState] = useState<StyleLabState>(loadState);
+  const [state, setState] = useState<StyleLabState>(() => loadState(enabled));
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return; // only the editing view persists
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       /* ignore */
     }
-  }, [state]);
+  }, [enabled, state]);
 
   // The page background behind everything (visible under the sidebar's
   // translucent panel and during view fades) follows the gradient's bottom stop.
