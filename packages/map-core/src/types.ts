@@ -22,6 +22,22 @@ export type PlanetStyle = {
   // Sidebar-only: a CSS gradient for the legend swatch. Not used by the planet
   // renderer (kept here so the one style shape covers both surfaces).
   swatchBackground?: string
+  // Ombré stripe recipe (wins over `stripes` when present).
+  ombre?: OmbreStripes
+}
+
+// Ombré stripes (style-lab experiment): N stripes whose colours are sampled
+// along a ramp of `stops`, mixed in OKLab (or raw sRGB). `angle` is degrees —
+// 0 = horizontal bands, 90 = vertical. Optional hairlines between stripes.
+export type OmbreStripes = {
+  stops: string[]
+  count: number
+  angle: number
+  blend?: "oklab" | "srgb"
+  reverse?: boolean
+  /** Edge line between adjacent stripes, screen px (0/undefined = none). */
+  stripeStrokePx?: number
+  stripeStrokeColor?: string
 }
 
 export type ConnectionStyle = "solid" | "dotted"

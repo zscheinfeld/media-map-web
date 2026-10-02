@@ -19,6 +19,11 @@ import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type Valuat
 import { buildExportPng, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
+import { useGameMode } from "./game/useGameMode";
+import { GameOverlay } from "./game/GameOverlay";
+import { ghostStyleFor } from "./game/ghostStyle";
+import { useStyleLab } from "./styleLab/styleLab";
+import { StyleLabPanel } from "./styleLab/StyleLabPanel";
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
@@ -382,6 +387,10 @@ type SectorPanelProps = {
   hoveredSector: string | null;
   onHoverSector: (s: string | null) => void;
   onFocusSector: (s: string) => void;
+  /** Style lab (branch experiment): a sector's override colour, if any. */
+  sectorColorOverride?: (s: string) => string | null;
+  /** Style lab: solid background for the side panel. */
+  panelBackground?: string | null;
 };
 
 const pillBtn: React.CSSProperties = {
@@ -409,6 +418,7 @@ function SectorPanelContent({
   onHoverSector,
   onFocusSector,
   onClose,
+  sectorColorOverride,
 }: SectorPanelProps & { onClose?: () => void }) {
   // The mobile drawer is the only caller that passes `onClose`, so it doubles as
   // the mobile/desktop discriminator. Sector rows read larger on the phone
@@ -504,8 +514,9 @@ function SectorPanelContent({
         {sectors.map(s => {
           const hue = hueForSector(s);
           const flat = flatStyleForSector(s);
-          const customBg = flat?.swatchBackground ?? null;
-          const primary = flat?.fill ?? flat?.stripes?.[0] ?? null;
+          const labFill = sectorColorOverride?.(s) ?? null;
+          const customBg = labFill ? null : (flat?.swatchBackground ?? null);
+          const primary = labFill ?? flat?.fill ?? flat?.stripes?.[0] ?? null;
           const swatchBg = customBg ?? primary ?? `hsl(${hue}, 70%, 55%)`;
           const swatchBorder =
             customBg ? "none"
@@ -745,7 +756,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           display: "flex",
           flexDirection: "column",
           boxSizing: "border-box",
-          background: "rgba(7, 14, 32, 0.85)",
+          background: props.panelBackground ?? "rgba(7, 14, 32, 0.85)",
           color: "#e6edf7",
           padding: "16px 14px",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -1242,7 +1253,7 @@ function ContentList({
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {r.date && <span style={{ opacity: 0.55, fontSize: 12 }}>{formatContentDate(r.date)}</span>}
-              {r.url && <span style={{ opacity: 0.7 }}>→</span>}
+              {r.url && <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, lineHeight: 1, opacity: 0.7 }}>arrow_forward</span>}
             </span>
           </>
         );
@@ -2172,7 +2183,7 @@ function Carousel({
         }}
       >
         EXPLORE MAP
-        <span style={{ opacity: 0.7, fontSize: 13 }}>→</span>
+        <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, lineHeight: 1, opacity: 0.7 }}>arrow_forward</span>
       </button>
     </div>
   );
@@ -2316,6 +2327,7 @@ function CompanyListView({
   active,
   isMobile,
   focusRow,
+  sectorColorOverride,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -2324,6 +2336,7 @@ function CompanyListView({
   isMobile: boolean;
   /** A search pick: scroll this row into view and flash it (token re-fires). */
   focusRow: { name: string; token: number } | null;
+  sectorColorOverride?: (s: string) => string | null;
 }) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2531,7 +2544,7 @@ function CompanyListView({
                       height: 11,
                       borderRadius: 3,
                       flex: "0 0 auto",
-                      background: sectorDotBackground(r.sector),
+                      background: sectorColorOverride?.(r.sector) ?? sectorDotBackground(r.sector),
                       boxShadow: "0 0 5px rgba(0,0,0,0.4)",
                     }}
                   />
@@ -2641,9 +2654,12 @@ function AggregateView({
   highlightCompany,
   onClearHighlight,
   isMobile = false,
+  bg,
 }: {
   active: boolean;
   data: AggregateData;
+  /** Style lab: background gradient override. */
+  bg?: string;
   zoomTarget: number;
   highlightSector: string | null;
   /** A search pick, pinned like a hover until the user clicks anywhere. */
@@ -2851,7 +2867,7 @@ function AggregateView({
         inset: 0,
         zIndex: 5,
         fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-        background: AGG_GRADIENT,
+        background: bg ?? AGG_GRADIENT,
         opacity: active ? 1 : 0,
         pointerEvents: active ? "auto" : "none",
         transition: "opacity 320ms ease",
@@ -3268,6 +3284,12 @@ export default function MediaMap() {
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
   // --- Search (top bar, beside the view tabs) ---
   const [searchOpen, setSearchOpen] = useState(false);
+  // Game mode (easter egg on the map's logo). Declared up here because the
+  // physics hook below needs to know when to hand the nodes over.
+  const [gameActive, setGameActive] = useState(false);
+  const gameLogoRef = useRef<HTMLButtonElement | null>(null);
+  // The sidebar collapses for the game; this remembers whether to reopen it.
+  const sidebarBeforeGameRef = useRef(true);
   // Names matching the live query → everything else on the map dims. null = idle.
   const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
   // Aggregate view: the band a search result pinned (click anywhere to release).
@@ -3320,6 +3342,11 @@ export default function MediaMap() {
   // is null and the app uses the Google Sheet + local files exactly as before.
   const { docs: sanityDocs, loading: sanityLoading, error: sanityError } = useSanityMapDocs();
   const sanity = useResolvedSanityMap(sanityDocs, makeMoment(activeDate.year, activeDate.month));
+  // Style lab (branch experiment): colour/style overrides layered on top of
+  // Sanity at RENDER time (node.style is only re-read by physics on a rebuild).
+  const lab = useStyleLab();
+  // Stable callbacks pulled out so hooks can list them as dependencies.
+  const { styleFor: labStyleFor, sectorColor: labSectorColor } = lab;
 
   // Square positions/centers live in Sanity (mobile_position_overrides + sector
   // mobile_center, resolved at the viewed year); merge over the MOBILE_LAYOUTS.square
@@ -3592,12 +3619,18 @@ export default function MediaMap() {
   // by the CURRENT map's valuation (largest first). Colors mirror the planets.
   const aggregateData = useMemo<AggregateData>(() => {
     const bands: AggBand[] = baseCompanies.map((c) => {
-      const style = sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector);
+      const baseStyle = sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector);
+      // Style-lab palette (sector colours / Large Cap ombré recipes) applies here too.
+      const style = labStyleFor(c.name, c.sector, baseStyle);
       const hue = sanity?.hueBySector[c.sector] ?? hueForSector(c.sector);
-      const palette = style?.stripes && style.stripes.length
-        ? style.stripes
-        : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
-      const color = AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()] ?? mostSaturatedColor(palette);
+      const palette = style?.ombre?.stops?.length
+        ? style.ombre.stops
+        : style?.stripes && style.stripes.length
+          ? style.stripes
+          : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
+      // The hand-picked band colours were tuned for the old brand stripes; a
+      // company with a new recipe takes its band colour from the recipe instead.
+      const color = (style?.ombre ? null : AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()]) ?? mostSaturatedColor(palette);
       // A company contributes a bar only in years its appearance windows cover
       // (empty = all years); outside the window its value is 0 (no bar).
       const windows = windowsFor(c.name);
@@ -3619,7 +3652,7 @@ export default function MediaMap() {
     }
     return { dates: dateRange, bands, maxTotal };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseCompanies, dateRange, valData, hiddenByYear, sanity]);
+  }, [baseCompanies, dateRange, valData, hiddenByYear, sanity, labStyleFor]);
 
   // All-time high / low (with the date each occurred) for every company,
   // swept across the full timeline. Independent of the active date, so this
@@ -3990,6 +4023,7 @@ export default function MediaMap() {
     resettleToken,
     flyIntroToken,
     layoutKey: String(activeDate.year),
+    suspended: gameActive,
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -4679,6 +4713,35 @@ export default function MediaMap() {
     animateView(1, { x: 0, y: 0 }, 1100);
   };
 
+  // === Game mode (easter egg) — see src/game/useGameMode.ts ===
+  const game = useGameMode({
+    nodes,
+    enabled: !isMobile && !isEditMode && !mobileEdit,
+    containerRef,
+    logoRef: gameLogoRef,
+    containerW,
+    containerH,
+    canvas,
+    slideUnitsPerPx: naturalSlideUnitsPerPx,
+    onActiveChange: setGameActive,
+    onStart: () => {
+      // The game needs the whole map in view with nothing on top of it — the
+      // sidebar collapses too (restored on exit).
+      setInspectedPlanet(null);
+      setHoveredPlanet(null);
+      setTimelineOpen(false);
+      setSearchOpen(false);
+      setSearchMatches(null);
+      selectView("map");
+      resetView();
+      sidebarBeforeGameRef.current = sidebarOpen;
+      setSidebarOpen(false);
+    },
+    onExit: () => {
+      setSidebarOpen(sidebarBeforeGameRef.current);
+    },
+  });
+
   // === Static PNG export (see exportMap.tsx) ===
   // Pre-rendered in the background from the settled PRESENT-year layout and
   // cached, so the About-modal download is instant. Regenerated (debounced)
@@ -4693,8 +4756,10 @@ export default function MediaMap() {
       nodes
         .map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`)
         .join("|") +
-      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}`,
-    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled],
+      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
+      // Style lab: any override change invalidates the cached PNG.
+      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}`,
+    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state],
   );
   const generateExportPng = useCallback(async (): Promise<Blob | null> => {
     // Let an in-flight render finish first, then re-check: it may have produced
@@ -4702,7 +4767,9 @@ export default function MediaMap() {
     if (exportInFlightRef.current) await exportInFlightRef.current;
     if (exportCacheRef.current?.key === exportKey) return exportCacheRef.current.blob;
     const run = buildExportPng({
-      nodes,
+      nodes: lab.hasOverrides ? nodes.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : nodes,
+      bgStops: lab.bgStops,
+      sectorColorOverride: lab.sectorColor,
       connections: effectiveConnections,
       labelSizePx,
       bounds: physicsBounds,
@@ -4719,7 +4786,7 @@ export default function MediaMap() {
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts]);
+  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, lab.bgStops, lab.sectorColor]);
 
   // Background pre-render: desktop, present year, map mode, not authoring.
   // Debounced so the settle's per-tick node updates don't each kick off a 4K
@@ -4790,6 +4857,7 @@ export default function MediaMap() {
   // map viewBox to the right (the scrollbar handles navigation), so don't
   // cull there — we'd hide everything outside the initial canvas region.
   const visibleNodes = useMemo(() => {
+    if (game.active) return nodes.filter(n => !game.hud.lost.has(n.name));
     if (layoutMode === "linear") return nodes;
     const pad = 300;
     return nodes.filter(n => {
@@ -4799,7 +4867,7 @@ export default function MediaMap() {
       if (n.y - n.r > view.y + view.h + pad) return false;
       return true;
     });
-  }, [nodes, view, layoutMode]);
+  }, [nodes, view, layoutMode, game.active, game.hud.lost]);
 
   // Lookup by company name so connection lines can resolve their endpoints to
   // live node coordinates (which follow physics + any in-progress drag).
@@ -4818,9 +4886,12 @@ export default function MediaMap() {
     const tick = sanity?.tickerByName ?? {};
     const sectorColor = (sec: string) => {
       const flat = flatStyleForSector(sec);
-      return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
+      return labSectorColor(sec) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
     };
-    const planetColor = (n: PlanetNode) => n.style?.fill ?? n.style?.stripes?.[0] ?? `hsl(${n.hue}, 70%, 55%)`;
+    const planetColor = (n: PlanetNode) => {
+      const st = labStyleFor(n.name, n.sector, n.style);
+      return st?.fill ?? st?.ombre?.stops?.[0] ?? st?.stripes?.[0] ?? `hsl(${n.hue}, 70%, 55%)`;
+    };
     // Aggregate spans every year, so its bands are the whole searchable set.
     if (viewMode === "aggregate") {
       return aggregateData.bands.map((b) => ({
@@ -4894,7 +4965,7 @@ export default function MediaMap() {
       });
     }
     return [...onYear, ...extra];
-  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year]);
+  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year, labStyleFor, labSectorColor]);
 
   const onSearchSelect = (item: SearchItem) => {
     setSearchMatches(null);
@@ -4916,13 +4987,17 @@ export default function MediaMap() {
   // The search field grows to the width the tabs occupied. Observe rather than
   // measure once: the tabs widen when the web font lands, and `scrollWidth` is the
   // full content width even while they're collapsed behind the open search.
+  // Re-attached whenever the pill remounts (timeline / game mode unmount it);
+  // the 0 an unmounting element reports is ignored so the tabs never collapse.
   useEffect(() => {
     const el = tabsRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setTabsWidth(el.scrollWidth));
+    const ro = new ResizeObserver(() => {
+      if (el.scrollWidth > 0) setTabsWidth(el.scrollWidth);
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [timelineOpen]);
+  }, [timelineOpen, game.active]);
 
   const sectorPanelProps: SectorPanelProps = {
     sectors: allSectors,
@@ -4939,6 +5014,8 @@ export default function MediaMap() {
     hoveredSector,
     onHoverSector: setHoveredSector,
     onFocusSector: focusOnSector,
+    sectorColorOverride: lab.sectorColor,
+    panelBackground: lab.panelBg,
   };
 
   return (
@@ -4951,7 +5028,13 @@ export default function MediaMap() {
         overflow: "hidden",
       }}
     >
-      {!isMobile && <Sidebar {...sectorPanelProps} open={sidebarOpen} onCollapse={() => setSidebarOpen(false)} />}
+      {!isMobile && (
+        <Sidebar
+          {...sectorPanelProps}
+          open={sidebarOpen}
+          onCollapse={() => setSidebarOpen(false)}
+        />
+      )}
       {!isMobile && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -4971,8 +5054,10 @@ export default function MediaMap() {
             lineHeight: 0,
             // Fade in after the panel has slid away; fade out quickly when it opens.
             // (color transition kept so the 50%→100% hover still animates.)
-            opacity: sidebarOpen ? 0 : 1,
-            pointerEvents: sidebarOpen ? "none" : "auto",
+            // Hidden while the sidebar is open, and for the whole game (the
+            // panel collapses for play and must stay closed).
+            opacity: sidebarOpen || game.active ? 0 : 1,
+            pointerEvents: sidebarOpen || game.active ? "none" : "auto",
             transition: sidebarOpen
               ? "opacity 150ms ease, color 150ms ease"
               : "opacity 220ms ease 200ms, color 150ms ease",
@@ -4982,7 +5067,7 @@ export default function MediaMap() {
         </button>
       )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
-            background: LIST_BG_GRADIENT }}>
+            background: lab.bgGradient }}>
         {/* Horizontal view on a portrait phone: cover the map with a rotate
             prompt. The map stays mounted underneath so physics keeps running and
             it's ready the instant the phone is turned. */}
@@ -4999,7 +5084,7 @@ export default function MediaMap() {
               gap: 18,
               textAlign: "center",
               padding: 32,
-              background: LIST_BG_GRADIENT,
+              background: lab.bgGradient,
               color: "#e6edf7",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               textShadow: "none",
@@ -5045,20 +5130,20 @@ export default function MediaMap() {
             // native horizontal scroll.
             touchAction: layoutMode === "linear" ? "pan-x" : "none",
           }}
-          onMouseDown={layoutMode === "linear" ? undefined : onMouseDown}
-          onMouseMove={layoutMode === "linear" ? undefined : onMouseMove}
-          onMouseUp={layoutMode === "linear" ? undefined : onMouseUp}
-          onMouseLeave={layoutMode === "linear" ? undefined : onMouseUp}
-          onWheel={layoutMode === "linear" ? undefined : onWheel}
-          onTouchStart={layoutMode === "linear" ? undefined : onTouchStart}
-          onTouchMove={layoutMode === "linear" ? undefined : onTouchMove}
-          onTouchEnd={layoutMode === "linear" ? undefined : onTouchEnd}
+          onMouseDown={layoutMode === "linear" || game.active ? undefined : onMouseDown}
+          onMouseMove={layoutMode === "linear" || game.active ? undefined : onMouseMove}
+          onMouseUp={layoutMode === "linear" || game.active ? undefined : onMouseUp}
+          onMouseLeave={layoutMode === "linear" || game.active ? undefined : onMouseUp}
+          onWheel={layoutMode === "linear" || game.active ? undefined : onWheel}
+          onTouchStart={layoutMode === "linear" || game.active ? undefined : onTouchStart}
+          onTouchMove={layoutMode === "linear" || game.active ? undefined : onTouchMove}
+          onTouchEnd={layoutMode === "linear" || game.active ? undefined : onTouchEnd}
           onClick={() => {
             // Click on the map background while zoomed in (a focused planet, a
             // focused sector, or any pinch/zoom) → close the side panel and zoom
             // all the way out. Planet clicks set the suppress flag so they focus.
             if (bgClickSuppressRef.current) { bgClickSuppressRef.current = false; return; }
-            if (didDragRef.current) return;
+            if (didDragRef.current || game.active) return;
             if (layoutMode === "linear") {
               // Linear's zoom is the user's chosen strip scale, not a "focused"
               // state to back out of — just close the panel.
@@ -5128,7 +5213,7 @@ export default function MediaMap() {
             {/* Connection lines — drawn beneath the planets so the circles and
                 labels stay on top. Map mode only (in linear mode the planets
                 are reordered into a strip, so lines would be meaningless). */}
-            {layoutMode === "map" && effectiveConnections.map((conn, idx) => {
+            {layoutMode === "map" && !game.active && effectiveConnections.map((conn, idx) => {
               const a = nodeByName.get(conn.from);
               const b = nodeByName.get(conn.to);
               if (!a || !b) return null;
@@ -5243,10 +5328,52 @@ export default function MediaMap() {
             ].map(n => {
               // While dragging in edit mode, render the dragged planet at its
               // live cursor position (override node.x/y just for this frame).
-              const renderNode =
+              const dragNode =
                 dragState && dragState.name === n.name
                   ? { ...n, x: dragState.x, y: dragState.y }
                   : n;
+              const renderNode = lab.hasOverrides
+                ? { ...dragNode, style: labStyleFor(n.name, n.sector, n.style) }
+                : dragNode;
+              // Game mode: a parked planet is a transparent disc with a 1px
+              // sector-coloured outline; when it launches it cross-fades back
+              // to its normal look (two stacked renders, opacity-tweened).
+              if (game.active && !n.isEntity) {
+                const launched = game.hud.launched.has(n.name);
+                const fade = { transition: "opacity 700ms ease" } as const;
+                return (
+                  <g key={n.name}>
+                    <g style={{ ...fade, opacity: launched ? 0 : 1 }}>
+                      <Planet
+                        node={{ ...renderNode, style: ghostStyleFor(renderNode) }}
+                        slideUnitsPerPx={slideUnitsPerPx}
+                        isHovered={false}
+                        onHoverChange={setHoveredPlanet}
+                        onClick={() => {}}
+                        dimmed={false}
+                        labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
+                        showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        labelSuppressed={mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"}
+                        labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                      />
+                    </g>
+                    <g style={{ ...fade, opacity: launched ? 1 : 0, pointerEvents: launched ? undefined : "none" }}>
+                      <Planet
+                        node={renderNode}
+                        slideUnitsPerPx={slideUnitsPerPx}
+                        isHovered={false}
+                        onHoverChange={setHoveredPlanet}
+                        onClick={() => {}}
+                        dimmed={false}
+                        labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
+                        showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        labelSuppressed={mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"}
+                        labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                      />
+                    </g>
+                  </g>
+                );
+              }
               return (
                 <Planet
                   key={n.name}
@@ -5255,7 +5382,7 @@ export default function MediaMap() {
                   isHovered={hoveredPlanet === n.name}
                   onHoverChange={setHoveredPlanet}
                   onClick={(node) => {
-                    if (didDragRef.current) return;
+                    if (didDragRef.current || game.active) return;
                     bgClickSuppressRef.current = true; // a planet click, not a background click
                     if (isEditMode || mobileEdit) {
                       if (connectMode) {
@@ -5269,9 +5396,12 @@ export default function MediaMap() {
                       setInspectedPlanet(node.name);
                     }
                   }}
+                  // No sector-hover dimming mid-game: the cursor sweeps across the
+                  // sidebar while steering the paddle and would dim the field.
                   dimmed={
-                    (hoveredSector !== null && n.sector !== hoveredSector) ||
-                    (searchMatches !== null && !searchMatches.has(n.name))
+                    !game.active &&
+                    ((hoveredSector !== null && n.sector !== hoveredSector) ||
+                      (searchMatches !== null && !searchMatches.has(n.name)))
                   }
                   highlighted={searchMatches !== null && searchMatches.has(n.name)}
                   labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
@@ -5421,6 +5551,7 @@ export default function MediaMap() {
             fades out underneath. The sim keeps running so returning to map is
             instant. */}
         <CompanyListView
+          sectorColorOverride={lab.sectorColor}
           rows={listRows}
           sort={listSort}
           onSort={handleListSort}
@@ -5431,6 +5562,7 @@ export default function MediaMap() {
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
         <AggregateView
+          bg={lab.bgGradient}
           active={viewMode === "aggregate" && !timelineOpen}
           data={aggregateData}
           zoomTarget={aggZoomTarget}
@@ -5515,8 +5647,8 @@ export default function MediaMap() {
           />
         )}
 
-        {/* View-mode toggle — upper-right of the canvas */}
-        {!timelineOpen && (
+        {/* View-mode toggle — upper-right of the canvas (the game HUD takes its spot) */}
+        {!timelineOpen && !game.active && (
           <div
             style={{
               // Positioned, so it's also the containing block the search
@@ -5616,6 +5748,17 @@ export default function MediaMap() {
           </div>
         )}
 
+        <GameOverlay
+          phase={game.phase}
+          countdown={game.countdown}
+          hud={game.hud}
+          totals={game.totals}
+          paddle={game.paddle}
+          onBegin={game.begin}
+          onExit={game.exit}
+          onReplay={game.replay}
+        />
+
         {/* Timeline overlay — carousel of thumbnails + timeline strip at the bottom */}
         {timelineOpen && (
           <div
@@ -5650,14 +5793,16 @@ export default function MediaMap() {
         )}
 
         {/* Eshap logo — top-left of the map, hugging the side panel (desktop).
-            Drops below the "open panel" icon while the sidebar is collapsed. */}
+            Drops below the "open panel" icon while the sidebar is collapsed.
+            Easter egg: clicking it starts game mode — it fades out here and the
+            paddle fades in at the bottom of the map. */}
         {!isMobile && (
-          <a
-            href="https://eshap.substack.com/"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            ref={gameLogoRef}
+            type="button"
+            onClick={game.start}
             className="eshap-logo eshap-logo--faint"
-            aria-label="Eshap on Substack"
+            aria-label="Eshap"
             style={{
               position: "absolute",
               left: 16,
@@ -5665,11 +5810,19 @@ export default function MediaMap() {
               zIndex: 11,
               display: "block",
               lineHeight: 0,
-              transition: "top 240ms ease",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              // Hidden during the game (it becomes the paddle) and in the List /
+              // Aggregate views, where it would sit on top of their headers.
+              opacity: game.active || viewMode === "list" || viewMode === "aggregate" ? 0 : undefined,
+              pointerEvents: game.active || viewMode === "list" || viewMode === "aggregate" ? "none" : "auto",
+              transition: "top 240ms ease, opacity 360ms ease",
             }}
           >
             <img src="/Evan-logo-new.png" alt="" draggable={false} style={{ width: 96, height: "auto", display: "block" }} />
-          </a>
+          </button>
         )}
 
         {/* Bottom-left pill stack. Timeline button is always the first pill
@@ -5683,7 +5836,8 @@ export default function MediaMap() {
             // Clear the mobile browser's home indicator / toolbar safe area.
             bottom: `calc(${timelineOpen ? 72 : 16}px + env(safe-area-inset-bottom))`,
             zIndex: 11,
-            display: "flex",
+            // Hidden while the game runs — the paddle sweeps through this corner.
+            display: game.active ? "none" : "flex",
             flexDirection: "column",
             alignItems: "flex-start",
             gap: 6,
@@ -5855,7 +6009,7 @@ export default function MediaMap() {
                 disabled={!canPrev}
                 style={arrowBtnStyle(canPrev)}
               >
-                ‹
+                <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 22, lineHeight: 1 }}>chevron_left</span>
               </button>
               <button
                 aria-label="Next month"
@@ -5863,14 +6017,14 @@ export default function MediaMap() {
                 disabled={!canNext}
                 style={arrowBtnStyle(canNext)}
               >
-                ›
+                <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 22, lineHeight: 1 }}>chevron_right</span>
               </button>
             </div>
           );
         })()}
 
         {/* Zoom + download UI — hidden in timeline mode (no map) and list mode */}
-        {!timelineOpen && viewMode !== "list" && (
+        {!timelineOpen && viewMode !== "list" && !game.active && (
           <div
             style={{
               position: "absolute",
@@ -6008,6 +6162,19 @@ export default function MediaMap() {
       )}
 
       {/* Right-side planet detail panel — opens on planet click in non-edit mode. */}
+      {/* Style lab panel — ?style=1 only (branch experiment). */}
+      {lab.enabled && (
+        <StyleLabPanel
+          lab={lab}
+          sectors={allSectors}
+          liveSectorColor={(s) => {
+            const flat = flatStyleForSector(s);
+            return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[s] ?? hueForSector(s)}, 70%, 55%)`;
+          }}
+          largeCapNames={nodes.filter((n) => n.sector === "Large Cap" && !n.isEntity).map((n) => n.name).sort()}
+          liveStyleFor={(name) => nodes.find((n) => n.name === name)?.style ?? null}
+        />
+      )}
       <PlanetDetailPanel
         node={inspectedPlanet ? nodes.find((n) => n.name === inspectedPlanet) ?? null : null}
         detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}
