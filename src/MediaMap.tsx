@@ -19,6 +19,8 @@ import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type Valuat
 import { buildExportPng, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
+import { useGameMode } from "./game/useGameMode";
+import { GameOverlay } from "./game/GameOverlay";
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
@@ -722,7 +724,22 @@ const iconBtnStyle: React.CSSProperties = {
   lineHeight: 0,
 };
 
-function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: boolean; onCollapse: () => void }) {
+function Sidebar({
+  open,
+  onCollapse,
+  onLogoClick,
+  logoRef,
+  logoHidden,
+  ...props
+}: SectorPanelProps & {
+  open: boolean;
+  onCollapse: () => void;
+  /** Easter egg: the logo starts game mode (see src/game). */
+  onLogoClick: () => void;
+  logoRef: React.RefObject<HTMLButtonElement | null>;
+  /** While the game runs the logo has "left" the sidebar to become the paddle. */
+  logoHidden: boolean;
+}) {
   return (
     <aside
       style={{
@@ -784,21 +801,31 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
         <SectorPanelContent {...props} />
       </div>
 
-      {/* Eshap logo — pinned at the lower left of the panel; links to Substack. */}
+      {/* Eshap logo — pinned at the lower left of the panel. Easter egg: clicking
+          it starts game mode (the logo flies out to become the paddle, so it
+          hides here while the game is up). */}
       <div style={{ flex: "0 0 auto", paddingTop: 14, marginTop: 4 }}>
-        <a
-          href="https://eshap.substack.com/"
-          target="_blank"
-          rel="noreferrer"
+        <button
+          ref={logoRef}
+          type="button"
+          onClick={onLogoClick}
           className="eshap-logo"
-          style={{ display: "inline-block" }}
+          aria-label="Eshap"
+          style={{
+            display: "inline-block",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            visibility: logoHidden ? "hidden" : "visible",
+          }}
         >
           <img
             src="/Evan-logo-new.png"
-            alt="Eshap on Substack"
+            alt=""
+            draggable={false}
             style={{ width: 96, height: "auto", display: "block" }}
           />
-        </a>
+        </button>
       </div>
       </div>
     </aside>
@@ -3253,6 +3280,10 @@ export default function MediaMap() {
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
   // --- Search (top bar, beside the view tabs) ---
   const [searchOpen, setSearchOpen] = useState(false);
+  // Game mode (easter egg on the sidebar logo). Declared up here because the
+  // physics hook below needs to know when to hand the nodes over.
+  const [gameActive, setGameActive] = useState(false);
+  const gameLogoRef = useRef<HTMLButtonElement | null>(null);
   // Names matching the live query → everything else on the map dims. null = idle.
   const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
   // Aggregate view: the band a search result pinned (click anywhere to release).
@@ -3975,6 +4006,7 @@ export default function MediaMap() {
     resettleToken,
     flyIntroToken,
     layoutKey: String(activeDate.year),
+    suspended: gameActive,
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -4664,6 +4696,30 @@ export default function MediaMap() {
     animateView(1, { x: 0, y: 0 }, 1100);
   };
 
+  // === Game mode (easter egg) — see src/game/useGameMode.ts ===
+  const game = useGameMode({
+    nodes,
+    enabled: !isMobile && !isEditMode && !mobileEdit,
+    containerRef,
+    logoRef: gameLogoRef,
+    containerW,
+    containerH,
+    canvas,
+    slideUnitsPerPx: naturalSlideUnitsPerPx,
+    onActiveChange: setGameActive,
+    onStart: () => {
+      // The game needs the whole map in view with nothing on top of it.
+      setInspectedPlanet(null);
+      setHoveredPlanet(null);
+      setTimelineOpen(false);
+      setSearchOpen(false);
+      setSearchMatches(null);
+      selectView("map");
+      resetView();
+    },
+    onExit: () => {},
+  });
+
   // === Static PNG export (see exportMap.tsx) ===
   // Pre-rendered in the background from the settled PRESENT-year layout and
   // cached, so the About-modal download is instant. Regenerated (debounced)
@@ -4775,6 +4831,7 @@ export default function MediaMap() {
   // map viewBox to the right (the scrollbar handles navigation), so don't
   // cull there — we'd hide everything outside the initial canvas region.
   const visibleNodes = useMemo(() => {
+    if (game.active) return nodes.filter(n => !game.hud.lost.has(n.name));
     if (layoutMode === "linear") return nodes;
     const pad = 300;
     return nodes.filter(n => {
@@ -4784,7 +4841,7 @@ export default function MediaMap() {
       if (n.y - n.r > view.y + view.h + pad) return false;
       return true;
     });
-  }, [nodes, view, layoutMode]);
+  }, [nodes, view, layoutMode, game.active, game.hud.lost]);
 
   // Lookup by company name so connection lines can resolve their endpoints to
   // live node coordinates (which follow physics + any in-progress drag).
@@ -4901,13 +4958,17 @@ export default function MediaMap() {
   // The search field grows to the width the tabs occupied. Observe rather than
   // measure once: the tabs widen when the web font lands, and `scrollWidth` is the
   // full content width even while they're collapsed behind the open search.
+  // Re-attached whenever the pill remounts (timeline / game mode unmount it);
+  // the 0 an unmounting element reports is ignored so the tabs never collapse.
   useEffect(() => {
     const el = tabsRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setTabsWidth(el.scrollWidth));
+    const ro = new ResizeObserver(() => {
+      if (el.scrollWidth > 0) setTabsWidth(el.scrollWidth);
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [timelineOpen]);
+  }, [timelineOpen, game.active]);
 
   const sectorPanelProps: SectorPanelProps = {
     sectors: allSectors,
@@ -4936,7 +4997,16 @@ export default function MediaMap() {
         overflow: "hidden",
       }}
     >
-      {!isMobile && <Sidebar {...sectorPanelProps} open={sidebarOpen} onCollapse={() => setSidebarOpen(false)} />}
+      {!isMobile && (
+        <Sidebar
+          {...sectorPanelProps}
+          open={sidebarOpen}
+          onCollapse={() => setSidebarOpen(false)}
+          onLogoClick={game.start}
+          logoRef={gameLogoRef}
+          logoHidden={game.active}
+        />
+      )}
       {!isMobile && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -5030,20 +5100,20 @@ export default function MediaMap() {
             // native horizontal scroll.
             touchAction: layoutMode === "linear" ? "pan-x" : "none",
           }}
-          onMouseDown={layoutMode === "linear" ? undefined : onMouseDown}
-          onMouseMove={layoutMode === "linear" ? undefined : onMouseMove}
-          onMouseUp={layoutMode === "linear" ? undefined : onMouseUp}
-          onMouseLeave={layoutMode === "linear" ? undefined : onMouseUp}
-          onWheel={layoutMode === "linear" ? undefined : onWheel}
-          onTouchStart={layoutMode === "linear" ? undefined : onTouchStart}
-          onTouchMove={layoutMode === "linear" ? undefined : onTouchMove}
-          onTouchEnd={layoutMode === "linear" ? undefined : onTouchEnd}
+          onMouseDown={layoutMode === "linear" || game.active ? undefined : onMouseDown}
+          onMouseMove={layoutMode === "linear" || game.active ? undefined : onMouseMove}
+          onMouseUp={layoutMode === "linear" || game.active ? undefined : onMouseUp}
+          onMouseLeave={layoutMode === "linear" || game.active ? undefined : onMouseUp}
+          onWheel={layoutMode === "linear" || game.active ? undefined : onWheel}
+          onTouchStart={layoutMode === "linear" || game.active ? undefined : onTouchStart}
+          onTouchMove={layoutMode === "linear" || game.active ? undefined : onTouchMove}
+          onTouchEnd={layoutMode === "linear" || game.active ? undefined : onTouchEnd}
           onClick={() => {
             // Click on the map background while zoomed in (a focused planet, a
             // focused sector, or any pinch/zoom) → close the side panel and zoom
             // all the way out. Planet clicks set the suppress flag so they focus.
             if (bgClickSuppressRef.current) { bgClickSuppressRef.current = false; return; }
-            if (didDragRef.current) return;
+            if (didDragRef.current || game.active) return;
             if (layoutMode === "linear") {
               // Linear's zoom is the user's chosen strip scale, not a "focused"
               // state to back out of — just close the panel.
@@ -5113,7 +5183,7 @@ export default function MediaMap() {
             {/* Connection lines — drawn beneath the planets so the circles and
                 labels stay on top. Map mode only (in linear mode the planets
                 are reordered into a strip, so lines would be meaningless). */}
-            {layoutMode === "map" && effectiveConnections.map((conn, idx) => {
+            {layoutMode === "map" && !game.active && effectiveConnections.map((conn, idx) => {
               const a = nodeByName.get(conn.from);
               const b = nodeByName.get(conn.to);
               if (!a || !b) return null;
@@ -5240,7 +5310,7 @@ export default function MediaMap() {
                   isHovered={hoveredPlanet === n.name}
                   onHoverChange={setHoveredPlanet}
                   onClick={(node) => {
-                    if (didDragRef.current) return;
+                    if (didDragRef.current || game.active) return;
                     bgClickSuppressRef.current = true; // a planet click, not a background click
                     if (isEditMode || mobileEdit) {
                       if (connectMode) {
@@ -5254,9 +5324,12 @@ export default function MediaMap() {
                       setInspectedPlanet(node.name);
                     }
                   }}
+                  // No sector-hover dimming mid-game: the cursor sweeps across the
+                  // sidebar while steering the paddle and would dim the field.
                   dimmed={
-                    (hoveredSector !== null && n.sector !== hoveredSector) ||
-                    (searchMatches !== null && !searchMatches.has(n.name))
+                    !game.active &&
+                    ((hoveredSector !== null && n.sector !== hoveredSector) ||
+                      (searchMatches !== null && !searchMatches.has(n.name)))
                   }
                   highlighted={searchMatches !== null && searchMatches.has(n.name)}
                   labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
@@ -5500,8 +5573,8 @@ export default function MediaMap() {
           />
         )}
 
-        {/* View-mode toggle — upper-right of the canvas */}
-        {!timelineOpen && (
+        {/* View-mode toggle — upper-right of the canvas (the game HUD takes its spot) */}
+        {!timelineOpen && !game.active && (
           <div
             style={{
               // Positioned, so it's also the containing block the search
@@ -5601,6 +5674,16 @@ export default function MediaMap() {
           </div>
         )}
 
+        <GameOverlay
+          phase={game.phase}
+          countdown={game.countdown}
+          hud={game.hud}
+          totals={game.totals}
+          paddle={game.paddle}
+          onExit={game.exit}
+          onReplay={game.replay}
+        />
+
         {/* Timeline overlay — carousel of thumbnails + timeline strip at the bottom */}
         {timelineOpen && (
           <div
@@ -5645,7 +5728,8 @@ export default function MediaMap() {
             // Clear the mobile browser's home indicator / toolbar safe area.
             bottom: `calc(${timelineOpen ? 72 : 16}px + env(safe-area-inset-bottom))`,
             zIndex: 11,
-            display: "flex",
+            // Hidden while the game runs — the paddle sweeps through this corner.
+            display: game.active ? "none" : "flex",
             flexDirection: "column",
             alignItems: "flex-start",
             gap: 6,
@@ -5832,7 +5916,7 @@ export default function MediaMap() {
         })()}
 
         {/* Zoom + download UI — hidden in timeline mode (no map) and list mode */}
-        {!timelineOpen && viewMode !== "list" && (
+        {!timelineOpen && viewMode !== "list" && !game.active && (
           <div
             style={{
               position: "absolute",
