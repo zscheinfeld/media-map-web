@@ -5814,8 +5814,10 @@ export default function MediaMap() {
               border: "none",
               padding: 0,
               cursor: "pointer",
-              opacity: game.active ? 0 : undefined,
-              pointerEvents: game.active ? "none" : "auto",
+              // Hidden during the game (it becomes the paddle) and in the List /
+              // Aggregate views, where it would sit on top of their headers.
+              opacity: game.active || viewMode === "list" || viewMode === "aggregate" ? 0 : undefined,
+              pointerEvents: game.active || viewMode === "list" || viewMode === "aggregate" ? "none" : "auto",
               transition: "top 240ms ease, opacity 360ms ease",
             }}
           >
