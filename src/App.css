@@ -102,7 +102,17 @@ html, body, #root {
   background-clip: padding-box;
 }
 
-/* Side-panel Eshap logo → Substack: pointer + fade on hover. */
+/* Game-mode countdown digit: pops in each second. */
+@keyframes mm-count-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.mm-count-pop {
+  animation: mm-count-pop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Side-panel Eshap logo (game-mode trigger): pointer + fade on hover. */
 .eshap-logo {
   cursor: pointer;
   transition: opacity 150ms ease;

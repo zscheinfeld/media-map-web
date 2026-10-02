@@ -358,6 +358,13 @@ export type PhysicsOptions = {
   /** Bump this number to re-settle the sim from the current positions WITHOUT
    *  changing any settings (a manual "refresh physics"). */
   restartToken?: number
+  /**
+   * Hand the nodes to someone else. While true the sim is stopped and NOT
+   * rebuilt, so an outside loop can drive node.x/y directly (the app's game
+   * mode). Flipping back to false resumes a cool maintaining sim from wherever
+   * the nodes are — no pre-warm re-settle, so a restored layout stays put.
+   */
+  suspended?: boolean
   /** Bump this number to smoothly TWEEN the current layout into the target year's
    *  resolved layout (positions + sizes). Used for A/B pill comparisons — the
    *  target layout is taken from the per-year cache (keyed by `layoutKey`), or
@@ -398,6 +405,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     resettleToken = 0,
     flyIntroToken = 0,
     layoutKey = "",
+    suspended = false,
   } = opts
 
   const [nodes, setNodes] = useState<PlanetNode[]>([])
@@ -418,6 +426,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const prevRestartTokenRef = useRef(restartToken)
   const prevResettleTokenRef = useRef(resettleToken)
   const prevFlyTokenRef = useRef(flyIntroToken)
+  const prevSuspendedRef = useRef(false)
   // The first-load intro while it is in flight: when it started, how long it
   // runs, and the resolved targets it is tweening toward. Lets an effect re-run
   // mid-intro RE-TARGET the tween instead of tearing it down and snapping.
@@ -460,6 +469,17 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   useEffect(() => {
     if (inputs.length === 0) {
       setNodes([])
+      return
+    }
+
+    // Suspended: stop ticking and leave the node objects exactly as they are
+    // for the outside driver. The resume run (next effect pass) sees
+    // `resumingFromSuspend` and skips the re-settle pre-warm.
+    const resumingFromSuspend = prevSuspendedRef.current && !suspended
+    prevSuspendedRef.current = suspended
+    if (suspended) {
+      simRef.current?.stop()
+      simRef.current = null
       return
     }
 
@@ -1101,7 +1121,9 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // by the interrupted intro while keeping a good layout roughly in place),
     // then a cool live sim that eases `r` tweens and maintains separation before
     // cooling to a full stop. Mirrors the edit-mode prewarm + cool sim.
-    {
+    // (Skipped when resuming from `suspended`: the driver restored a layout that
+    // was already settled, and a pre-warm would nudge it.)
+    if (!resumingFromSuspend) {
       const prewarm = forceSimulation<PlanetNode>(built)
         .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
         .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
@@ -1150,13 +1172,18 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 2)
         setNodes(built.slice())
       })
+    // Resuming from `suspended`: the driver restored a layout that was at rest
+    // before it took over, so there is nothing to maintain — don't tick at all.
+    // (Even a near-zero alpha runs ~130 ticks of hard separation, and that pass
+    // and liveCollide disagree on some pairs by a few su, so it would creep.)
+    if (resumingFromSuspend) sim.stop()
     simRef.current = sim
     setNodes(built.slice())
     return () => {
       sim.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken, resettleToken, flyIntroToken])
+  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken, resettleToken, flyIntroToken, suspended])
 
   // Wake/cool the sim on drag enter/leave. The tick callback already nudges
   // alphaTarget on every tick, but the sim can be fully cooled (alpha=0) when

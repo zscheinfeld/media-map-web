@@ -722,13 +722,17 @@ function LinkRow({ label, href }: { label: string; href: string }) {
     >
       {label}
       <span
+        className="material-symbols-outlined"
+        aria-hidden
         style={{
+          fontSize: 16,
+          lineHeight: 1,
           opacity: hover ? 1 : 0.6,
           transform: hover ? "translateX(3px)" : "none",
           transition: "opacity 150ms ease, transform 150ms ease",
         }}
       >
-        →
+        arrow_forward
       </span>
     </a>
   );
