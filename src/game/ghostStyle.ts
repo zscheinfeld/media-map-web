@@ -31,7 +31,8 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
 /** The outline colour a parked planet shows in game mode. */
 export function ghostColorFor(node: PlanetNode): string {
   const st = node.style;
-  const stripes = st?.stripes ?? [];
+  // An ombré recipe's stops are the palette when present (style-lab look).
+  const stripes = st?.ombre?.stops?.length ? st.ombre.stops : (st?.stripes ?? []);
   if (node.sector === LARGE_CAP && stripes.length) {
     // Most saturated stripe; near-black/near-white stripes are ignored.
     let best = stripes[0], bestS = -1;

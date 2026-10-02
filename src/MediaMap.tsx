@@ -22,6 +22,8 @@ import { SearchBar } from "./SearchBar";
 import { useGameMode } from "./game/useGameMode";
 import { GameOverlay } from "./game/GameOverlay";
 import { ghostStyleFor } from "./game/ghostStyle";
+import { useStyleLab } from "./styleLab/styleLab";
+import { StyleLabPanel } from "./styleLab/StyleLabPanel";
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
@@ -385,6 +387,10 @@ type SectorPanelProps = {
   hoveredSector: string | null;
   onHoverSector: (s: string | null) => void;
   onFocusSector: (s: string) => void;
+  /** Style lab (branch experiment): a sector's override colour, if any. */
+  sectorColorOverride?: (s: string) => string | null;
+  /** Style lab: solid background for the side panel. */
+  panelBackground?: string | null;
 };
 
 const pillBtn: React.CSSProperties = {
@@ -412,6 +418,7 @@ function SectorPanelContent({
   onHoverSector,
   onFocusSector,
   onClose,
+  sectorColorOverride,
 }: SectorPanelProps & { onClose?: () => void }) {
   // The mobile drawer is the only caller that passes `onClose`, so it doubles as
   // the mobile/desktop discriminator. Sector rows read larger on the phone
@@ -507,8 +514,9 @@ function SectorPanelContent({
         {sectors.map(s => {
           const hue = hueForSector(s);
           const flat = flatStyleForSector(s);
-          const customBg = flat?.swatchBackground ?? null;
-          const primary = flat?.fill ?? flat?.stripes?.[0] ?? null;
+          const labFill = sectorColorOverride?.(s) ?? null;
+          const customBg = labFill ? null : (flat?.swatchBackground ?? null);
+          const primary = labFill ?? flat?.fill ?? flat?.stripes?.[0] ?? null;
           const swatchBg = customBg ?? primary ?? `hsl(${hue}, 70%, 55%)`;
           const swatchBorder =
             customBg ? "none"
@@ -748,7 +756,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           display: "flex",
           flexDirection: "column",
           boxSizing: "border-box",
-          background: "rgba(7, 14, 32, 0.85)",
+          background: props.panelBackground ?? "rgba(7, 14, 32, 0.85)",
           color: "#e6edf7",
           padding: "16px 14px",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -2319,6 +2327,7 @@ function CompanyListView({
   active,
   isMobile,
   focusRow,
+  sectorColorOverride,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -2327,6 +2336,7 @@ function CompanyListView({
   isMobile: boolean;
   /** A search pick: scroll this row into view and flash it (token re-fires). */
   focusRow: { name: string; token: number } | null;
+  sectorColorOverride?: (s: string) => string | null;
 }) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2534,7 +2544,7 @@ function CompanyListView({
                       height: 11,
                       borderRadius: 3,
                       flex: "0 0 auto",
-                      background: sectorDotBackground(r.sector),
+                      background: sectorColorOverride?.(r.sector) ?? sectorDotBackground(r.sector),
                       boxShadow: "0 0 5px rgba(0,0,0,0.4)",
                     }}
                   />
@@ -2644,9 +2654,12 @@ function AggregateView({
   highlightCompany,
   onClearHighlight,
   isMobile = false,
+  bg,
 }: {
   active: boolean;
   data: AggregateData;
+  /** Style lab: background gradient override. */
+  bg?: string;
   zoomTarget: number;
   highlightSector: string | null;
   /** A search pick, pinned like a hover until the user clicks anywhere. */
@@ -2854,7 +2867,7 @@ function AggregateView({
         inset: 0,
         zIndex: 5,
         fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-        background: AGG_GRADIENT,
+        background: bg ?? AGG_GRADIENT,
         opacity: active ? 1 : 0,
         pointerEvents: active ? "auto" : "none",
         transition: "opacity 320ms ease",
@@ -3329,6 +3342,11 @@ export default function MediaMap() {
   // is null and the app uses the Google Sheet + local files exactly as before.
   const { docs: sanityDocs, loading: sanityLoading, error: sanityError } = useSanityMapDocs();
   const sanity = useResolvedSanityMap(sanityDocs, makeMoment(activeDate.year, activeDate.month));
+  // Style lab (branch experiment): colour/style overrides layered on top of
+  // Sanity at RENDER time (node.style is only re-read by physics on a rebuild).
+  const lab = useStyleLab();
+  // Stable callbacks pulled out so hooks can list them as dependencies.
+  const { styleFor: labStyleFor, sectorColor: labSectorColor } = lab;
 
   // Square positions/centers live in Sanity (mobile_position_overrides + sector
   // mobile_center, resolved at the viewed year); merge over the MOBILE_LAYOUTS.square
@@ -3601,12 +3619,18 @@ export default function MediaMap() {
   // by the CURRENT map's valuation (largest first). Colors mirror the planets.
   const aggregateData = useMemo<AggregateData>(() => {
     const bands: AggBand[] = baseCompanies.map((c) => {
-      const style = sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector);
+      const baseStyle = sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector);
+      // Style-lab palette (sector colours / Large Cap ombré recipes) applies here too.
+      const style = labStyleFor(c.name, c.sector, baseStyle);
       const hue = sanity?.hueBySector[c.sector] ?? hueForSector(c.sector);
-      const palette = style?.stripes && style.stripes.length
-        ? style.stripes
-        : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
-      const color = AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()] ?? mostSaturatedColor(palette);
+      const palette = style?.ombre?.stops?.length
+        ? style.ombre.stops
+        : style?.stripes && style.stripes.length
+          ? style.stripes
+          : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
+      // The hand-picked band colours were tuned for the old brand stripes; a
+      // company with a new recipe takes its band colour from the recipe instead.
+      const color = (style?.ombre ? null : AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()]) ?? mostSaturatedColor(palette);
       // A company contributes a bar only in years its appearance windows cover
       // (empty = all years); outside the window its value is 0 (no bar).
       const windows = windowsFor(c.name);
@@ -3628,7 +3652,7 @@ export default function MediaMap() {
     }
     return { dates: dateRange, bands, maxTotal };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseCompanies, dateRange, valData, hiddenByYear, sanity]);
+  }, [baseCompanies, dateRange, valData, hiddenByYear, sanity, labStyleFor]);
 
   // All-time high / low (with the date each occurred) for every company,
   // swept across the full timeline. Independent of the active date, so this
@@ -4732,8 +4756,10 @@ export default function MediaMap() {
       nodes
         .map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`)
         .join("|") +
-      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}`,
-    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled],
+      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
+      // Style lab: any override change invalidates the cached PNG.
+      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}`,
+    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state],
   );
   const generateExportPng = useCallback(async (): Promise<Blob | null> => {
     // Let an in-flight render finish first, then re-check: it may have produced
@@ -4741,7 +4767,9 @@ export default function MediaMap() {
     if (exportInFlightRef.current) await exportInFlightRef.current;
     if (exportCacheRef.current?.key === exportKey) return exportCacheRef.current.blob;
     const run = buildExportPng({
-      nodes,
+      nodes: lab.hasOverrides ? nodes.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : nodes,
+      bgStops: lab.bgStops,
+      sectorColorOverride: lab.sectorColor,
       connections: effectiveConnections,
       labelSizePx,
       bounds: physicsBounds,
@@ -4758,7 +4786,7 @@ export default function MediaMap() {
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts]);
+  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, lab.bgStops, lab.sectorColor]);
 
   // Background pre-render: desktop, present year, map mode, not authoring.
   // Debounced so the settle's per-tick node updates don't each kick off a 4K
@@ -4858,9 +4886,12 @@ export default function MediaMap() {
     const tick = sanity?.tickerByName ?? {};
     const sectorColor = (sec: string) => {
       const flat = flatStyleForSector(sec);
-      return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
+      return labSectorColor(sec) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
     };
-    const planetColor = (n: PlanetNode) => n.style?.fill ?? n.style?.stripes?.[0] ?? `hsl(${n.hue}, 70%, 55%)`;
+    const planetColor = (n: PlanetNode) => {
+      const st = labStyleFor(n.name, n.sector, n.style);
+      return st?.fill ?? st?.ombre?.stops?.[0] ?? st?.stripes?.[0] ?? `hsl(${n.hue}, 70%, 55%)`;
+    };
     // Aggregate spans every year, so its bands are the whole searchable set.
     if (viewMode === "aggregate") {
       return aggregateData.bands.map((b) => ({
@@ -4934,7 +4965,7 @@ export default function MediaMap() {
       });
     }
     return [...onYear, ...extra];
-  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year]);
+  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year, labStyleFor, labSectorColor]);
 
   const onSearchSelect = (item: SearchItem) => {
     setSearchMatches(null);
@@ -4983,6 +5014,8 @@ export default function MediaMap() {
     hoveredSector,
     onHoverSector: setHoveredSector,
     onFocusSector: focusOnSector,
+    sectorColorOverride: lab.sectorColor,
+    panelBackground: lab.panelBg,
   };
 
   return (
@@ -5034,7 +5067,7 @@ export default function MediaMap() {
         </button>
       )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
-            background: LIST_BG_GRADIENT }}>
+            background: lab.bgGradient }}>
         {/* Horizontal view on a portrait phone: cover the map with a rotate
             prompt. The map stays mounted underneath so physics keeps running and
             it's ready the instant the phone is turned. */}
@@ -5051,7 +5084,7 @@ export default function MediaMap() {
               gap: 18,
               textAlign: "center",
               padding: 32,
-              background: LIST_BG_GRADIENT,
+              background: lab.bgGradient,
               color: "#e6edf7",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               textShadow: "none",
@@ -5295,10 +5328,13 @@ export default function MediaMap() {
             ].map(n => {
               // While dragging in edit mode, render the dragged planet at its
               // live cursor position (override node.x/y just for this frame).
-              const renderNode =
+              const dragNode =
                 dragState && dragState.name === n.name
                   ? { ...n, x: dragState.x, y: dragState.y }
                   : n;
+              const renderNode = lab.hasOverrides
+                ? { ...dragNode, style: labStyleFor(n.name, n.sector, n.style) }
+                : dragNode;
               // Game mode: a parked planet is a transparent disc with a 1px
               // sector-coloured outline; when it launches it cross-fades back
               // to its normal look (two stacked renders, opacity-tweened).
@@ -5309,7 +5345,7 @@ export default function MediaMap() {
                   <g key={n.name}>
                     <g style={{ ...fade, opacity: launched ? 0 : 1 }}>
                       <Planet
-                        node={{ ...renderNode, style: ghostStyleFor(n) }}
+                        node={{ ...renderNode, style: ghostStyleFor(renderNode) }}
                         slideUnitsPerPx={slideUnitsPerPx}
                         isHovered={false}
                         onHoverChange={setHoveredPlanet}
@@ -5515,6 +5551,7 @@ export default function MediaMap() {
             fades out underneath. The sim keeps running so returning to map is
             instant. */}
         <CompanyListView
+          sectorColorOverride={lab.sectorColor}
           rows={listRows}
           sort={listSort}
           onSort={handleListSort}
@@ -5525,6 +5562,7 @@ export default function MediaMap() {
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
         <AggregateView
+          bg={lab.bgGradient}
           active={viewMode === "aggregate" && !timelineOpen}
           data={aggregateData}
           zoomTarget={aggZoomTarget}
@@ -6122,6 +6160,19 @@ export default function MediaMap() {
       )}
 
       {/* Right-side planet detail panel — opens on planet click in non-edit mode. */}
+      {/* Style lab panel — ?style=1 only (branch experiment). */}
+      {lab.enabled && (
+        <StyleLabPanel
+          lab={lab}
+          sectors={allSectors}
+          liveSectorColor={(s) => {
+            const flat = flatStyleForSector(s);
+            return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[s] ?? hueForSector(s)}, 70%, 55%)`;
+          }}
+          largeCapNames={nodes.filter((n) => n.sector === "Large Cap" && !n.isEntity).map((n) => n.name).sort()}
+          liveStyleFor={(name) => nodes.find((n) => n.name === name)?.style ?? null}
+        />
+      )}
       <PlanetDetailPanel
         node={inspectedPlanet ? nodes.find((n) => n.name === inspectedPlanet) ?? null : null}
         detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}

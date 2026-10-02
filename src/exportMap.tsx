@@ -390,6 +390,7 @@ function buildPanelMarkup(
   counts: Record<string, number>,
   logoUri: string | null,
   qrUri: string | null,
+  sectorColorOverride?: (sector: string) => string | null,
 ): string {
   const W = EXPORT_W, H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
   const FONT = LABEL_FONT_FAMILY;
@@ -431,7 +432,7 @@ function buildPanelMarkup(
   let rowTop = cy;
   for (const s of sectors) {
     const flat = flatStyleForSector(s);
-    const primary = flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(s)}, 70%, 55%)`;
+    const primary = sectorColorOverride?.(s) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(s)}, 70%, 55%)`;
     const stroke = flat?.stroke && flat.stroke !== "transparent" ? flat.stroke : null;
     const midY = rowTop + containerH / 2;
     const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical center
@@ -460,7 +461,7 @@ function buildPanelMarkup(
 }
 
 /** Rasterize the composite SVG over the site's background gradient → PNG blob. */
-function rasterize(rootSvg: string): Promise<Blob | null> {
+function rasterize(rootSvg: string, bgStops?: [string, string, string]): Promise<Blob | null> {
   return new Promise((resolve) => {
     const W = EXPORT_W, H = EXPORT_H;
     const svgUrl = URL.createObjectURL(new Blob([rootSvg], { type: "image/svg+xml;charset=utf-8" }));
@@ -476,9 +477,9 @@ function rasterize(rootSvg: string): Promise<Blob | null> {
         return;
       }
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, "#1E0300");
-      g.addColorStop(0.51, "#010C4C");
-      g.addColorStop(1, "#070010");
+      g.addColorStop(0, bgStops?.[0] ?? "#1E0300");
+      g.addColorStop(0.51, bgStops?.[1] ?? "#010C4C");
+      g.addColorStop(1, bgStops?.[2] ?? "#070010");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       ctx.drawImage(img, 0, 0, W, H);
@@ -504,6 +505,9 @@ export type ExportInput = {
   year: number;
   sectors: string[];
   counts: Record<string, number>;
+  /** Style-lab overrides (branch experiment): background stops + sector colours. */
+  bgStops?: [string, string, string];
+  sectorColorOverride?: (sector: string) => string | null;
 };
 
 /**
@@ -535,11 +539,11 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
     fetchDataUri("/Evan-logo-new.png"),
     fetchDataUri("/Eshap_QR.svg"),
   ]);
-  const panel = buildPanelMarkup(input.year, input.sectors, input.counts, logoUri, qrUri);
+  const panel = buildPanelMarkup(input.year, input.sectors, input.counts, logoUri, qrUri, input.sectorColorOverride);
   const root =
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${EXPORT_W}" height="${EXPORT_H}" viewBox="0 0 ${EXPORT_W} ${EXPORT_H}">` +
     `<style>${fontCss}</style>${mapMarkup}${panel}</svg>`;
-  return rasterize(root);
+  return rasterize(root, input.bgStops);
 }
 
 /** Trigger a browser download of a prepared PNG blob. */
