@@ -32,7 +32,7 @@ export type StyleLabState = {
   panelBg?: string;
 };
 
-export const DEFAULT_BG: [string, string, string] = ["#1E0300", "#010C4C", "#070010"];
+export const DEFAULT_BG: [string, string, string] = ["#080202", "#0a0f29", "#030118"];
 export const EMPTY_STATE: StyleLabState = { bg: DEFAULT_BG, sectors: {}, largeCaps: {} };
 
 const STORAGE_KEY = "mm-style-lab-v1";

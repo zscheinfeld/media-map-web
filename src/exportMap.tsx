@@ -477,9 +477,9 @@ function rasterize(rootSvg: string, bgStops?: [string, string, string]): Promise
         return;
       }
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, bgStops?.[0] ?? "#1E0300");
-      g.addColorStop(0.51, bgStops?.[1] ?? "#010C4C");
-      g.addColorStop(1, bgStops?.[2] ?? "#070010");
+      g.addColorStop(0, bgStops?.[0] ?? "#080202");
+      g.addColorStop(0.51, bgStops?.[1] ?? "#0a0f29");
+      g.addColorStop(1, bgStops?.[2] ?? "#030118");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       ctx.drawImage(img, 0, 0, W, H);

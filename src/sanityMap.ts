@@ -225,6 +225,8 @@ export type ResolvedSanityMap = {
   /** Knobs for the SQUARE (mobile) canvas, tuned separately. Null until authored,
    *  in which case the square map keeps its built-in mobile defaults. */
   squareSettings: ResolvedKnobs | null
+  /** Each sector's own default style (sidebar swatches, list dots, legend). */
+  styleBySector: Record<string, PlanetStyle | null>
   /** Map Settings → background gradient stops (top, middle, bottom); null = built-in. */
   background: [string, string, string] | null
   /** Map Settings → solid side-panel colour; null = built-in translucent navy. */
@@ -245,6 +247,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   const centerBySector: Record<string, Coord> = {}
   const hueBySector: Record<string, number> = {}
   const styleByName: Record<string, PlanetStyle | null> = {}
+  const styleBySector: Record<string, PlanetStyle | null> = {}
   const positions: ResolvedSanityMap["positions"] = {}
   const mobilePositions: ResolvedSanityMap["mobilePositions"] = {}
   const mobileCenterBySector: ResolvedSanityMap["mobileCenterBySector"] = {}
@@ -253,6 +256,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 
   const noteSector = (sector: RawSector | null | undefined, name: string) => {
     if (!hueBySector[name]) hueBySector[name] = hashHue(name)
+    if (!(name in styleBySector)) styleBySector[name] = toCoreStyle(sector?.default_style)
     const center = sectorCenterAt(sector, at)
     if (center && !centerBySector[name]) centerBySector[name] = center
     const mobileCenter = mobileSectorCenterAt(sector, at)
@@ -346,7 +350,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     bgRaw?.top && bgRaw.middle && bgRaw.bottom ? [bgRaw.top, bgRaw.middle, bgRaw.bottom] : null
   const panelBg = raw.settings?.panel_background ?? null
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName, background, panelBg}
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName, styleBySector, background, panelBg}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
