@@ -11,6 +11,7 @@ import {about} from './documents/about'
 
 // Shared objects
 import {planetStyle} from './objects/planetStyle'
+import {ombreStripes} from './objects/ombreStripes'
 import {glow} from './objects/glow'
 import {positionOverride} from './objects/positionOverride'
 import {sectorCenterOverride} from './objects/sectorCenterOverride'
@@ -40,6 +41,7 @@ export const schemaTypes: SchemaTypeDefinition[] = [
   about,
   // Objects
   planetStyle,
+  ombreStripes,
   glow,
   positionOverride,
   sectorCenterOverride,

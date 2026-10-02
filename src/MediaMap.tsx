@@ -22,7 +22,7 @@ import { SearchBar } from "./SearchBar";
 import { useGameMode } from "./game/useGameMode";
 import { GameOverlay } from "./game/GameOverlay";
 import { ghostStyleFor } from "./game/ghostStyle";
-import { useStyleLab } from "./styleLab/styleLab";
+import { bgGradientOf, useStyleLab } from "./styleLab/styleLab";
 import { StyleLabPanel } from "./styleLab/StyleLabPanel";
 import type { SearchItem } from "./searchMatch";
 
@@ -3347,6 +3347,21 @@ export default function MediaMap() {
   const lab = useStyleLab();
   // Stable callbacks pulled out so hooks can list them as dependencies.
   const { styleFor: labStyleFor, sectorColor: labSectorColor } = lab;
+  // Background + side panel: a style-lab override wins, else Sanity's Map
+  // Settings, else the built-in gradient / translucent navy.
+  const sanityBg = sanity?.background ?? null;
+  const bgStops = lab.bgIsCustom || !sanityBg ? lab.bgStops : sanityBg;
+  const bgGradient = bgGradientOf(bgStops);
+  const panelBg = lab.panelBg ?? sanity?.panelBg ?? null;
+  // The page background (visible under the translucent sidebar and during view
+  // fades) follows the gradient's bottom stop.
+  const bgBottom = bgStops[2];
+  useEffect(() => {
+    document.body.style.background = bgBottom;
+    return () => {
+      document.body.style.background = "";
+    };
+  }, [bgBottom]);
 
   // Square positions/centers live in Sanity (mobile_position_overrides + sector
   // mobile_center, resolved at the viewed year); merge over the MOBILE_LAYOUTS.square
@@ -4758,8 +4773,8 @@ export default function MediaMap() {
         .join("|") +
       `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
       // Style lab: any override change invalidates the cached PNG.
-      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}`,
-    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state],
+      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}|${bgStops.join(",")}`,
+    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state, bgStops],
   );
   const generateExportPng = useCallback(async (): Promise<Blob | null> => {
     // Let an in-flight render finish first, then re-check: it may have produced
@@ -4768,7 +4783,7 @@ export default function MediaMap() {
     if (exportCacheRef.current?.key === exportKey) return exportCacheRef.current.blob;
     const run = buildExportPng({
       nodes: lab.hasOverrides ? nodes.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : nodes,
-      bgStops: lab.bgStops,
+      bgStops,
       sectorColorOverride: lab.sectorColor,
       connections: effectiveConnections,
       labelSizePx,
@@ -4786,7 +4801,7 @@ export default function MediaMap() {
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, lab.bgStops, lab.sectorColor]);
+  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, lab.sectorColor]);
 
   // Background pre-render: desktop, present year, map mode, not authoring.
   // Debounced so the settle's per-tick node updates don't each kick off a 4K
@@ -5015,7 +5030,7 @@ export default function MediaMap() {
     onHoverSector: setHoveredSector,
     onFocusSector: focusOnSector,
     sectorColorOverride: lab.sectorColor,
-    panelBackground: lab.panelBg,
+    panelBackground: panelBg,
   };
 
   return (
@@ -5067,7 +5082,7 @@ export default function MediaMap() {
         </button>
       )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
-            background: lab.bgGradient }}>
+            background: bgGradient }}>
         {/* Horizontal view on a portrait phone: cover the map with a rotate
             prompt. The map stays mounted underneath so physics keeps running and
             it's ready the instant the phone is turned. */}
@@ -5084,7 +5099,7 @@ export default function MediaMap() {
               gap: 18,
               textAlign: "center",
               padding: 32,
-              background: lab.bgGradient,
+              background: bgGradient,
               color: "#e6edf7",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
               textShadow: "none",
@@ -5562,7 +5577,7 @@ export default function MediaMap() {
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
         <AggregateView
-          bg={lab.bgGradient}
+          bg={bgGradient}
           active={viewMode === "aggregate" && !timelineOpen}
           data={aggregateData}
           zoomTarget={aggZoomTarget}

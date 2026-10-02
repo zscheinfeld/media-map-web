@@ -35,6 +35,23 @@ export const mapSettings = defineType({
         'While this is empty the square map keeps its built-in mobile defaults, so adding the ' +
         'first entry is what hands control of mobile physics to the CMS.',
     }),
+    defineField({
+      name: 'background',
+      title: 'Map background',
+      type: 'object',
+      description: 'The site-wide vertical gradient behind the map (top → middle → bottom). Empty = the built-in gradient.',
+      fields: [
+        defineField({name: 'top', title: 'Top', type: 'color'}),
+        defineField({name: 'middle', title: 'Middle', type: 'color'}),
+        defineField({name: 'bottom', title: 'Bottom', type: 'color'}),
+      ],
+    }),
+    defineField({
+      name: 'panel_background',
+      title: 'Side panel background',
+      type: 'color',
+      description: 'Solid colour for the left sector panel. Empty = the built-in translucent navy.',
+    }),
   ],
   preview: {
     select: {overrides: 'overrides'},

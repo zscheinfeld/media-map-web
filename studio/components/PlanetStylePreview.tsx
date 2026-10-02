@@ -1,6 +1,7 @@
 import {useEffect, useId, useState} from 'react'
 import {type ObjectInputProps, useClient, useFormValue} from 'sanity'
 import {Box, Card, Flex, Stack, Text} from '@sanity/ui'
+import {ombreStripeColors} from '@media-map/map-core'
 
 // --- Style value shapes (as stored by the schema) -------------------------
 // @sanity/color-input stores colors as objects; we only need `.hex` to render.
@@ -13,6 +14,7 @@ type StyleValue = {
   stroke?: ColorValue
   stroke_width_px?: number
   glow?: {color?: ColorValue; blur_px?: number; spread_px?: number}
+  ombre?: {stops?: ColorValue[]; count?: number; angle?: number; blend?: 'oklab' | 'srgb'; reverse?: boolean}
 }
 
 const hex = (c: ColorValue): string | undefined => c?.hex
@@ -43,8 +45,18 @@ function PlanetSvg({style}: {style: StyleValue}) {
   const C = SIZE / 2
   const R = 48
 
-  const stripes = (style.stripes ?? []).map(hex).filter(Boolean) as string[]
-  const useStripes = stripes.length >= 2
+  // An ombré recipe wins over plain stripes (same rule as the map's Planet).
+  const ombreStops = (style.ombre?.stops ?? []).map(hex).filter(Boolean) as string[]
+  const ombreColors = ombreStops.length
+    ? ombreStripeColors({
+        stops: ombreStops,
+        count: style.ombre?.count ?? ombreStops.length,
+        blend: style.ombre?.blend,
+        reverse: style.ombre?.reverse,
+      })
+    : []
+  const stripes = ombreColors.length ? ombreColors : ((style.stripes ?? []).map(hex).filter(Boolean) as string[])
+  const useStripes = ombreColors.length >= 1 || stripes.length >= 2
   const fill = hex(style.fill)
 
   // Stroke: explicit > derived from fill/first stripe > faint default.
@@ -53,8 +65,9 @@ function PlanetSvg({style}: {style: StyleValue}) {
   const strokeWidth = style.stroke_width_px ?? 1.5
 
   // Vertical (default) = 90°, horizontal = 0°, diagonal = 45°. Same as the app.
-  const angle =
-    style.stripe_orientation === 'horizontal'
+  const angle = ombreColors.length
+    ? (style.ombre?.angle ?? 90)
+    : style.stripe_orientation === 'horizontal'
       ? 0
       : style.stripe_orientation === 'diagonal'
         ? 45

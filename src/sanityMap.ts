@@ -42,6 +42,15 @@ type SanityPlanetStyle =
       stroke?: string | null
       stroke_width_px?: number | null
       glow?: {color?: string | null; blur_px?: number | null; spread_px?: number | null} | null
+      ombre?: {
+        stops?: (string | null)[] | null
+        count?: number | null
+        angle?: number | null
+        blend?: "oklab" | "srgb" | null
+        reverse?: boolean | null
+        stripe_stroke_px?: number | null
+        stripe_stroke_color?: string | null
+      } | null
     }
   | null
   | undefined
@@ -106,7 +115,12 @@ type RawMapDocs = {
   companies: RawCompany[]
   connections: RawConnection[]
   entities: RawEntity[]
-  settings: {overrides?: RawSettingsOverride[]; square_overrides?: RawSettingsOverride[]} | null
+  settings: {
+    overrides?: RawSettingsOverride[]
+    square_overrides?: RawSettingsOverride[]
+    background?: {top?: string | null; middle?: string | null; bottom?: string | null} | null
+    panel_background?: string | null
+  } | null
 }
 
 // --- Sanity → map-core conversions -----------------------------------------
@@ -118,6 +132,18 @@ function toCoreStyle(s: SanityPlanetStyle): PlanetStyle | null {
   const stripes = (s.stripes ?? []).filter((h): h is string => !!h)
   if (stripes.length) out.stripes = stripes
   if (s.stripe_orientation) out.stripeOrientation = s.stripe_orientation
+  const ombreStops = (s.ombre?.stops ?? []).filter((h): h is string => !!h)
+  if (s.ombre && ombreStops.length) {
+    out.ombre = {
+      stops: ombreStops,
+      count: s.ombre.count ?? ombreStops.length,
+      angle: s.ombre.angle ?? 90,
+      blend: s.ombre.blend ?? "oklab",
+      reverse: !!s.ombre.reverse,
+      stripeStrokePx: s.ombre.stripe_stroke_px ?? 0,
+      stripeStrokeColor: s.ombre.stripe_stroke_color ?? undefined,
+    }
+  }
   if (s.stroke) out.stroke = s.stroke
   if (typeof s.stroke_width_px === "number") out.strokeWidthPx = s.stroke_width_px
   if (s.glow?.color) {
@@ -199,6 +225,10 @@ export type ResolvedSanityMap = {
   /** Knobs for the SQUARE (mobile) canvas, tuned separately. Null until authored,
    *  in which case the square map keeps its built-in mobile defaults. */
   squareSettings: ResolvedKnobs | null
+  /** Map Settings → background gradient stops (top, middle, bottom); null = built-in. */
+  background: [string, string, string] | null
+  /** Map Settings → solid side-panel colour; null = built-in translucent navy. */
+  panelBg: string | null
   /** Side-panel content per company (vitals filtered to T; content newest-first). */
   detailByName: Record<string, CompanyDetail>
   /** name → ticker, for search-by-symbol. */
@@ -310,7 +340,13 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   // Square knobs forward-propagate independently of desktop's.
   const squareSettings = toKnobs(activeAt(raw.settings?.square_overrides ?? [], at, overrideMoment))
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName}
+  // Site-wide colours from Map Settings (null = use the built-in defaults).
+  const bgRaw = raw.settings?.background
+  const background: [string, string, string] | null =
+    bgRaw?.top && bgRaw.middle && bgRaw.bottom ? [bgRaw.top, bgRaw.middle, bgRaw.bottom] : null
+  const panelBg = raw.settings?.panel_background ?? null
+
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName, background, panelBg}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
@@ -326,7 +362,8 @@ const STYLE_PROJ = `{
   stripe_orientation,
   "stroke": stroke.hex,
   stroke_width_px,
-  "glow": { "color": glow.color.hex, "blur_px": glow.blur_px, "spread_px": glow.spread_px }
+  "glow": { "color": glow.color.hex, "blur_px": glow.blur_px, "spread_px": glow.spread_px },
+  "ombre": ombre{ "stops": stops[].hex, count, angle, blend, reverse, stripe_stroke_px, "stripe_stroke_color": stripe_stroke_color.hex }
 }`
 const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
 const COMPANIES_Q = `*[_type == "company"]{
@@ -347,7 +384,7 @@ const ENTITIES_Q = `*[_type == "entity"]{
   position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
 }`
 const SETTINGS_KNOBS = `start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion`
-const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}} }`
+const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}}, "background": background{ "top": top.hex, "middle": middle.hex, "bottom": bottom.hex }, "panel_background": panel_background.hex }`
 
 /**
  * Fetch the raw Sanity map docs once (one query per type). Returns null docs

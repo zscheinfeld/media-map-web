@@ -29,6 +29,15 @@ type SanityPlanetStyle =
       stroke?: SanityColor
       stroke_width_px?: number
       glow?: {color?: SanityColor; blur_px?: number; spread_px?: number}
+      ombre?: {
+        stops?: SanityColor[]
+        count?: number
+        angle?: number
+        blend?: 'oklab' | 'srgb'
+        reverse?: boolean
+        stripe_stroke_px?: number
+        stripe_stroke_color?: SanityColor
+      } | null
     }
   | null
   | undefined
@@ -40,6 +49,18 @@ function toCoreStyle(s: SanityPlanetStyle): PlanetStyle | null {
   const stripes = (s.stripes ?? []).map((c) => c?.hex).filter((h): h is string => !!h)
   if (stripes.length) out.stripes = stripes
   if (s.stripe_orientation) out.stripeOrientation = s.stripe_orientation
+  const ombreStops = (s.ombre?.stops ?? []).map((c) => c?.hex).filter((h): h is string => !!h)
+  if (s.ombre && ombreStops.length) {
+    out.ombre = {
+      stops: ombreStops,
+      count: s.ombre.count ?? ombreStops.length,
+      angle: s.ombre.angle ?? 90,
+      blend: s.ombre.blend ?? 'oklab',
+      reverse: !!s.ombre.reverse,
+      stripeStrokePx: s.ombre.stripe_stroke_px ?? 0,
+      stripeStrokeColor: s.ombre.stripe_stroke_color?.hex,
+    }
+  }
   if (s.stroke?.hex) out.stroke = s.stroke.hex
   if (typeof s.stroke_width_px === 'number') out.strokeWidthPx = s.stroke_width_px
   if (s.glow?.color?.hex) {

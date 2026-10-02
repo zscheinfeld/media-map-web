@@ -201,15 +201,6 @@ export function useStyleLab() {
     }
   }, [enabled, state]);
 
-  // The page background behind everything (visible under the sidebar's
-  // translucent panel and during view fades) follows the gradient's bottom stop.
-  useEffect(() => {
-    document.body.style.background = state.bg[2];
-    return () => {
-      document.body.style.background = "";
-    };
-  }, [state.bg]);
-
   // Shift+S hides/shows the panel so the map can be viewed clean.
   useEffect(() => {
     if (!enabled) return;
@@ -223,6 +214,7 @@ export function useStyleLab() {
     return () => window.removeEventListener("keydown", onKey);
   }, [enabled]);
 
+  const bgIsCustom = state.bg.some((c, i) => c.toLowerCase() !== DEFAULT_BG[i].toLowerCase());
   const hasOverrides =
     !!state.largeCapStroke ||
     !!state.sectorStroke ||
@@ -248,6 +240,8 @@ export function useStyleLab() {
     sectorColor,
     bgGradient: bgGradientOf(state.bg),
     bgStops: state.bg,
+    /** True when the lab's background differs from the built-in gradient. */
+    bgIsCustom,
     panelBg: state.panelBg ?? null,
     /** Back to the baked preset (or the live look when there is none). */
     resetToPreset: () => setState(normalizeState(LAB_PRESET ?? EMPTY_STATE)),

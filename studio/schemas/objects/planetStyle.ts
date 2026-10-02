@@ -53,6 +53,13 @@ export const planetStyle = defineType({
       },
     }),
     defineField({
+      name: 'ombre',
+      title: 'Ombré stripes',
+      type: 'ombreStripes',
+      description:
+        'A stripe recipe: N stripes sampled along a colour ramp, at any angle. When set it replaces Stripes and Fill.',
+    }),
+    defineField({
       name: 'stroke',
       title: 'Outline color',
       type: 'color',
