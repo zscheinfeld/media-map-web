@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { PlanetNode } from "@media-map/map-core";
 
-export type GamePhase = "idle" | "countdown" | "playing" | "ended";
+export type GamePhase = "idle" | "intro" | "countdown" | "playing" | "ended";
 
 export const GAME_SECONDS = 90;
 const COUNTDOWN_FROM = 5;
@@ -31,6 +31,8 @@ const SPEED_MAX = 820;
 export const PADDLE_W = 150;
 /** Paddle's gap from the bottom of the map, px (matches the Time Machine button's inset). */
 const PADDLE_BOTTOM_PX = 16;
+/** The sidebar's collapse transition (MediaMap `Sidebar`): the paddle is placed after it. */
+const SIDEBAR_COLLAPSE_MS = 320;
 const PADDLE_KEY_SPEED = 1100; // px/s with ← / →
 const MAX_BOUNCE = Math.PI / 3; // 60° off vertical when a planet hits the paddle's edge
 const OBSTACLE_SECTOR = "Large Cap";
@@ -60,9 +62,12 @@ export type GameHud = {
   savedCount: number;
   /** Names of planets that fell through — the renderer hides these. */
   lost: Set<string>;
+  /** Names of planets that have launched — the renderer cross-fades these from
+   *  their parked "ghost" outline back to their normal fill. */
+  launched: Set<string>;
 };
 
-const EMPTY_HUD: GameHud = { timeLeft: GAME_SECONDS, savedCap: 0, savedCount: 0, lost: new Set() };
+const EMPTY_HUD: GameHud = { timeLeft: GAME_SECONDS, savedCap: 0, savedCount: 0, lost: new Set(), launched: new Set() };
 
 export function useGameMode({
   nodes,
@@ -124,6 +129,7 @@ export function useGameMode({
   const containerRectRef = useRef<DOMRect | null>(null);
   const keysRef = useRef({ left: false, right: false });
   const lostRef = useRef<Set<string>>(new Set());
+  const launchedRef = useRef<Set<string>>(new Set());
   const savedCapRef = useRef(0);
   const savedCountRef = useRef(0);
 
@@ -149,6 +155,7 @@ export function useGameMode({
     }
     moversRef.current = [];
     lostRef.current = new Set();
+    launchedRef.current = new Set();
   };
 
   const finish = () => {
@@ -161,7 +168,7 @@ export function useGameMode({
     lastFrameRef.current = now;
     const elapsed = (now - t0Ref.current) / 1000;
     if (elapsed >= GAME_SECONDS) {
-      setHud({ timeLeft: 0, savedCap: savedCapRef.current, savedCount: savedCountRef.current, lost: lostRef.current });
+      setHud({ timeLeft: 0, savedCap: savedCapRef.current, savedCount: savedCountRef.current, lost: lostRef.current, launched: launchedRef.current });
       finish();
       return;
     }
@@ -186,11 +193,15 @@ export function useGameMode({
 
     const obstacles = obstaclesRef.current;
     let lostChanged = false;
+    let launchedChanged = false;
     for (const m of moversRef.current) {
       if (m.lost) continue;
       if (!m.active) {
         if (elapsed < m.releaseAt) continue;
         m.active = true;
+        if (!launchedChanged) launchedRef.current = new Set(launchedRef.current);
+        launchedRef.current.add(m.node.name);
+        launchedChanged = true;
       }
       const n = m.node;
       const yBefore = n.y; // for the swept paddle test below
@@ -261,6 +272,7 @@ export function useGameMode({
       savedCap: savedCapRef.current,
       savedCount: savedCountRef.current,
       lost: lostChanged ? lostRef.current : h.lost,
+      launched: launchedChanged ? launchedRef.current : h.launched,
     }));
     const left = cRect.left + paddleXRef.current - PADDLE_W / 2;
     setPaddle((p) => (p && p.left === left && !p.animate ? p : p ? { ...p, left, animate: false } : p));
@@ -269,6 +281,18 @@ export function useGameMode({
 
   const beginPlay = () => {
     const { nodes, containerW, containerH, canvas, slideUnitsPerPx: supp } = propsRef.current;
+    // The map may have grown since the click (the sidebar collapses for the
+    // game): re-measure and re-centre the paddle on the current width.
+    const container = containerRef.current;
+    if (container) {
+      const cRect = container.getBoundingClientRect();
+      containerRectRef.current = cRect;
+      paddleXRef.current = cRect.width / 2;
+      const geom = paddleGeomRef.current;
+      setPaddle((p) =>
+        p ? { ...p, left: cRect.left + cRect.width / 2 - PADDLE_W / 2, top: cRect.bottom - geom.bottomGap - geom.h, animate: true } : p,
+      );
+    }
     // Walls = the visible viewport at zoom 1 ("meet" fit, centered on the canvas).
     const visW = containerW * supp;
     const visH = containerH * supp;
@@ -310,8 +334,9 @@ export function useGameMode({
     savedCapRef.current = cap;
     savedCountRef.current = launchable.length;
     lostRef.current = new Set();
+    launchedRef.current = new Set();
     setTotals({ cap, count: launchable.length });
-    setHud({ timeLeft: GAME_SECONDS, savedCap: cap, savedCount: launchable.length, lost: lostRef.current });
+    setHud({ timeLeft: GAME_SECONDS, savedCap: cap, savedCount: launchable.length, lost: lostRef.current, launched: launchedRef.current });
     keysRef.current = { left: false, right: false };
 
     setPhaseBoth("playing");
@@ -349,24 +374,37 @@ export function useGameMode({
     setTotals({ cap: nodes.reduce((sum, n) => sum + n.valuation_b, 0), count: nodes.length });
 
     // The logo (top-left of the map) fades out and the paddle — the same
-    // artwork, bigger — fades in at bottom center of the map.
-    const cRect = container.getBoundingClientRect();
+    // artwork, bigger — fades in at bottom center of the map. The app collapses
+    // the sidebar in `onStart`, so the placement waits for that transition to
+    // finish and measures the full-width map: the paddle then appears centred
+    // under the welcome card rather than off to the right.
     const lRect = logo.getBoundingClientRect();
-    containerRectRef.current = cRect;
     const aspect = lRect.width > 0 ? lRect.height / lRect.width : 0.45;
     const h = PADDLE_W * aspect;
     const bottomGap = PADDLE_BOTTOM_PX;
     paddleGeomRef.current = { h, bottomGap };
-    paddleXRef.current = cRect.width / 2;
-    const at = { left: cRect.left + cRect.width / 2 - PADDLE_W / 2, top: cRect.bottom - bottomGap - h, w: PADDLE_W, h };
-    setPaddle({ ...at, animate: false, visible: false });
-    window.setTimeout(() => setPaddle((p) => (p ? { ...p, visible: true } : p)), 40);
+    containerRectRef.current = container.getBoundingClientRect();
+    setPaddle(null);
+    window.setTimeout(() => {
+      if (phaseRef.current === "idle") return;
+      const cRect = container.getBoundingClientRect();
+      containerRectRef.current = cRect;
+      paddleXRef.current = cRect.width / 2;
+      setPaddle({ left: cRect.left + cRect.width / 2 - PADDLE_W / 2, top: cRect.bottom - bottomGap - h, w: PADDLE_W, h, animate: false, visible: false });
+      window.setTimeout(() => setPaddle((p) => (p ? { ...p, visible: true } : p)), 40);
+    }, SIDEBAR_COLLAPSE_MS + 160);
 
     onActiveChange(true);
     onStart();
+    // Welcome card first; `begin` (the Get Started button) runs the countdown.
+    setPhaseBoth("intro");
+  }, [enabled, containerRef, logoRef]);
+
+  const begin = useCallback(() => {
+    if (phaseRef.current !== "intro") return;
     startCountdown(COUNTDOWN_FROM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, containerRef, logoRef]);
+  }, []);
 
   const exit = useCallback(() => {
     if (phaseRef.current === "idle") return;
@@ -392,7 +430,7 @@ export function useGameMode({
       paddleXRef.current = cRect.width / 2;
       setPaddle((p) => (p ? { ...p, left: cRect.left + cRect.width / 2 - PADDLE_W / 2, animate: true } : p));
     }
-    setHud({ ...EMPTY_HUD, lost: new Set() });
+    setHud({ ...EMPTY_HUD, lost: new Set(), launched: new Set() });
     startCountdown(REPLAY_COUNTDOWN_FROM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerRef]);
@@ -445,6 +483,7 @@ export function useGameMode({
     totals,
     paddle,
     start,
+    begin,
     exit,
     replay,
   };

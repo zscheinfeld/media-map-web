@@ -104,8 +104,8 @@ html, body, #root {
 
 /* Game-mode countdown digit: pops in each second. */
 @keyframes mm-count-pop {
-  0% { transform: scale(0.6); opacity: 0; }
-  60% { transform: scale(1.08); opacity: 1; }
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
 .mm-count-pop {
