@@ -7,9 +7,9 @@ import type { StyleLabState } from "./styleLab";
 
 export const LAB_PRESET: StyleLabState | null = {
   "bg": [
-    "#1E0300",
-    "#010C4C",
-    "#070010"
+    "#080202",
+    "#0a0f29",
+    "#030118"
   ],
   "sectors": {
     "Telecom": "#53a11e",
@@ -37,13 +37,13 @@ export const LAB_PRESET: StyleLabState | null = {
         "#ef1a1a",
         "#3657fd"
       ],
-      "count": 20,
+      "count": 17,
       "angle": 120,
       "blend": "oklab",
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
+      "strokePx": 0.5,
       "strokeColor": "#969696"
     },
     "Amazon": {
@@ -58,8 +58,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": true,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "Nvidia": {
       "stops": [
@@ -74,7 +74,7 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": true,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
+      "strokePx": 1,
       "strokeColor": "#969696"
     },
     "Microsoft": {
@@ -90,8 +90,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": true,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "Samsung": {
       "stops": [
@@ -111,8 +111,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": true,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "META": {
       "stops": [
@@ -125,8 +125,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "Apple": {
       "stops": [
@@ -140,8 +140,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "Walmart": {
       "stops": [
@@ -157,8 +157,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "ByteDance": {
       "stops": [
@@ -175,8 +175,8 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     },
     "Netflix": {
       "stops": [
@@ -189,29 +189,78 @@ export const LAB_PRESET: StyleLabState | null = {
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
+      "strokePx": 1,
       "strokeColor": "#969696"
     },
     "Alibaba": {
       "stops": [
-        "#ffd8a8",
-        "#ff9a76",
-        "#e8628c",
-        "#8b5cf6",
-        "#2b2f77"
+        "#b8b8b8",
+        "#2d2d36",
+        "#ff791f"
       ],
-      "count": 12,
-      "angle": 0,
+      "count": 7,
+      "angle": 120,
       "blend": "oklab",
       "reverse": false,
       "stripeStrokePx": 0,
       "stripeStrokeColor": "#0d0f13",
-      "strokePx": 0.75,
-      "strokeColor": "#969696"
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
+    },
+    "Oracle": {
+      "stops": [
+        "#b8b8b8",
+        "#710f20",
+        "#710f20",
+        "#b8b8b8"
+      ],
+      "count": 12,
+      "angle": 120,
+      "blend": "oklab",
+      "reverse": false,
+      "stripeStrokePx": 0,
+      "stripeStrokeColor": "#0d0f13",
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
+    },
+    "Tencent": {
+      "stops": [
+        "#b8b8b8",
+        "#53a11e",
+        "#9f570f"
+      ],
+      "count": 12,
+      "angle": 120,
+      "blend": "oklab",
+      "reverse": true,
+      "stripeStrokePx": 0,
+      "stripeStrokeColor": "#0d0f13",
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
+    },
+    "Reliance": {
+      "stops": [
+        "#53a11e",
+        "#ef1a1a",
+        "#18266e"
+      ],
+      "count": 12,
+      "angle": 120,
+      "blend": "oklab",
+      "reverse": false,
+      "stripeStrokePx": 0,
+      "stripeStrokeColor": "#0d0f13",
+      "strokePx": 0,
+      "strokeColor": "#0d0f13"
     }
   },
   "largeCapStroke": {
     "px": 0.75,
     "color": "#969696"
-  }
+  },
+  "sectorStroke": {
+    "px": 0.75,
+    "color": "#969696"
+  },
+  "panelBg": "#030118"
 } as StyleLabState;
