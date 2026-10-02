@@ -171,9 +171,10 @@ export function GameOverlay({
             pointerEvents: "none",
             userSelect: "none",
             filter: "drop-shadow(0 0 10px rgba(120,160,255,0.55))",
+            opacity: paddle.visible ? 1 : 0,
             transition: paddle.animate
-              ? "left 900ms cubic-bezier(0.4, 0, 0.2, 1), top 900ms cubic-bezier(0.4, 0, 0.2, 1), width 900ms ease, height 900ms ease"
-              : "none",
+              ? "left 900ms cubic-bezier(0.4, 0, 0.2, 1), opacity 360ms ease"
+              : "opacity 360ms ease",
           }}
         />
       )}

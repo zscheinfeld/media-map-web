@@ -29,6 +29,8 @@ const SPEED_MIN = 520;
 const SPEED_MAX = 820;
 /** Paddle (the logo) width in px — larger than the sidebar logo so it's catchable. */
 export const PADDLE_W = 150;
+/** Paddle's gap from the bottom of the map, px (matches the Time Machine button's inset). */
+const PADDLE_BOTTOM_PX = 16;
 const PADDLE_KEY_SPEED = 1100; // px/s with ← / →
 const MAX_BOUNCE = Math.PI / 3; // 60° off vertical when a planet hits the paddle's edge
 const OBSTACLE_SECTOR = "Large Cap";
@@ -48,8 +50,9 @@ type Mover = {
 /** The visible viewport in slide units (the game's walls) + the px→slide scale. */
 type Walls = { x0: number; y0: number; x1: number; y1: number; supp: number };
 
-/** Screen-px rect for the paddle <img>. `animate` = CSS-transition its travel. */
-export type PaddleRect = { left: number; top: number; w: number; h: number; animate: boolean };
+/** Screen-px rect for the paddle <img>. `animate` = CSS-transition a move;
+ *  `visible` = fade (the paddle fades in at the bottom when the game starts). */
+export type PaddleRect = { left: number; top: number; w: number; h: number; animate: boolean; visible: boolean };
 
 export type GameHud = {
   timeLeft: number;
@@ -345,26 +348,19 @@ export function useGameMode({
     // Show the full stake on the HUD during the countdown (play recomputes it).
     setTotals({ cap: nodes.reduce((sum, n) => sum + n.valuation_b, 0), count: nodes.length });
 
-    // The paddle starts as the sidebar logo (same rect), then flies to bottom
-    // center of the map keeping the logo's distance from the bottom edge.
+    // The logo (top-left of the map) fades out and the paddle — the same
+    // artwork, bigger — fades in at bottom center of the map.
     const cRect = container.getBoundingClientRect();
     const lRect = logo.getBoundingClientRect();
     containerRectRef.current = cRect;
     const aspect = lRect.width > 0 ? lRect.height / lRect.width : 0.45;
     const h = PADDLE_W * aspect;
-    const bottomGap = Math.max(8, cRect.bottom - lRect.bottom);
+    const bottomGap = PADDLE_BOTTOM_PX;
     paddleGeomRef.current = { h, bottomGap };
     paddleXRef.current = cRect.width / 2;
-    setPaddle({ left: lRect.left, top: lRect.top, w: lRect.width, h: lRect.height, animate: false });
-    window.setTimeout(() => {
-      setPaddle({
-        left: cRect.left + cRect.width / 2 - PADDLE_W / 2,
-        top: cRect.bottom - bottomGap - h,
-        w: PADDLE_W,
-        h,
-        animate: true,
-      });
-    }, 40);
+    const at = { left: cRect.left + cRect.width / 2 - PADDLE_W / 2, top: cRect.bottom - bottomGap - h, w: PADDLE_W, h };
+    setPaddle({ ...at, animate: false, visible: false });
+    window.setTimeout(() => setPaddle((p) => (p ? { ...p, visible: true } : p)), 40);
 
     onActiveChange(true);
     onStart();
@@ -376,7 +372,9 @@ export function useGameMode({
     if (phaseRef.current === "idle") return;
     stopLoops();
     restore();
-    setPaddle(null);
+    // Fade the paddle out, then drop it (the logo fades back in on its own).
+    setPaddle((p) => (p ? { ...p, visible: false } : p));
+    window.setTimeout(() => setPaddle(null), 380);
     setHud(EMPTY_HUD);
     setPhaseBoth("idle");
     propsRef.current.onActiveChange(false);
