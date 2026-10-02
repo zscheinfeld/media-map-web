@@ -792,20 +792,35 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
         <SectorPanelContent {...props} />
       </div>
 
-      {/* Eshap logo — pinned at the lower left of the panel; links to Substack. */}
+      {/* Substack CTA — pinned at the bottom of the panel, full width (same
+          width as the All / None pills above). The Eshap logo now lives at the
+          bottom-left of the map instead. */}
       <div style={{ flex: "0 0 auto", paddingTop: 14, marginTop: 4 }}>
         <a
           href="https://eshap.substack.com/"
           target="_blank"
           rel="noreferrer"
-          className="eshap-logo"
-          style={{ display: "inline-block" }}
+          className="mm-hover"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "11px 12px",
+            borderRadius: 8,
+            background: "#3657FD",
+            border: "none",
+            color: "#fff",
+            textDecoration: "none",
+            fontSize: 15,
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+          }}
         >
-          <img
-            src="/Evan-logo-new.png"
-            alt="Eshap on Substack"
-            style={{ width: 96, height: "auto", display: "block" }}
-          />
+          <img src="/substack-flag.svg" alt="" aria-hidden draggable={false} style={{ width: 15, height: "auto", display: "block" }} />
+          <span>Full Map Analysis</span>
         </a>
       </div>
       </div>
@@ -5662,6 +5677,29 @@ export default function MediaMap() {
               onHover={setHoveredDate}
             />
           </div>
+        )}
+
+        {/* Eshap logo — top-left of the map, hugging the side panel (desktop).
+            Drops below the "open panel" icon while the sidebar is collapsed. */}
+        {!isMobile && (
+          <a
+            href="https://eshap.substack.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="eshap-logo eshap-logo--faint"
+            aria-label="Eshap on Substack"
+            style={{
+              position: "absolute",
+              left: 16,
+              top: sidebarOpen ? 16 : 56,
+              zIndex: 11,
+              display: "block",
+              lineHeight: 0,
+              transition: "top 240ms ease",
+            }}
+          >
+            <img src="/Evan-logo-new.png" alt="" draggable={false} style={{ width: 96, height: "auto", display: "block" }} />
+          </a>
         )}
 
         {/* Bottom-left pill stack. Timeline button is always the first pill
