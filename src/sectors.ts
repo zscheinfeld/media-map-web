@@ -15,6 +15,8 @@ export const CANVAS_MOBILE_HORIZONTAL = { x: -1280, y: -720, w: 2560, h: 1440 };
 // placement (which it inherits) so planets start visible before manual tuning.
 export const CANVAS_MOBILE_SQUARE = { x: -2000, y: -2000, w: 4000, h: 4000 };
 
+import type { OmbreStripes } from "@media-map/map-core";
+
 // Sector → canvas position (slide-coord space). These are the "gravity wells"
 // the physics simulation pulls each sector's planets toward.
 //
@@ -111,6 +113,8 @@ export type StripeOrientation = "horizontal" | "vertical" | "diagonal";
 export type PlanetStyle = {
   fill?: string;
   stripes?: string[];
+  // Ombré stripe recipe (wins over `stripes`); see map-core's OmbreStripes.
+  ombre?: OmbreStripes;
   stripeOrientation?: StripeOrientation;
   stroke?: string;
   strokeWidthPx?: number;
@@ -133,25 +137,25 @@ export type PlanetStyle = {
 // Sector-level default styles. Sectors not listed fall back to the legacy
 // HSL gradient look driven by SECTOR_HUES.
 export const SECTOR_FLAT_STYLES: Record<string, PlanetStyle> = {
-  "Audio":          { fill: "#EE7D31" },
-  "Advertising":    { fill: "#FF7F7C" },
-  "Local TV":       { fill: "#F17DF0" },
-  "Content Platform": { fill: "#FFFD78" },
-  "Telecom":        { fill: "#548235" },
-  "Gaming":         { fill: "#9437FF" },
-  "Sports Leagues": { fill: "#5B0615" },
+  "Audio":          { fill: "#ff791f" },
+  "Advertising":    { fill: "#ef6262" },
+  "Local TV":       { fill: "#fbbcfa" },
+  "Content Platform": { fill: "#ffffa9" },
+  "Telecom":        { fill: "#53a11e" },
+  "Gaming":         { fill: "#9437ff" },
+  "Sports Leagues": { fill: "#710f20" },
   "AI":             { fill: "#000000", stroke: "#FFFFFF", strokeWidthPx: 0.5 },
-  "MVPD/BB":        { fill: "#BF9001" },
+  "MVPD/BB":        { fill: "#ffc000" },
   "Publishing":     { fill: "#FFFFFF" },
-  "HoldingCo":      { fill: "#5A2D00" },
-  "Studio":         { fill: "#C00000" },
-  "Hardware/Physical": { fill: "#767171" },
+  "HoldingCo":      { fill: "#9f570f" },
+  "Studio":         { fill: "#ef1a1a" },
+  "Hardware/Physical": { fill: "#b8b8b8" },
   "PSM":            {
-    fill: "#FCFC06",
+    fill: "#fcfc06",
     glow: { color: "#F40B0A", blurPx: 5, spreadPx: 2.8 },
   },
-  "Social/Creator": { fill: "#74FEFF" },
-  "Exhibition":     { fill: "#FF23D9" },
+  "Social/Creator": { fill: "#42dcb7" },
+  "Exhibition":     { fill: "#ff3fde" },
   // Large Cap: planets vary per-company (Apple, NVIDIA, Alphabet etc. each
   // have their own brand palette). The sector-level entry contributes a
   // rainbow swatch for the sidebar and a transparent stroke that every Large
@@ -169,37 +173,20 @@ export const SECTOR_FLAT_STYLES: Record<string, PlanetStyle> = {
 // CMS-friendly shape: each entry is the same `PlanetStyle` object the sector
 // map uses, so the CMS only needs to expose one schema.
 export const COMPANY_STYLES: Record<string, PlanetStyle> = {
-  "NVIDIA":    { stripes: ["#78CF3F", "#2D2D36", "#4DBCA1", "#686775", "#999AA3"] },
-  "Alphabet":  { stripes: ["#3E5FB0", "#A63632", "#B0801F", "#357550", "#533089"] },
-  "Meta":      { stripes: ["#94959F", "#7D849D", "#64789D", "#3F4D9C", "#29409E"] },
-  "ByteDance": { stripes: ["#A11C22", "#3DA4B7", "#0F0D17", "#A81E28", "#45ACB5"] },
-  "Amazon":    { stripes: ["#A7662B", "#224D87", "#110D1F", "#242843", "#9F99A9"] },
-  "Samsung":   {
-    stripes: [
-      "#575362", "#1B5FA1", "#B18828", "#B24825", "#A10C32",
-      "#8D097E", "#4E3F97", "#113D8D", "#1D74A7", "#1A6D7F", "#1E7A3E",
-    ],
-  },
-  "Apple":     {
-    stripes: ["#155E9D", "#969AB2", "#64667B", "#48495B", "#0C0D1D"],
-    stripeOrientation: "horizontal",
-  },
-  "Alibaba":   { stripes: ["#D1541E", "#D0CED8", "#04020B"] },
-  "Walmart":   { stripes: ["#10162D", "#A7105F", "#B4ABAF", "#1B4D89", "#B58217"] },
-  "Microsoft": {
-    stripes: ["#A5442D", "#5E812E", "#1973AD", "#A9812E", "#585762"],
-    stripeOrientation: "diagonal",
-  },
-  "Netflix":   { stripes: ["#8C122D", "#75122B", "#5F0F29", "#4C0E26", "#07051D"] },
-  "Oracle":    {
-    stripes: [
-      "#8F0D1A", "#8F0D1A", "#9F9DA4", "#8F0D1A", "#8F0D1A",
-      "#8F0D1A", "#8F0D1A", "#9F9DA4", "#8F0D1A", "#8F0D1A",
-    ],
-    stripeOrientation: "horizontal",
-  },
-  "Reliance":  { stripes: ["#042969", "#B2040A", "#5F943B", "#2B4314"] },
-  "Tencent":   { stripes: ["#94571E", "#4C8307", "#999999"] },
+  "Alphabet": { ombre: { stops: ["#9437ff", "#53a11e", "#ffc000", "#ff791f", "#ef1a1a", "#3657fd"], count: 17, angle: 120, blend: "oklab", reverse: false }, stroke: "#969696", strokeWidthPx: 0.5 },
+  "Amazon": { ombre: { stops: ["#9f570f", "#18266e", "#b8b8b8"], count: 12, angle: 120, blend: "oklab", reverse: true } },
+  "Nvidia": { ombre: { stops: ["#ededed", "#42dcb7", "#2d2d36", "#a1ff62"], count: 14, angle: 120, blend: "oklab", reverse: true }, stroke: "#969696", strokeWidthPx: 1 },
+  "Microsoft": { ombre: { stops: ["#ff791f", "#53a11e", "#3657fd", "#ffc000"], count: 12, angle: 120, blend: "oklab", reverse: true } },
+  "Samsung": { ombre: { stops: ["#53a11e", "#8196fe", "#3657fd", "#9437ff", "#ef1a1a", "#ff791f", "#ffc000", "#3657fd", "#2d2d36"], count: 20, angle: 120, blend: "oklab", reverse: true } },
+  "META": { ombre: { stops: ["#3657fd", "#b8b8b8"], count: 12, angle: 120, blend: "oklab", reverse: false } },
+  "Apple": { ombre: { stops: ["#18266e", "#b8b8b8", "#2d2d36"], count: 15, angle: 120, blend: "oklab", reverse: false } },
+  "Walmart": { ombre: { stops: ["#ffc000", "#18266e", "#b8b8b8", "#ef6262", "#2d2d36"], count: 10, angle: 120, blend: "oklab", reverse: false } },
+  "ByteDance": { ombre: { stops: ["#42dcb7", "#ef1a1a", "#2d2d36", "#42dcb7", "#ef1a1a", "#2d2d36"], count: 24, angle: 120, blend: "oklab", reverse: false } },
+  "Netflix": { ombre: { stops: ["#000000", "#ef1a1a"], count: 10, angle: 120, blend: "oklab", reverse: false }, stroke: "#969696", strokeWidthPx: 1 },
+  "Alibaba": { ombre: { stops: ["#b8b8b8", "#2d2d36", "#ff791f"], count: 7, angle: 120, blend: "oklab", reverse: false } },
+  "Oracle": { ombre: { stops: ["#b8b8b8", "#710f20", "#710f20", "#b8b8b8"], count: 12, angle: 120, blend: "oklab", reverse: false } },
+  "Tencent": { ombre: { stops: ["#b8b8b8", "#53a11e", "#9f570f"], count: 12, angle: 120, blend: "oklab", reverse: true } },
+  "Reliance": { ombre: { stops: ["#53a11e", "#ef1a1a", "#18266e"], count: 12, angle: 120, blend: "oklab", reverse: false } },
 };
 
 // Stable color per sector (HSL hue). Anything not listed gets a hash-derived hue.
@@ -274,11 +261,16 @@ export function hueForSector(sector: string): number {
  * company entry adds `stripes` + `stripeOrientation` but inherits the transparent
  * stroke from the sector default.
  */
+// Every planet's default outline in the fallback look (matches Sanity, where it
+// lives on each sector's default style). Kept out of SECTOR_FLAT_STYLES because
+// the sidebar reads a sector's `stroke` as its swatch border / checkbox accent.
+const PLANET_OUTLINE: PlanetStyle = { stroke: "#969696", strokeWidthPx: 0.75 };
+
 export function planetStyleFor(name: string, sector: string): PlanetStyle | null {
   const company = companyStylesByLower.get(name.toLowerCase());
   const sec = flatStylesByLower.get(sector.toLowerCase());
   if (!company && !sec) return null;
-  return { ...(sec ?? {}), ...(company ?? {}) };
+  return { ...(sec ?? {}), ...PLANET_OUTLINE, ...(company ?? {}) };
 }
 
 /** Sidebar swatches show the sector default, never a per-company override. */

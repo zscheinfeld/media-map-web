@@ -172,20 +172,26 @@ const MOBILE_SETTINGS_FIELDS: { key: keyof MobileSettings; label: string; min: n
 // The map area's background gradient — shared so the aggregate view samples the
 // exact same colors, and the list view's frozen Company column can sample a flat
 // tone per row (see sampleListGradient) so it re-creates the gradient behind it.
-const LIST_BG_GRADIENT = "linear-gradient(180deg, #1E0300 0%, #010C4C 51%, #070010 100%)";
+const LIST_BG_GRADIENT = "linear-gradient(180deg, #080202 0%, #0a0f29 51%, #030118 100%)";
 
-// The gradient's stops (0% / 51% / 100%), as RGB, for per-row sampling.
-const LIST_GRADIENT_STOPS: [number, [number, number, number]][] = [
-  [0, [30, 3, 0]],
-  [0.51, [1, 12, 76]],
-  [1, [7, 0, 16]],
-];
-// Solid color of the background gradient at vertical fraction `f` (0 = top).
-function sampleListGradient(f: number): string {
+function hexRgb(hex: string): [number, number, number] {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const n = parseInt(h, 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+// Solid color of the background gradient at vertical fraction `f` (0 = top),
+// for the live gradient's three stops (0% / 51% / 100%).
+function sampleListGradient(f: number, bgStops: [string, string, string]): string {
+  const stops: [number, [number, number, number]][] = [
+    [0, hexRgb(bgStops[0])],
+    [0.51, hexRgb(bgStops[1])],
+    [1, hexRgb(bgStops[2])],
+  ];
   const clamped = f < 0 ? 0 : f > 1 ? 1 : f;
-  let [f0, c0] = LIST_GRADIENT_STOPS[0];
-  for (let i = 1; i < LIST_GRADIENT_STOPS.length; i++) {
-    const [f1, c1] = LIST_GRADIENT_STOPS[i];
+  let [f0, c0] = stops[0];
+  for (let i = 1; i < stops.length; i++) {
+    const [f1, c1] = stops[i];
     if (clamped <= f1) {
       const t = f1 === f0 ? 0 : (clamped - f0) / (f1 - f0);
       return `rgb(${Math.round(c0[0] + (c1[0] - c0[0]) * t)}, ${Math.round(c0[1] + (c1[1] - c0[1]) * t)}, ${Math.round(c0[2] + (c1[2] - c0[2]) * t)})`;
@@ -756,7 +762,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           display: "flex",
           flexDirection: "column",
           boxSizing: "border-box",
-          background: props.panelBackground ?? "rgba(7, 14, 32, 0.85)",
+          background: props.panelBackground ?? "#030118",
           color: "#e6edf7",
           padding: "16px 14px",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -2328,6 +2334,7 @@ function CompanyListView({
   isMobile,
   focusRow,
   sectorColorOverride,
+  bgStops,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -2337,6 +2344,8 @@ function CompanyListView({
   /** A search pick: scroll this row into view and flash it (token re-fires). */
   focusRow: { name: string; token: number } | null;
   sectorColorOverride?: (s: string) => string | null;
+  /** The live background gradient stops, sampled for the frozen column. */
+  bgStops: [string, string, string];
 }) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2389,7 +2398,7 @@ function CompanyListView({
       const rowH = rect.height / n;
       const vh = window.innerHeight || 1;
       cells.forEach((cell, i) => {
-        cell.style.backgroundColor = sampleListGradient((rect.top + (i + 0.5) * rowH) / vh);
+        cell.style.backgroundColor = sampleListGradient((rect.top + (i + 0.5) * rowH) / vh, bgStops);
       });
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
@@ -2402,7 +2411,7 @@ function CompanyListView({
       if (raf) cancelAnimationFrame(raf);
     };
     // `rows` in deps so a sort re-order repaints (cells move but keep inline bg).
-  }, [isMobile, rows, active]);
+  }, [isMobile, rows, active, bgStops]);
   const columns: { key: ListSortKey; label: string; align: "left" | "right" }[] = [
     { key: "company", label: "Company", align: "left" },
     { key: "sector", label: "Sector", align: "left" },
@@ -3355,6 +3364,14 @@ export default function MediaMap() {
   const panelBg = lab.panelBg ?? sanity?.panelBg ?? null;
   // The page background (visible under the translucent sidebar and during view
   // fades) follows the gradient's bottom stop.
+  // A sector's colour: a style-lab override, else Sanity's sector default, else
+  // null (callers fall back to the built-in sector styles). Feeds the sidebar
+  // swatches, list dots, search results and the PNG legend.
+  const sanitySectorStyles = sanity?.styleBySector;
+  const sectorColorResolved = useCallback(
+    (s: string): string | null => labSectorColor(s) ?? sanitySectorStyles?.[s]?.fill ?? null,
+    [labSectorColor, sanitySectorStyles],
+  );
   const bgBottom = bgStops[2];
   useEffect(() => {
     document.body.style.background = bgBottom;
@@ -4784,7 +4801,7 @@ export default function MediaMap() {
     const run = buildExportPng({
       nodes: lab.hasOverrides ? nodes.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : nodes,
       bgStops,
-      sectorColorOverride: lab.sectorColor,
+      sectorColorOverride: sectorColorResolved,
       connections: effectiveConnections,
       labelSizePx,
       bounds: physicsBounds,
@@ -4801,7 +4818,7 @@ export default function MediaMap() {
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, lab.sectorColor]);
+  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, sectorColorResolved]);
 
   // Background pre-render: desktop, present year, map mode, not authoring.
   // Debounced so the settle's per-tick node updates don't each kick off a 4K
@@ -4901,7 +4918,7 @@ export default function MediaMap() {
     const tick = sanity?.tickerByName ?? {};
     const sectorColor = (sec: string) => {
       const flat = flatStyleForSector(sec);
-      return labSectorColor(sec) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
+      return sectorColorResolved(sec) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[sec] ?? hueForSector(sec)}, 70%, 55%)`;
     };
     const planetColor = (n: PlanetNode) => {
       const st = labStyleFor(n.name, n.sector, n.style);
@@ -4980,7 +4997,7 @@ export default function MediaMap() {
       });
     }
     return [...onYear, ...extra];
-  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year, labStyleFor, labSectorColor]);
+  }, [viewMode, aggregateData, listRows, nodes, nodeByName, displayedCompanies, enabled, sanity, sanityDocs, valData, activeDate.year, labStyleFor, sectorColorResolved]);
 
   const onSearchSelect = (item: SearchItem) => {
     setSearchMatches(null);
@@ -5029,7 +5046,7 @@ export default function MediaMap() {
     hoveredSector,
     onHoverSector: setHoveredSector,
     onFocusSector: focusOnSector,
-    sectorColorOverride: lab.sectorColor,
+    sectorColorOverride: sectorColorResolved,
     panelBackground: panelBg,
   };
 
@@ -5566,7 +5583,8 @@ export default function MediaMap() {
             fades out underneath. The sim keeps running so returning to map is
             instant. */}
         <CompanyListView
-          sectorColorOverride={lab.sectorColor}
+          sectorColorOverride={sectorColorResolved}
+          bgStops={bgStops}
           rows={listRows}
           sort={listSort}
           onSort={handleListSort}
@@ -6184,7 +6202,7 @@ export default function MediaMap() {
           sectors={allSectors}
           liveSectorColor={(s) => {
             const flat = flatStyleForSector(s);
-            return flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[s] ?? hueForSector(s)}, 70%, 55%)`;
+            return sanity?.styleBySector[s]?.fill ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${sanity?.hueBySector[s] ?? hueForSector(s)}, 70%, 55%)`;
           }}
           largeCapNames={nodes.filter((n) => n.sector === "Large Cap" && !n.isEntity).map((n) => n.name).sort()}
           liveStyleFor={(name) => nodes.find((n) => n.name === name)?.style ?? null}

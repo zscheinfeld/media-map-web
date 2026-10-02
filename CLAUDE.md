@@ -76,6 +76,16 @@ How fields map to rendering, all inside the `Planet` component in [src/MediaMap.
 - `glow` → an `<feGaussianBlur>` filter applied to an oversized backing circle drawn *before* the planet. `blurPx` and `spreadPx` are screen pixels.
 - `swatchBackground` → sidebar-only override (CSS gradient string). When set, the sidebar renders a **custom checkbox** instead of `<input type="checkbox">` because native `accent-color` can't accept a gradient.
 
+**Ombré stripes.** `PlanetStyle.ombre` (map-core `OmbreStripes`: `stops`, `count`, `angle`, `blend`, `reverse`, optional hairlines) is a stripe *recipe* — N stripes sampled along a colour ramp (`ombreStripeColors` in map-core's style.ts). It wins over `stripes`/`fill`. The Large Cap brand palettes use it.
+
+**Where colour comes from.** On the live site, Sanity: `sector.default_style` + `company.planet_style` (incl. `ombre`) → `styleByName` / `styleBySector` in [src/sanityMap.ts](src/sanityMap.ts); Map Settings carries the background gradient stops and side-panel colour. `SECTOR_FLAT_STYLES` / `COMPANY_STYLES` in [src/sectors.ts](src/sectors.ts) are the **fallback** for when Sanity isn't configured. Sector colour for non-planet surfaces (sidebar swatches, list dots, search, PNG legend) goes through `sectorColorResolved` in MediaMap: style-lab override → Sanity sector fill → local constant.
+
+**Style lab** ([src/styleLab/](src/styleLab/)) — `?style=1` opens a panel that overrides sector colours, per-company ombré recipes, outlines, background and panel colour **at render time** (physics only re-reads `node.style` on a rebuild, so overrides are applied where planets are drawn). Edits persist in localStorage for the editing view only; `preset.ts` can bake a look for every visitor (currently `null` — the approved palette was migrated into Sanity with [jobs/migrate-palette.ts](jobs/migrate-palette.ts)).
+
+### Game mode
+
+[src/game/](src/game/) — an easter egg: clicking the Eshap logo at the map's top-left (desktop) starts a 90-second Pong-style round. `useGameMode` owns the state machine (`intro` → `countdown` → `playing` → `ended`) and drives `node.x/y` directly in its own rAF loop while `usePhysicsLayout` is `suspended`; on exit it restores the snapshot and the hook resumes **without ticking**, so the layout hands back exactly. Parked planets render as 1px sector-coloured outlines (`ghostStyle.ts`) and cross-fade to their fill when launched. The sidebar collapses for the round; pan/zoom, tabs, search and connection lines are gated on `game.active`.
+
 ### Layout: positions, pinning, design mode
 
 Same two-tier pattern as styling, but for planet coordinates.
