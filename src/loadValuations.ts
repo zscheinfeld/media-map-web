@@ -308,6 +308,9 @@ export function useValuations(): {
   hidden: HiddenData
   lastUpdated: Map<string, string>
   loading: boolean
+  /** True once the LIVE sheet has answered (or given up) — i.e. the values
+   *  won't change again. `loading` clears earlier, as soon as the snapshot paints. */
+  settled: boolean
   /** Which tier the values came from (see ValuationSource). */
   source: ValuationSource
 } {
@@ -316,6 +319,7 @@ export function useValuations(): {
   const [hidden, setHidden] = useState<HiddenData>(() => new Map())
   const [lastUpdated, setLastUpdated] = useState<Map<string, string>>(() => new Map())
   const [loading, setLoading] = useState(isValuationsConfigured())
+  const [settled, setSettled] = useState(!isValuationsConfigured())
 
   useEffect(() => {
     if (!isValuationsConfigured()) return
@@ -349,6 +353,7 @@ export function useValuations(): {
     //    tween to the fresh values). If it never lands, the snapshot simply stays.
     fetchLiveValuations(snapshotP).then(async (res) => {
       if (cancelled) return
+      setSettled(true)
       if ("load" in res) {
         haveLive = true
         apply(res.load, res.source, res.detail)
@@ -372,5 +377,5 @@ export function useValuations(): {
     }
   }, [])
 
-  return {data, hidden, lastUpdated, loading, source}
+  return {data, hidden, lastUpdated, loading, settled, source}
 }

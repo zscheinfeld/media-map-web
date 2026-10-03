@@ -28,6 +28,16 @@ export type PlanetProps = {
   /** Search match: always show the label (even on planets small enough to hide
    *  it). The match reads through everything else dimming, not a colour change. */
   highlighted?: boolean
+  /** Black outline around the label text, screen px. */
+  labelStrokePx?: number
+  /**
+   * Which part to draw. "all" (default) = circle + name together. "body" = the
+   * circle without its name; "label" = only the name. The caller draws every
+   * body first and every label after, so a planet drawn later can never cover a
+   * neighbour's name. (Entities are all-name: they draw in "all"/"body" and are
+   * skipped for "label".)
+   */
+  part?: "all" | "body" | "label"
 }
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
@@ -49,6 +59,8 @@ export function Planet({
   labelMinScreenDiameter = 0,
   entityLabelSuppressed = false,
   highlighted = false,
+  labelStrokePx = 1.2,
+  part = "all",
 }: PlanetProps) {
   const safeName = node.name.replace(/[^a-z0-9]/gi, "_")
   const gradId = `planet-${safeName}`
@@ -100,7 +112,7 @@ export function Planet({
         fontSize={labelFontPx}
         fill={node.labelColor ?? "#fff"}
         stroke="#000"
-        strokeWidth={1.2 * slideUnitsPerPx}
+        strokeWidth={labelStrokePx * slideUnitsPerPx}
         paintOrder="stroke"
         // In edit mode the visible text is a grab/select target (entities have no
         // circle); otherwise it's click-through.
@@ -126,6 +138,7 @@ export function Planet({
   // label (always shown — it IS the node) plus edit-mode cues drawn as a small
   // ring centered on the label, since there's no circle to outline.
   if (node.isEntity) {
+    if (part === "label") return null
     // Ring radius keyed off the label half-extent so selection stays legible at
     // any label width; clamped to a small minimum for very short names.
     const cueR = Math.max(node.labelRadius ?? 0, 24 * slideUnitsPerPx)
@@ -168,6 +181,16 @@ export function Planet({
             mobile, zoomed out); revealed on hover, in edit mode, or once the
             caller stops suppressing (zoomed in past its threshold). */}
         {(isEditMode || isHovered || highlighted || !entityLabelSuppressed) && renderNameLabel(false)}
+      </g>
+    )
+  }
+
+  // Name-only pass: just the label, click-through, dimming with its planet.
+  if (part === "label") {
+    if (!showLabel) return null
+    return (
+      <g style={{opacity: dimmed ? 0.2 : 1, transition: "opacity 220ms ease", pointerEvents: "none"}}>
+        {renderNameLabel(showValuation)}
       </g>
     )
   }
@@ -311,7 +334,7 @@ export function Planet({
           pointerEvents="none"
         />
       )}
-      {showLabel && renderNameLabel(showValuation)}
+      {part !== "body" && showLabel && renderNameLabel(showValuation)}
     </g>
   )
 }

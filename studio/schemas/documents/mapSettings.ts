@@ -36,6 +36,30 @@ export const mapSettings = defineType({
         'first entry is what hands control of mobile physics to the CMS.',
     }),
     defineField({
+      name: 'layout_lab',
+      title: 'Layout',
+      type: 'text',
+      rows: 6,
+      description:
+        'The map layout for every device, as exported by the layout lab. To change it: open the ' +
+        'layout lab (the "Layout lab" tab at the top of Studio), adjust, press Copy JSON, paste here ' +
+        'replacing everything, then Publish. Leave empty to use the layout built into the site. ' +
+        'Do not edit by hand.',
+      validation: (Rule) =>
+        Rule.custom((value) => {
+          if (!value || !String(value).trim()) return true
+          try {
+            const parsed = JSON.parse(String(value))
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('knobs' in parsed)) {
+              return 'This does not look like a layout exported from the layout lab (use its Copy JSON button).'
+            }
+            return true
+          } catch {
+            return 'Not valid JSON — paste exactly what the layout lab\'s Copy JSON button gave you.'
+          }
+        }),
+    }),
+    defineField({
       name: 'background',
       title: 'Map background',
       type: 'object',

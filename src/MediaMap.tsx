@@ -5,6 +5,7 @@ import {
   Planet,
   ConnectionLine,
   computeAnchorDiam,
+  diameterFor,
   makeMoment,
   yearWindowsActiveAt,
   type PlanetNode,
@@ -16,7 +17,7 @@ import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
-import { buildExportPng, downloadBlob, measureLabelTextWidth } from "./exportMap";
+import { buildExportPng, clearTextWidthCache, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
 import { useGameMode } from "./game/useGameMode";
@@ -24,6 +25,20 @@ import { GameOverlay } from "./game/GameOverlay";
 import { ghostStyleFor } from "./game/ghostStyle";
 import { bgGradientOf, useStyleLab } from "./styleLab/styleLab";
 import { StyleLabPanel } from "./styleLab/StyleLabPanel";
+import {
+  PHONE_FRAME,
+  TABLET_FRAME,
+  TYPE_KEYS,
+  positionsAt,
+  resolveKnobs,
+  sectorsAt,
+  seedFor,
+  useLayoutLab,
+  type DeviceMode,
+  type LayoutKnobs,
+  type LayoutLab,
+} from "./layoutLab/layoutLab";
+import { LAYOUT_PANEL_W, LayoutLabPanel, type LabSelection } from "./layoutLab/LayoutLabPanel";
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
@@ -65,6 +80,42 @@ const MOBILE_BREAKPOINT_PX = 768;
 const MOBILE_MEDIA_QUERY =
   `(max-width: ${MOBILE_BREAKPOINT_PX}px), ` +
   `(max-height: 500px) and (orientation: landscape) and (pointer: coarse)`;
+
+/** Layout lab: longest the first paint waits for late-arriving data (ms after the snapshot). */
+const LIVE_WAIT_MS = 1200;
+
+/** The type a phone view has before any lab override (the live phone values). */
+function phoneTypeDefaults(labelPx: number, nameThreshold: number): Partial<LayoutKnobs> {
+  return {
+    labelLargePx: labelPx,
+    labelSmallPx: labelPx,
+    labelStrokePx: 1.2,
+    labelThresholdB: 100,
+    nameThreshold,
+    nameSpacing: 0,
+    zoomTypeGrowth: LABEL_GROW_RATE,
+    zoomTypeMax: LABEL_GROW_MAX,
+  };
+}
+/** Only the type knobs of an override set. */
+function pickTypeKnobs(over: Partial<LayoutKnobs>): Partial<LayoutKnobs> {
+  const out: Partial<LayoutKnobs> = {};
+  for (const k of TYPE_KEYS) if (over[k] !== undefined) out[k] = over[k];
+  return out;
+}
+
+/** Live match for a media query (layout lab: the tablet type range). */
+function useMediaQuery(query: string): boolean {
+  const [m, setM] = useState<boolean>(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    setM(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setM(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [query]);
+  return m;
+}
 
 function useIsMobile(): boolean {
   const [m, setM] = useState<boolean>(() =>
@@ -349,8 +400,9 @@ const ZOOM_STEP = 1.4;
 // line-spacing %) scales with the font automatically.
 const LABEL_GROW_START = 2;
 const LABEL_GROW_MAX = 1.7;
-const labelScaleForZoom = (zoom: number) =>
-  Math.min(LABEL_GROW_MAX, Math.max(1, 1 + (zoom - LABEL_GROW_START) * 0.12));
+const LABEL_GROW_RATE = 0.12;
+const labelScaleForZoom = (zoom: number, rate = LABEL_GROW_RATE, max = LABEL_GROW_MAX) =>
+  Math.min(max, Math.max(1, 1 + (zoom - LABEL_GROW_START) * rate));
 
 // Ease the pan back to center as the map zooms toward MIN_ZOOM, so the most
 // zoomed-out level is always the centered default view (0 at MIN_ZOOM → 1 by
@@ -3202,8 +3254,61 @@ function MobileEditorToolbar({
   );
 }
 
+// Layout lab (?layout=1) page frame. Desktop: the map keeps its full size and
+// the panel floats over it (Shift+L hides it). Phone modes: the whole app renders inside a
+// phone-sized box — the `transform` makes that box the containing block for
+// position:fixed children (drawers, modals), so they stay inside it too.
+// Without ?layout=1 this renders its children untouched.
+function LabFrame({ lab, panel, children }: { lab: LayoutLab; panel: React.ReactNode; children: React.ReactNode }) {
+  if (!lab.enabled) return <>{children}</>;
+  const phone = lab.device === "square" || lab.device === "full";
+  const framed = lab.device !== "desktop";
+  const frame = phone ? PHONE_FRAME : { w: lab.tabletPreviewW, h: TABLET_FRAME.h };
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        // A framed preview sits beside the panel (so none of it is covered);
+        // the desktop map keeps its full width and the panel floats over it.
+        paddingRight: framed && lab.open ? LAYOUT_PANEL_W : 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: framed ? "rgba(0,0,0,0.45)" : undefined,
+      }}
+    >
+      <div
+        style={
+          framed
+            ? {
+                position: "relative",
+                width: frame.w,
+                maxWidth: "calc(100% - 32px)",
+                height: `min(${frame.h}px, calc(100% - 32px))`,
+                transform: "translateZ(0)",
+                overflow: "hidden",
+                borderRadius: phone ? 28 : 18,
+                boxShadow: "0 0 0 1px rgba(255,255,255,0.28), 0 24px 60px rgba(0,0,0,0.6)",
+              }
+            : { position: "relative", width: "100%", height: "100%", transform: "translateZ(0)", overflow: "hidden" }
+        }
+      >
+        {children}
+      </div>
+      {panel}
+    </div>
+  );
+}
+
 export default function MediaMap() {
-  const isMobile = useIsMobile();
+  const realIsMobile = useIsMobile();
+  // Layout lab (branch experiment): layout/physics/type overrides + a phone
+  // preview. Its Device switch forces the mobile UI inside a phone-sized frame.
+  const llab = useLayoutLab();
+  const labPhone = llab.device === "square" || llab.device === "full";
+  const isMobile = realIsMobile || labPhone;
   const isEditMode = useIsEditMode();
   // Mobile view type + per-type layouts. On the phone the gear switches the view
   // type (persisted); ?edit=mobile is the desktop editor whose selector controls
@@ -3212,7 +3317,11 @@ export default function MediaMap() {
   const [mobileViewType, setMobileViewType] = useState<MobileViewType>(loadMobileViewType);
   const [mobileEditType, setMobileEditType] = useState<MobileViewType>("vertical");
   const mobileEdit = useMobileEditMode();
-  const activeType: MobileViewType = mobileEdit ? mobileEditType : mobileViewType;
+  const activeType: MobileViewType = mobileEdit
+    ? mobileEditType
+    : labPhone
+      ? (llab.device as MobileViewType)
+      : mobileViewType;
   // A mobile authored view is active (phone or editor); desktop non-edit = false.
   const mobileView = isMobile || mobileEdit;
   // The horizontal view is the landscape/rotated-phone experience. On a real
@@ -3368,6 +3477,14 @@ export default function MediaMap() {
   // is null and the app uses the Google Sheet + local files exactly as before.
   const { docs: sanityDocs, loading: sanityLoading, error: sanityError } = useSanityMapDocs();
   const sanity = useResolvedSanityMap(sanityDocs, makeMoment(activeDate.year, activeDate.month));
+  // The published layout (Map Settings → Layout in Sanity) replaces the preset
+  // baked into the build — that is how a layout tuned in the lab goes live
+  // without a deploy.
+  const publishedLayout = sanityDocs?.settings?.layout_lab ?? null;
+  const { setRemote: setLabRemote } = llab;
+  useEffect(() => {
+    setLabRemote(publishedLayout);
+  }, [setLabRemote, publishedLayout]);
   // Style lab (branch experiment): colour/style overrides layered on top of
   // Sanity at RENDER time (node.style is only re-read by physics on a rebuild).
   const lab = useStyleLab();
@@ -3428,7 +3545,22 @@ export default function MediaMap() {
     hidden: hiddenByYear,
     lastUpdated: lastUpdatedBySlug,
     loading: valuationsLoading,
+    settled: valuationsSettled,
   } = useValuations();
+  // Layout lab (deterministic layout): every change of inputs is a full solve,
+  // so painting early and then again as later data lands means two solves and a
+  // hitch mid-animation. Two things land after the snapshot: the live valuation
+  // sheet, and the legacy sheet (the fallback value for the few companies the
+  // valuation sheet doesn't cover). Hold the first paint for both — but only
+  // briefly: after LIVE_WAIT_MS go ahead with what there is.
+  const stillArriving = !valuationsSettled || loading;
+  const [liveWaitOver, setLiveWaitOver] = useState(false);
+  useEffect(() => {
+    if (valuationsLoading || !stillArriving) return;
+    const id = window.setTimeout(() => setLiveWaitOver(true), LIVE_WAIT_MS);
+    return () => window.clearTimeout(id);
+  }, [valuationsLoading, stillArriving]);
+  const holdForLive = llab.active && stillArriving && !liveWaitOver;
   // The map's "current" view = the newest YEAR column in the valuation sheet (so
   // the view advances when a year rolls over), with its MONTH derived from the
   // newest ingest "last_updated" (decision #3). Falls back to the calendar date
@@ -3485,7 +3617,7 @@ export default function MediaMap() {
     // the legacy fallback for a second or two, then a jolt when the real values
     // arrived (and companies absent from the legacy sheet, e.g. Space X, blinked
     // in late). The Studio editor has always gated on this; the app didn't.
-    if (valuationsLoading) return [];
+    if (valuationsLoading || holdForLive) return [];
     if (!sanity) return companies;
     return sanity.companies.map((c) => {
       const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
@@ -3497,7 +3629,7 @@ export default function MediaMap() {
         valuationAt(valData, c.slug, currentYearKey) ?? detail?.manualValue ?? sheetVal;
       return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
     });
-  }, [sanity, sanityLoading, valuationsLoading, companies, sheetValByName, valData, currentYearKey]);
+  }, [sanity, sanityLoading, valuationsLoading, holdForLive, companies, sheetValByName, valData, currentYearKey]);
   // "Last updated" date per company name (join slug → date from the sheet).
   const lastUpdatedByName = useMemo(() => {
     const m = new Map<string, string>();
@@ -3800,6 +3932,9 @@ export default function MediaMap() {
   useEffect(() => {
     if (enabledSeeded.current) return;
     if (isSanityConfigured() && sanityLoading) return; // wait for the Sanity read to settle
+    // Companies are held back until the valuations land; seeding before then
+    // would see only the entities' sectors and switch every other sector off.
+    if (baseCompanies.length === 0) return;
     const sectors = new Set<string>();
     for (const c of baseCompanies) sectors.add(c.sector);
     for (const e of sanity?.entities ?? []) sectors.add(e.sector);
@@ -3878,9 +4013,13 @@ export default function MediaMap() {
   // mobileLayout.ts — i.e. adding the first square override is what moves mobile
   // physics from code to the CMS, and nothing changes before that.
   const sq = sanity?.squareSettings;
-  const eff = {
+  // Layout lab: Phone 16:9 can follow the DESKTOP layout exactly (same canvas).
+  // Then every layout input below is desktop's; only type stays the phone's.
+  const fullMirror = llab.active && llab.applied.fullFollowsDesktop && isMobile && !mobileEdit && activeType === "full";
+  const layoutMobile = mobileView && !fullMirror;
+  const effLive = {
     ...effBase,
-    ...(mobileView
+    ...(layoutMobile
       ? {
           sectorPull: sq?.sectorPull ?? activeSettings.sectorPull,
           collidePadding: sq?.collidePadding ?? activeSettings.collidePadding,
@@ -3895,6 +4034,124 @@ export default function MediaMap() {
         }
       : {}),
   };
+
+  // ---- Layout lab: knob overrides on top of the live values --------------
+  const labMode: DeviceMode = !layoutMobile ? "desktop" : activeType === "square" ? "square" : "full";
+  // The live (pre-override) value of every lab knob for this mode + year. Label
+  // footprint starts at the ratio the live site already has: its spacing is
+  // measured at Sanity's label size while names are drawn at `labelSizePx`.
+  const liveKnobs = useMemo<LayoutKnobs>(
+    () => ({
+      packingDensity: effLive.packingDensity,
+      collidePadding: effLive.collidePadding,
+      sizeSpacing: effLive.sizeSpacing ?? 0,
+      sectorPull: effLive.sectorPull ?? 0.035,
+      repulsion: effLive.repulsion ?? 0,
+      connectionPull: effLive.connectionPull,
+      entityRadius: effLive.entityRadius ?? 140,
+      gapFill: 0,
+      gapMin: 60,
+      centerPull: 0,
+      labelFootprint: Math.round((effLive.labelSizePx / labelSizePx) * 100) / 100,
+      labelLargePx: labelSizePx,
+      labelSmallPx: labelSizePx,
+      labelStrokePx: 1.2,
+      labelThresholdB: 100,
+      nameThreshold: layoutMobile ? activeSettings.nameThreshold : 0,
+      nameSpacing: 0,
+      zoomTypeGrowth: LABEL_GROW_RATE,
+      zoomTypeMax: LABEL_GROW_MAX,
+      designWidth: layoutMobile ? PHONE_FRAME.w : 1100,
+    }),
+    [effLive.packingDensity, effLive.collidePadding, effLive.sizeSpacing, effLive.sectorPull, effLive.repulsion, effLive.connectionPull, effLive.entityRadius, effLive.labelSizePx, labelSizePx, layoutMobile, activeSettings.nameThreshold],
+  );
+  // K = the knobs the map lays out with (debounced); null when the lab is off,
+  // which leaves every code path below exactly as it is on the live site.
+  const labKnobOverrides = llab.applied.knobs[labMode];
+  const K = useMemo<LayoutKnobs | null>(
+    () => (llab.active ? resolveKnobs(labKnobOverrides, liveKnobs) : null),
+    [llab.active, labKnobOverrides, liveKnobs],
+  );
+  const { noteLive: labNoteLive } = llab;
+  useEffect(() => {
+    if (llab.enabled) labNoteLive(labMode, liveKnobs);
+  }, [llab.enabled, labNoteLive, labMode, liveKnobs]);
+  const eff = K
+    ? {
+        ...effLive,
+        packingDensity: K.packingDensity,
+        collidePadding: K.collidePadding,
+        sizeSpacing: K.sizeSpacing,
+        sectorPull: K.sectorPull,
+        repulsion: K.repulsion,
+        connectionPull: K.connectionPull,
+        entityRadius: K.entityRadius,
+      }
+    : effLive;
+  // Tablet = the desktop layout with its own type. In the editor the Device
+  // switch decides; for visitors it is the window width (above the phone
+  // breakpoint, up to tabletMaxWidth). KT = the knobs names are DRAWN with;
+  // K stays the desktop set, so spacing — and the layout — never changes.
+  const isTabletWidth = useMediaQuery(`(max-width: ${llab.applied.tabletMaxWidth}px)`);
+  const tabletType = !mobileView && (llab.enabled ? llab.device === "tablet" : llab.active && isTabletWidth);
+  const tabletOverrides = llab.applied.tablet;
+  // Phone 16:9 following desktop: the phone's own type (live phone defaults +
+  // its TYPE_KEYS overrides) on top of the desktop layout knobs.
+  const fullTypeOverrides = llab.applied.knobs.full;
+  const phoneNameThreshold = activeSettings.nameThreshold;
+  const KT = useMemo<LayoutKnobs | null>(() => {
+    if (!K) return null;
+    if (tabletType) return { ...K, ...tabletOverrides };
+    if (fullMirror) return { ...K, ...phoneTypeDefaults(labelSizePx, phoneNameThreshold), ...pickTypeKnobs(fullTypeOverrides) };
+    return K;
+  }, [K, tabletType, tabletOverrides, fullMirror, fullTypeOverrides, labelSizePx, phoneNameThreshold]);
+  const labLocked = !!K && llab.applied.lockLayout;
+  // Name size as DRAWN (tablet-aware); `labelPxOf` below is the size spacing is measured at.
+  // Linear is one strip of planets side by side with room for every name, so
+  // every name there uses the LARGE size — the small size is for the crowded map.
+  const typePxOf = useCallback(
+    (valuation_b: number, isEntity?: boolean) =>
+      KT
+        ? layoutMode === "linear" || (!isEntity && valuation_b >= KT.labelThresholdB)
+          ? KT.labelLargePx
+          : KT.labelSmallPx
+        : labelSizePx,
+    [KT, labelSizePx, layoutMode],
+  );
+  // Name size for a planet: large or small type either side of the threshold
+  // (entities are always small). Lab off → the one live size.
+  const labelPxOf = useCallback(
+    (valuation_b: number, isEntity?: boolean) =>
+      K ? (!isEntity && valuation_b >= K.labelThresholdB ? K.labelLargePx : K.labelSmallPx) : labelSizePx,
+    [K, labelSizePx],
+  );
+  // Dragging planets / sector wells in the lab's Arrange tab.
+  const arrange = llab.arrange && layoutMode === "map" && !gameActive;
+  // Placement + sector-well edits in force at the viewed year.
+  const labYear = activeDate.year;
+  const labPositions = useMemo(
+    () => (llab.active ? positionsAt(llab.applied, labMode, labYear) : null),
+    [llab.active, llab.applied, labMode, labYear],
+  );
+  const labSectors = useMemo(
+    () => (llab.active ? sectorsAt(llab.applied, labMode, labYear) : {}),
+    [llab.active, llab.applied, labMode, labYear],
+  );
+  // Text is measured for spacing, so re-measure once the web font has loaded —
+  // otherwise a cold load (fallback font) lays out differently from a warm one.
+  const [fontEpoch, setFontEpoch] = useState(0);
+  useEffect(() => {
+    if (!llab.active || typeof document === "undefined" || !document.fonts) return;
+    let on = true;
+    document.fonts.ready.then(() => {
+      if (!on) return;
+      clearTextWidthCache();
+      setFontEpoch((e) => e + 1);
+    });
+    return () => {
+      on = false;
+    };
+  }, [llab.active]);
 
   const anchorDiam = useMemo(
     () =>
@@ -3928,8 +4185,13 @@ export default function MediaMap() {
   // dimension as the effective collision radius — using `max(W, H)` not the
   // diagonal so the spacing matches what the eye perceives as "the label
   // reaches this far from center" without overshooting at the corners.
+  const lockedMeasure = labLocked && layoutMode !== "linear";
   const labelRadii = useMemo(() => {
-    if (naturalSlideUnitsPerPx === 1 && containerW === 0) return {};
+    const linear = layoutMode === "linear";
+    // Lab "lock layout": measure at the DESIGN width, not the window's, so the
+    // spacing — and therefore the whole layout — doesn't depend on window size.
+    const locked = lockedMeasure && !!K;
+    if (!locked && naturalSlideUnitsPerPx === 1 && containerW === 0) return {};
     const result: Record<string, number> = {};
     // LINEAR mode is one horizontal strip, so a label's WIDTH is what decides
     // whether neighbours collide — and it has to be the width actually DRAWN:
@@ -3940,11 +4202,20 @@ export default function MediaMap() {
     //    zoom), so zooming out makes every label wider in layout terms;
     //  • including the 2% name tracking, plus a few px of breathing room.
     // Map mode keeps its existing measurement so the authored layout is unchanged.
-    const linear = layoutMode === "linear";
-    const fontPx = linear ? labelSizePx * labelScaleForZoom(zoom) : eff.labelSizePx;
-    const suPerPx = linear && containerH > 0 ? canvas.h / zoom / containerH : naturalSlideUnitsPerPx;
+    const fontPxFor = (valuation_b: number, isEntity?: boolean) =>
+      linear ? typePxOf(valuation_b, isEntity) * labelScaleForZoom(zoom, KT?.zoomTypeGrowth, KT?.zoomTypeMax) : K ? labelPxOf(valuation_b, isEntity) : eff.labelSizePx;
+    const suPerPx =
+      linear && containerH > 0 ? canvas.h / zoom / containerH : locked ? canvas.w / K.designWidth : naturalSlideUnitsPerPx;
+    const footprint = K && !linear ? K.labelFootprint : 1;
+    // Layout lab: a name that never shows at rest (planet under the "hide names
+    // under" size) reserves no room. On a phone a hidden name's box is wider
+    // than most planets, and reserving one for every planet asks for more
+    // space than the canvas has — the solve jams, planets overlap and get
+    // shoved off the map.
+    const nameCanShow = (valuation_b: number) =>
+      !K || linear || K.nameThreshold <= 0 || diameterFor(valuation_b, anchorDiam) / suPerPx >= K.nameThreshold;
     const LINEAR_LABEL_PAD_PX = 4;
-    const halfExtent = (label: string, extraLines: number) => {
+    const halfExtent = (label: string, extraLines: number, fontPx: number) => {
       const words = label.trim().split(/\s+/);
       const maxWordPx = words.reduce(
         (m, w) => Math.max(m, measureLabelTextWidth(w, fontPx, 500) + (linear ? 0.02 * fontPx * w.length : 0)),
@@ -3954,21 +4225,28 @@ export default function MediaMap() {
       // Map mode — match Planet's rendering: lineHeight = 1.0, one word per line;
       // Large Cap planets also render a valuation line, so one extra line of height.
       const heightPx = (words.length + extraLines) * fontPx;
-      return (Math.max(maxWordPx, heightPx) / 2) * suPerPx;
+      return (Math.max(maxWordPx, heightPx) / 2) * suPerPx * footprint;
     };
     for (const c of displayedCompanies) {
       // Linear measures the text that's drawn (the "convert to USD" authoring
       // marker is stripped from the label); map mode keeps measuring the full name.
       const label = linear ? usdFlag(c.name).display : c.name;
-      result[c.name] = halfExtent(label, c.sector === "Large Cap" ? 1 : 0);
+      result[c.name] = nameCanShow(c.valuation_b)
+        ? halfExtent(label, c.sector === "Large Cap" ? 1 : 0, fontPxFor(c.valuation_b))
+        : 0;
     }
     // Text-only entity nodes (Sanity sub-brands) were missing from this map
     // entirely — they got no `labelRadii` entry, so the physics hook fell back to
     // one fixed `entityRadius` constant for every entity regardless of its actual
     // name length. Measure them the same way (entities never show a valuation line).
-    for (const e of sanity?.entities ?? []) result[e.name] = halfExtent(e.name, 0);
+    // (Lab, mobile: entity names are hidden until zoomed in, so they reserve none either.)
+    for (const e of sanity?.entities ?? []) {
+      result[e.name] = K && layoutMobile && !linear ? 0 : halfExtent(e.name, 0, fontPxFor(0, true));
+    }
     return result;
-  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, naturalSlideUnitsPerPx, containerW, containerH, layoutMode, zoom, labelSizePx, canvas]);
+    // When locked, the window size is deliberately NOT a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, lockedMeasure ? 0 : naturalSlideUnitsPerPx, lockedMeasure ? 0 : containerW, lockedMeasure ? 0 : containerH, layoutMode, zoom, labelSizePx, canvas, K, KT, labelPxOf, typePxOf, lockedMeasure, fontEpoch, anchorDiam, layoutMobile]);
 
   // Adapter: resolve the sheet's companies into map-core's data-source-agnostic
   // LayoutInput (visible-only, with each planet's default center, hue, and style
@@ -3991,7 +4269,7 @@ export default function MediaMap() {
         // Sanity wins, then local defaults.
         const desktopCenter = () => desktopCenterForSector(c.sector);
         let center: { x: number; y: number };
-        if (mobileView) {
+        if (layoutMobile) {
           const well = mobileSectorCenters[c.sector];
           if (well) center = well;
           else if (activeType === "full" || inheritsFullLayout(activeType)) center = desktopCenter();
@@ -4003,6 +4281,7 @@ export default function MediaMap() {
         } else {
           center = desktopCenter();
         }
+        center = labSectors[c.sector] ?? center; // layout-lab well move
         // TEMP: not-live red disabled — was:
         // const live = valuationAt(valData, c.slug, activeYearKey) !== undefined;
         // "Convert to USD" authoring marker: strip it from the drawn label. Colour
@@ -4022,9 +4301,11 @@ export default function MediaMap() {
         };
       });
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
-    const entityInputs = (sanity?.entities ?? []).filter((e) => enabled.has(e.sector));
+    const entityInputs = (sanity?.entities ?? [])
+      .filter((e) => enabled.has(e.sector))
+      .map((e) => (labSectors[e.sector] ? { ...e, center: labSectors[e.sector] } : e));
     return [...companyInputs, ...entityInputs];
-  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, activeType, canvas, mobileSectorCenters, desktopCenterForSector]);
+  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, layoutMobile, activeType, canvas, mobileSectorCenters, desktopCenterForSector, labSectors]);
 
   // Connections used for both physics and rendering: Sanity (windowed at T) when
   // configured, else the local edit-state. The edit-mode connection authoring
@@ -4052,12 +4333,24 @@ export default function MediaMap() {
     return out;
   }, [mobilePositions, activeType, sanity, positions, mobileLayouts.full.positions]);
 
+  // Mobile view uses the per-type pins; desktop uses Sanity/local. The layout
+  // lab's placement edits layer on top (null = freed back to pure physics).
+  const basePositions = layoutMobile ? mobilePinnedPositions : sanity ? sanity.positions : positions;
+  const physicsPositions = useMemo<Record<string, PlanetPosition>>(() => {
+    if (!labPositions || Object.keys(labPositions).length === 0) return basePositions;
+    const out: Record<string, PlanetPosition> = { ...basePositions };
+    for (const [name, p] of Object.entries(labPositions)) {
+      if (p) out[name] = { x: p.x, y: p.y, pin: p.pin, hold: p.hold };
+      else delete out[name];
+    }
+    return out;
+  }, [basePositions, labPositions]);
+
   const nodes = usePhysicsLayout({
     inputs,
     bounds: physicsBounds,
     viewMode: layoutMode,
-    // Mobile view uses the per-type pins; desktop uses Sanity/local.
-    positions: mobileView ? mobilePinnedPositions : sanity ? sanity.positions : positions,
+    positions: physicsPositions,
     isEditMode: isEditMode || mobileEdit,
     anchorDiam,
     collidePadding: eff.collidePadding,
@@ -4073,6 +4366,11 @@ export default function MediaMap() {
     flyIntroToken,
     layoutKey: String(activeDate.year),
     suspended: gameActive,
+    // Layout lab: deterministic solve + the gap-filling forces.
+    seed: K ? seedFor(llab.applied, labMode) : null,
+    centerPull: K?.centerPull,
+    gapFill: K?.gapFill,
+    gapMin: K?.gapMin,
   });
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -4201,7 +4499,8 @@ export default function MediaMap() {
     if (sectorDragRef.current && sectorDragState && didDragRef.current) {
       const name = sectorDragRef.current.name;
       const pos = { x: Math.round(sectorDragState.x), y: Math.round(sectorDragState.y) };
-      if (mobileEdit) updateActiveLayout((l) => ({ ...l, sectorCenters: { ...l.sectorCenters, [name]: pos } }));
+      if (arrange) llab.setSector(labMode, labYear, name, pos);
+      else if (mobileEdit) updateActiveLayout((l) => ({ ...l, sectorCenters: { ...l.sectorCenters, [name]: pos } }));
       else setSectorPositions((prev) => ({ ...prev, [name]: pos }));
     }
     sectorDragRef.current = null;
@@ -4212,7 +4511,18 @@ export default function MediaMap() {
       const name = planetDragRef.current.name;
       const x = Math.round(dragState.x);
       const y = Math.round(dragState.y);
-      if (mobileEdit) {
+      if (arrange) {
+        // Seat the node at the drop point first, so the re-solve tweens the
+        // neighbours around it instead of flying this planet back in.
+        const dropped = nodes.find((n) => n.name === name);
+        if (dropped) {
+          dropped.x = x;
+          dropped.y = y;
+        }
+        // A held planet keeps its hold at the new spot; anything else is pinned.
+        const held = !!physicsPositions[name]?.hold;
+        llab.setPosition(labMode, labYear, name, held ? { x, y, pin: false, hold: true } : { x, y, pin: true });
+      } else if (mobileEdit) {
         updateActiveLayout((l) => ({ ...l, positions: { ...l.positions, [name]: { x, y } } }));
       } else {
         setPositions((prev) => ({
@@ -4299,7 +4609,7 @@ export default function MediaMap() {
 
   // Begin a planet drag in edit mode. Called from Planet's onMouseDown.
   const onPlanetDragStart = (node: PlanetNode, e: React.MouseEvent) => {
-    if (!isEditMode && !mobileEdit) return;
+    if (!isEditMode && !mobileEdit && !arrange) return;
     e.stopPropagation();
     cancelZoomAnim();
     planetDragRef.current = {
@@ -4319,7 +4629,7 @@ export default function MediaMap() {
     centerY: number,
     e: React.MouseEvent,
   ) => {
-    if (!isEditMode && !mobileEdit) return;
+    if (!isEditMode && !mobileEdit && !arrange) return;
     e.stopPropagation();
     cancelZoomAnim();
     sectorDragRef.current = {
@@ -4905,6 +5215,79 @@ export default function MediaMap() {
   // Cull off-view planets in map mode. Linear mode extends far past the
   // map viewBox to the right (the scrollbar handles navigation), so don't
   // cull there — we'd hide everything outside the initial canvas region.
+  // Layout lab type: with "type scales with the map" the names keep their size
+  // in MAP units (set at the design width), so they shrink and grow with the
+  // window exactly as the planets do. Otherwise they stay a fixed px size.
+  const typeScale =
+    K && labLocked && llab.applied.scaleType && layoutMode !== "linear" && containerW > 0
+      ? canvas.w / K.designWidth / naturalSlideUnitsPerPx
+      : 1;
+  const renderLabelPx = (n: PlanetNode) => {
+    const px = typePxOf(n.valuation_b, n.isEntity);
+    const sized = KT ? Math.max(Math.min(llab.applied.minTypePx, px), px * typeScale) : px;
+    return sized * labelScaleForZoom(zoom, KT?.zoomTypeGrowth, KT?.zoomTypeMax);
+  };
+  const labelStrokePxEff = KT ? KT.labelStrokePx * Math.max(typeScale, 0.5) : undefined;
+  const nameThresholdEff = KT ? KT.nameThreshold : mobileView ? activeSettings.nameThreshold : 0;
+  // Name declutter (layout lab "Name breathing room"): hand names out largest
+  // planet first, skipping any whose box would come within `nameSpacing` px of
+  // a name already placed. Dense areas thin out; with a low size floor, small
+  // planets in empty areas pick names up. Computed on SETTLED positions (a
+  // short pause after the nodes stop changing) so names don't flicker while
+  // planets are still easing into place; re-run live on zoom.
+  const nameSpacing = KT?.nameSpacing ?? 0;
+  const [settledNodes, setSettledNodes] = useState<PlanetNode[] | null>(null);
+  useEffect(() => {
+    if (nameSpacing <= 0) return;
+    const id = window.setTimeout(() => setSettledNodes(nodes), 120);
+    return () => window.clearTimeout(id);
+  }, [nodes, nameSpacing]);
+  const shownNames = useMemo(() => {
+    if (!KT || nameSpacing <= 0 || !settledNodes || layoutMode === "linear" || slideUnitsPerPx <= 0) return null;
+    const su = slideUnitsPerPx;
+    const zoomScale = labelScaleForZoom(zoom, KT.zoomTypeGrowth, KT.zoomTypeMax);
+    const withValAll = zoom >= VALUATION_ZOOM_THRESHOLD;
+    const half = nameSpacing / 2;
+    const placed: { l: number; r: number; t: number; b: number }[] = [];
+    const out = new Set<string>();
+    const candidates = settledNodes
+      .filter((n) => !n.isEntity && (2 * n.r) / su >= KT.nameThreshold)
+      .sort((a, b) => b.r - a.r);
+    for (const n of candidates) {
+      const base = !n.isEntity && n.valuation_b >= KT.labelThresholdB ? KT.labelLargePx : KT.labelSmallPx;
+      const px = Math.max(Math.min(llab.applied.minTypePx, base), base * typeScale) * zoomScale;
+      // Widths are measured once at 10px and scaled (text width is linear in size).
+      const words = (n.labelText ?? n.name).trim().split(/\s+/);
+      let w = 0;
+      for (const word of words) w = Math.max(w, (measureLabelTextWidth(word, 10, 500) + 0.2 * word.length) * (px / 10));
+      let h = words.length * px;
+      if (withValAll || n.sector === "Large Cap") {
+        h += px * 1.15;
+        w = Math.max(w, measureLabelTextWidth(formatValuation(n.valuation_b), 10, 400) * (px / 10));
+      }
+      const cx = n.x / su;
+      const cy = n.y / su;
+      const box = { l: cx - w / 2 - half, r: cx + w / 2 + half, t: cy - h / 2 - half, b: cy + h / 2 + half };
+      if (placed.some((p) => p.l < box.r && p.r > box.l && p.t < box.b && p.b > box.t)) continue;
+      placed.push(box);
+      out.add(n.name);
+    }
+    return out;
+  }, [KT, nameSpacing, settledNodes, layoutMode, slideUnitsPerPx, zoom, typeScale, llab.applied.minTypePx]);
+  // While the declutter is on it alone decides which names show.
+  const nameHidden = (n: PlanetNode, fallback: boolean) => (shownNames ? !shownNames.has(n.name) : fallback);
+  const nameFloor = shownNames ? 0 : nameThresholdEff;
+
+  // A sector's gravity well as the layout uses it now (lab move → mobile well →
+  // desktop well) — what the Arrange handles sit on.
+  const sectorWellNow = (s: string) =>
+    labSectors[s] ?? (layoutMobile ? (mobileSectorCenters[s] ?? desktopCenterForSector(s)) : desktopCenterForSector(s));
+
+  // Names draw in a separate pass above all planets — except in the edit modes
+  // (there a name is a grab target on its own planet) and the game (its planets
+  // are stacked cross-fading pairs).
+  const namesOnTop = !(isEditMode || mobileEdit || arrange) && !game.active;
+
   const visibleNodes = useMemo(() => {
     if (game.active) return nodes.filter(n => !game.hud.lost.has(n.name));
     if (layoutMode === "linear") return nodes;
@@ -5067,7 +5450,105 @@ export default function MediaMap() {
     panelBackground: panelBg,
   };
 
+  // Lab-only debug handle (?layout=1): the live nodes, for measuring a layout
+  // from the console or a test script.
+  useEffect(() => {
+    if (!llab.enabled) return;
+    (window as unknown as { __mmLayout?: unknown }).__mmLayout = {
+      nodes, bounds: physicsBounds, canvas, mode: labMode, knobs: K, typeKnobs: KT, tabletType,
+      pinSources: {
+        sanityDesktop: Object.keys(sanity?.positions ?? {}),
+        sanityMobile: Object.keys(sanity?.mobilePositions ?? {}),
+        fileFull: Object.keys(mobileLayouts.full.positions),
+        fileThisView: Object.keys(activeLayout.positions),
+      },
+    };
+  }, [llab.enabled, nodes, physicsBounds, canvas, labMode, K, KT, tabletType]);
+
+  // ---- Layout lab panel wiring (only rendered with ?layout=1) ------------
+  const labGoToYear = (year: number) => {
+    const target = dateRange.find((d) => d.year === year);
+    if (!target) return;
+    setActiveDate(target);
+    setFlyIntroToken((n) => n + 1); // load it as a first page load would
+    setSavedViews((prev) => (prev.some((p) => sameDate(p, target)) ? prev : [...prev, target]));
+    setInspectedPlanet(null);
+    resetView();
+  };
+  const labReload = () => {
+    setInspectedPlanet(null);
+    resetView();
+    setFlyIntroToken((n) => n + 1);
+  };
+  const labSelectedNode = arrange && selectedPlanet ? nodes.find((n) => n.name === selectedPlanet) ?? null : null;
+  const labSelection: LabSelection | null = labSelectedNode
+    ? {
+        name: labSelectedNode.name,
+        x: physicsPositions[labSelectedNode.name]?.x ?? labSelectedNode.x,
+        y: physicsPositions[labSelectedNode.name]?.y ?? labSelectedNode.y,
+        pinned: labSelectedNode.pinned,
+        kind: !physicsPositions[labSelectedNode.name]
+          ? "free"
+          : physicsPositions[labSelectedNode.name].pin
+            ? "pin"
+            : physicsPositions[labSelectedNode.name].hold
+              ? "home"
+              : "soft",
+        edited: !!llab.state.positions[labMode][labSelectedNode.name],
+      }
+    : null;
+  const layoutLabPanel = llab.enabled ? (
+    <LayoutLabPanel
+      lab={llab}
+      mode={labMode}
+      live={liveKnobs}
+      knobs={resolveKnobs(llab.state.knobs[labMode], liveKnobs)}
+      typeBase={{
+        ...resolveKnobs(llab.state.knobs[labMode], liveKnobs),
+        ...(fullMirror ? phoneTypeDefaults(labelSizePx, activeSettings.nameThreshold) : {}),
+      }}
+      years={dateRange.map((d) => d.year)}
+      year={activeDate.year}
+      onYear={labGoToYear}
+      onRefresh={labReload}
+      mapWidth={containerW}
+      stats={{
+        planets: nodes.filter((n) => !n.isEntity).length,
+        pinned: nodes.filter((n) => n.pinned).length,
+        soft: nodes.filter((n) => !n.pinned && !n.hold && !!physicsPositions[n.name]).length,
+        held: nodes.filter((n) => n.hold).length,
+      }}
+      selection={labSelection}
+      onSelectionKind={(kind) => {
+        if (!labSelectedNode) return;
+        const name = labSelectedNode.name;
+        if (kind === "free") llab.setPosition(labMode, labYear, name, null);
+        else {
+          // Pin, or make a home, where it sits now.
+          const at = { x: Math.round(labSelectedNode.x), y: Math.round(labSelectedNode.y) };
+          llab.setPosition(labMode, labYear, name, kind === "pin" ? { ...at, pin: true } : { ...at, pin: false, hold: true });
+        }
+      }}
+      onSelectionMove={(x, y) => {
+        if (!labSelectedNode) return;
+        const name = labSelectedNode.name;
+        // A held or soft planet keeps its kind (its spot moves); anything else is pinned there.
+        const cur = physicsPositions[name];
+        const soft = !!cur && !cur.pin && !cur.hold;
+        if (!soft) {
+          labSelectedNode.x = x;
+          labSelectedNode.y = y;
+        }
+        llab.setPosition(labMode, labYear, name, cur?.hold ? { x, y, pin: false, hold: true } : { x, y, pin: !soft });
+      }}
+      onSelectionRevert={() => labSelectedNode && llab.revertPosition(labMode, labSelectedNode.name)}
+      movedSectors={Object.keys(labSectors).sort()}
+      onRevertSector={(s) => llab.revertSector(labMode, s)}
+    />
+  ) : null;
+
   return (
+    <LabFrame lab={llab} panel={layoutLabPanel}>
     <div
       style={{
         display: "flex",
@@ -5370,7 +5851,7 @@ export default function MediaMap() {
               });
             })()}
 
-            {/* Render hovered planet last so its label/stroke draw on top. */}
+            {/* Render hovered planet last so its stroke draws on top. */}
             {[
               ...visibleNodes.filter(n => n.name !== hoveredPlanet),
               ...visibleNodes.filter(n => n.name === hoveredPlanet),
@@ -5400,10 +5881,11 @@ export default function MediaMap() {
                         onHoverChange={setHoveredPlanet}
                         onClick={() => {}}
                         dimmed={false}
-                        labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
+                        labelSizePx={renderLabelPx(n)}
+                        labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                        labelSuppressed={mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"}
-                        labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                        labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
+                        labelMinScreenDiameter={nameFloor}
                       />
                     </g>
                     <g style={{ ...fade, opacity: launched ? 1 : 0, pointerEvents: launched ? undefined : "none" }}>
@@ -5414,10 +5896,11 @@ export default function MediaMap() {
                         onHoverChange={setHoveredPlanet}
                         onClick={() => {}}
                         dimmed={false}
-                        labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
+                        labelSizePx={renderLabelPx(n)}
+                        labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                        labelSuppressed={mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"}
-                        labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                        labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
+                        labelMinScreenDiameter={nameFloor}
                       />
                     </g>
                   </g>
@@ -5426,6 +5909,7 @@ export default function MediaMap() {
               return (
                 <Planet
                   key={n.name}
+                  part={namesOnTop ? "body" : "all"}
                   node={renderNode}
                   slideUnitsPerPx={slideUnitsPerPx}
                   isHovered={hoveredPlanet === n.name}
@@ -5433,7 +5917,7 @@ export default function MediaMap() {
                   onClick={(node) => {
                     if (didDragRef.current || game.active) return;
                     bgClickSuppressRef.current = true; // a planet click, not a background click
-                    if (isEditMode || mobileEdit) {
+                    if (isEditMode || mobileEdit || arrange) {
                       if (connectMode) {
                         handleConnectClick(node.name);
                       } else {
@@ -5453,28 +5937,61 @@ export default function MediaMap() {
                       (searchMatches !== null && !searchMatches.has(n.name)))
                   }
                   highlighted={searchMatches !== null && searchMatches.has(n.name)}
-                  labelSizePx={labelSizePx * labelScaleForZoom(zoom)}
-                  isEditMode={isEditMode || mobileEdit}
+                  labelSizePx={renderLabelPx(n)}
+                        labelStrokePx={labelStrokePxEff}
+                  isEditMode={isEditMode || mobileEdit || arrange}
                   isSelected={
-                    (isEditMode || mobileEdit) &&
+                    (isEditMode || mobileEdit || arrange) &&
                     (selectedPlanet === n.name ||
                       (connectMode && connectFrom === n.name))
                   }
-                  onPlanetMouseDown={(isEditMode || mobileEdit) && !connectMode ? onPlanetDragStart : undefined}
+                  onPlanetMouseDown={(isEditMode || mobileEdit || arrange) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
                   // Mobile view: show names by on-screen size (tunable threshold).
                   // Desktop: only Large Cap until zoomed in.
-                  labelSuppressed={
-                    mobileView
-                      ? false
-                      : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap"
-                  }
-                  labelMinScreenDiameter={mobileView ? activeSettings.nameThreshold : 0}
+                  labelSuppressed={nameHidden(
+                    n,
+                    mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap",
+                  )}
+                  labelMinScreenDiameter={nameFloor}
                   // Mobile: hide entities by default, reveal once zoomed in.
                   entityLabelSuppressed={mobileView && zoom < ENTITY_MOBILE_ZOOM_THRESHOLD}
                 />
               );
             })}
+
+            {/* Names in their own layer above every planet, so a planet drawn
+                later never covers a neighbour's name (the hovered one last). */}
+            {namesOnTop &&
+              [
+                ...visibleNodes.filter((n) => n.name !== hoveredPlanet),
+                ...visibleNodes.filter((n) => n.name === hoveredPlanet),
+              ]
+                .filter((n) => !n.isEntity)
+                .map((n) => (
+                  <Planet
+                    key={`name-${n.name}`}
+                    part="label"
+                    node={n}
+                    slideUnitsPerPx={slideUnitsPerPx}
+                    isHovered={hoveredPlanet === n.name}
+                    onHoverChange={setHoveredPlanet}
+                    onClick={() => {}}
+                    dimmed={
+                      (hoveredSector !== null && n.sector !== hoveredSector) ||
+                      (searchMatches !== null && !searchMatches.has(n.name))
+                    }
+                    highlighted={searchMatches !== null && searchMatches.has(n.name)}
+                    labelSizePx={renderLabelPx(n)}
+                    labelStrokePx={labelStrokePxEff}
+                    showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                    labelSuppressed={nameHidden(
+                      n,
+                      mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap",
+                    )}
+                    labelMinScreenDiameter={nameFloor}
+                  />
+                ))}
 
             {/* Draggable sector markers — edit mode only. Rendered after the
                 planets so they sit on top in z-order and can be grabbed. */}
@@ -5591,6 +6108,46 @@ export default function MediaMap() {
                 );
               });
             })()}
+
+            {/* Layout lab → Arrange: draggable sector wells. Only the dot is a
+                handle; the name is click-through so it never blocks a planet. */}
+            {arrange && llab.showWells &&
+              allSectors.filter((s) => enabled.has(s)).map((s) => {
+                const baseCenter = sectorWellNow(s);
+                const liveCenter =
+                  sectorDragState && sectorDragState.name === s
+                    ? { x: sectorDragState.x, y: sectorDragState.y }
+                    : baseCenter;
+                const moved = !!labSectors[s];
+                return (
+                  <g key={`lab-well-${s}`} transform={`translate(${liveCenter.x},${liveCenter.y})`}>
+                    <circle
+                      r={(moved ? 7 : 6) * slideUnitsPerPx}
+                      fill={moved ? "#a7f3d0" : "rgba(167,243,208,0.35)"}
+                      stroke="#a7f3d0"
+                      strokeWidth={1.5 * slideUnitsPerPx}
+                      style={{ cursor: "grab" }}
+                      onMouseDown={(e) => onSectorDragStart(s, baseCenter.x, baseCenter.y, e)}
+                    >
+                      <title>{`${s} well — drag to move`}</title>
+                    </circle>
+                    <text
+                      x={0}
+                      y={15 * slideUnitsPerPx}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={9 * slideUnitsPerPx}
+                      fontWeight={700}
+                      fill="#a7f3d0"
+                      stroke="rgba(0,0,0,0.85)"
+                      strokeWidth={2 * slideUnitsPerPx}
+                      style={{ paintOrder: "stroke fill", letterSpacing: 0.8, textTransform: "uppercase", pointerEvents: "none", userSelect: "none" }}
+                    >
+                      {s}
+                    </text>
+                  </g>
+                );
+              })}
           </svg>
         </div>
         </div>
@@ -6278,6 +6835,7 @@ export default function MediaMap() {
 
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} onDownloadMap={downloadMapImage} />
     </div>
+    </LabFrame>
   );
 }
 

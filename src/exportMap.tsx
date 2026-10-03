@@ -49,6 +49,10 @@ export const LABEL_FONT_FAMILY = '"franklin-gothic", "Libre Franklin", "Helvetic
 const textMeasureCtx: CanvasRenderingContext2D | null =
   typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
 const textWidthCache = new Map<string, number>();
+/** Forget cached widths (call once the web font has loaded). */
+export function clearTextWidthCache(): void {
+  textWidthCache.clear();
+}
 export function measureLabelTextWidth(text: string, fontPx: number, weight: number = 700): number {
   if (!textMeasureCtx) return text.length * fontPx * 0.55;
   const key = `${weight}|${fontPx}|${text}`;

@@ -120,6 +120,8 @@ type RawMapDocs = {
     square_overrides?: RawSettingsOverride[]
     background?: {top?: string | null; middle?: string | null; bottom?: string | null} | null
     panel_background?: string | null
+    /** Layout-lab settings as a JSON string (pasted from the lab's Copy JSON). */
+    layout_lab?: string | null
   } | null
 }
 
@@ -388,7 +390,7 @@ const ENTITIES_Q = `*[_type == "entity"]{
   position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
 }`
 const SETTINGS_KNOBS = `start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion`
-const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}}, "background": background{ "top": top.hex, "middle": middle.hex, "bottom": bottom.hex }, "panel_background": panel_background.hex }`
+const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}}, "background": background{ "top": top.hex, "middle": middle.hex, "bottom": bottom.hex }, "panel_background": panel_background.hex, layout_lab }`
 
 /**
  * Fetch the raw Sanity map docs once (one query per type). Returns null docs

@@ -52,10 +52,15 @@ export type Connection = {
 // A per-company position override in slide-coordinate space.
 //   pin: true  → locked (fx/fy); other planets collide around it.
 //   pin absent → soft attractor; physics can still nudge it.
+//   hold: true → a "home": the planet starts exactly here and is sprung back
+//                to it, and the spreading forces (sector pull, repulsion, gap
+//                fill, centre pull, connections) leave it alone — but it still
+//                collides, so it makes room when a neighbour grows.
 export type PlanetPosition = {
   x: number
   y: number
   pin?: boolean
+  hold?: boolean
 }
 
 // Canvas inset the physics keeps nodes inside, in slide units.
@@ -90,6 +95,8 @@ export type PlanetNode = {
   targetY: number
   // True when pinned via a position override (renderer marks these in edit mode).
   pinned: boolean
+  // True when (targetX, targetY) is a held "home" (see PlanetPosition.hold).
+  hold?: boolean
   // Half-extent of the rendered label box, in slide units (drives collision
   // spacing so wide labels don't overlap). Zero/undefined = ignore label.
   labelRadius?: number
