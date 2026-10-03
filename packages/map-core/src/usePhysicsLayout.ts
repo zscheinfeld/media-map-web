@@ -8,6 +8,11 @@ import {ANCHOR_DIAM_FALLBACK, diameterFor} from "./sizing.js"
 // other (clamped for stability inside connectionForce).
 export const CONNECTION_PULL = 0.55
 
+// Spring strength pulling a held planet back to its home (PlanetPosition.hold).
+// Firm enough that it returns once whatever pushed it shrinks again, loose
+// enough that collisions win while a neighbour needs the room.
+const HOLD_STRENGTH = 0.2
+
 // A node's collision footprint, in slide units. Planets use their circle (or
 // label box, whichever is larger); entities have no circle, so they use an
 // imaginary radius (`entityRadius`) or their label box. `sizeSpacing` inflates
@@ -235,8 +240,9 @@ function ejectFromFixed(
 function connectionForce(links: [PlanetNode, PlanetNode][], strength: number) {
   const force = (alpha: number) => {
     for (const [a, b] of links) {
-      const aFree = a.fx == null && a.fy == null
-      const bFree = b.fx == null && b.fy == null
+      // Held planets (homes) aren't dragged by a connection; only a free end moves.
+      const aFree = a.fx == null && a.fy == null && !a.hold
+      const bFree = b.fx == null && b.fy == null && !b.hold
       if (!aFree && !bFree) continue
       const dx = b.x + (b.vx ?? 0) - (a.x + (a.vx ?? 0))
       const dy = b.y + (b.vy ?? 0) - (a.y + (a.vy ?? 0))
@@ -258,6 +264,162 @@ function connectionForce(links: [PlanetNode, PlanetNode][], strength: number) {
     }
   }
   force.initialize = () => {}
+  return force
+}
+
+/** Deterministic [0, 1) from a string (FNV-1a + a final avalanche). */
+function hash01(str: string): number {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  h ^= h >>> 13
+  h = Math.imul(h, 0x5bd1e995)
+  h ^= h >>> 15
+  return (h >>> 0) / 4294967296
+}
+
+/** Convex hull of the node centres (Andrew's monotone chain), CCW. */
+function hullOf(nodes: PlanetNode[]): {x: number; y: number}[] {
+  const pts = nodes.map((n) => ({x: n.x, y: n.y})).sort((a, b) => a.x - b.x || a.y - b.y)
+  if (pts.length < 3) return pts
+  const cross = (o: {x: number; y: number}, a: {x: number; y: number}, b: {x: number; y: number}) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+  const lower: {x: number; y: number}[] = []
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  const upper: {x: number; y: number}[] = []
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  lower.pop()
+  upper.pop()
+  return lower.concat(upper)
+}
+
+/**
+ * Gap fill (layout lab): pulls free planets into the empty pockets INSIDE the
+ * cluster — the "bald spots" between sector groups that neither the sector pull
+ * nor the repulsion closes. A coarse grid samples the area inside the convex
+ * hull of the planets; a sample further than `minGap` from every footprint is
+ * "bald", and votes for the nearest free planet, weighted by how empty it is.
+ * Each planet is then nudged toward the centroid of its votes. Restricting the
+ * samples to the hull means edge planets are only ever pulled inward, so the
+ * force fills holes rather than spreading the cluster to the canvas edges.
+ * Heavy planets barely move (the pull is divided by their mass), so the small
+ * ones do the filling. Re-sampled every few ticks to keep a full solve fast.
+ */
+function gapFillForce(
+  strength: number,
+  minGap: number,
+  bounds: Bounds,
+  padding: number,
+  entityRadius: number,
+  sizeSpacing: number,
+) {
+  let nodes: PlanetNode[] = []
+  let pullX = new Float64Array(0)
+  let pullY = new Float64Array(0)
+  let tickNo = 0
+  const COLS = 52
+  const EVERY = 3
+  const resample = () => {
+    const n = nodes.length
+    const sumX = new Float64Array(n)
+    const sumY = new Float64Array(n)
+    const sumW = new Float64Array(n)
+    const foot = new Float64Array(n)
+    const free: boolean[] = new Array(n)
+    for (let i = 0; i < n; i++) {
+      foot[i] = collisionRadius(nodes[i], padding, entityRadius, sizeSpacing)
+      free[i] = !isFixed(nodes[i]) && !nodes[i].hold // pinned / held planets don't go filling
+    }
+    const hull = hullOf(nodes)
+    const inHull = (x: number, y: number) => {
+      for (let i = 0; i < hull.length; i++) {
+        const a = hull[i]
+        const b = hull[(i + 1) % hull.length]
+        if ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) < 0) return false
+      }
+      return true
+    }
+    const step = (bounds.x1 - bounds.x0) / COLS
+    for (let gy = bounds.y0 + step / 2; gy < bounds.y1; gy += step) {
+      for (let gx = bounds.x0 + step / 2; gx < bounds.x1; gx += step) {
+        if (hull.length >= 3 && !inHull(gx, gy)) continue
+        let empt = Infinity // distance to the nearest footprint edge
+        let best = -1 // nearest FREE planet (pinned ones can't come and fill)
+        let bestD = Infinity
+        for (let i = 0; i < n; i++) {
+          const dx = nodes[i].x - gx
+          const dy = nodes[i].y - gy
+          const d = Math.sqrt(dx * dx + dy * dy) - foot[i]
+          if (d < empt) empt = d
+          if (free[i] && d < bestD) {
+            bestD = d
+            best = i
+          }
+          if (empt <= minGap) break // not bald — no need to look further
+        }
+        if (best < 0 || empt <= minGap) continue
+        const w = empt - minGap
+        sumX[best] += gx * w
+        sumY[best] += gy * w
+        sumW[best] += w
+      }
+    }
+    pullX = new Float64Array(n)
+    pullY = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      if (sumW[i] <= 0) continue
+      const m = massRadius(nodes[i], entityRadius)
+      const heavy = 1 / (1 + (m / 220) * (m / 220))
+      pullX[i] = (sumX[i] / sumW[i] - nodes[i].x) * heavy
+      pullY[i] = (sumY[i] / sumW[i] - nodes[i].y) * heavy
+    }
+  }
+  const force = (alpha: number) => {
+    if (tickNo++ % EVERY === 0 || pullX.length !== nodes.length) resample()
+    const k = strength * alpha
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i]
+      if (isFixed(a) || a.hold) continue
+      a.vx = (a.vx ?? 0) + pullX[i] * k
+      a.vy = (a.vy ?? 0) + pullY[i] * k
+    }
+  }
+  force.initialize = (n: PlanetNode[]) => {
+    nodes = n
+    tickNo = 0
+  }
+  return force
+}
+
+/**
+ * Wraps a force so held planets (homes) don't FEEL it. A per-node strength of 0
+ * only stops a planet exerting the force; the pinned and free planets would
+ * still push the held ones off their homes.
+ */
+function heldExempt(inner: {(alpha: number): void; initialize?: (nodes: PlanetNode[], random: () => number) => void}) {
+  let nodes: PlanetNode[] = []
+  const force = (alpha: number) => {
+    const held = nodes.filter((n) => n.hold)
+    const saved = held.map((n) => [n.vx ?? 0, n.vy ?? 0])
+    inner(alpha)
+    held.forEach((n, i) => {
+      n.vx = saved[i][0]
+      n.vy = saved[i][1]
+    })
+  }
+  force.initialize = (n: PlanetNode[], random: () => number) => {
+    nodes = n
+    inner.initialize?.(n, random)
+  }
   return force
 }
 
@@ -365,6 +527,21 @@ export type PhysicsOptions = {
    * the nodes are — no pre-warm re-settle, so a restored layout stays put.
    */
   suspended?: boolean
+  /**
+   * Deterministic layout (layout lab). When set, every random starting jitter is
+   * derived from this seed + the planet's name, and every rebuild after the
+   * first load RESOLVES FROM SCRATCH and tweens there — so the layout is a pure
+   * function of (inputs, settings, seed): the same on every load, and unchanged
+   * by anything that doesn't change those (a window resize, a sidebar toggle).
+   * Unset = the legacy behaviour (random jitter, re-settle from where it sits).
+   */
+  seed?: number | null
+  /** Pull every planet toward the middle of the canvas (0 = off). */
+  centerPull?: number
+  /** Pull free planets into empty pockets inside the cluster (0 = off). */
+  gapFill?: number
+  /** How far (slide units) a spot must be from every planet to count as empty. */
+  gapMin?: number
   /** Bump this number to smoothly TWEEN the current layout into the target year's
    *  resolved layout (positions + sizes). Used for A/B pill comparisons — the
    *  target layout is taken from the per-year cache (keyed by `layoutKey`), or
@@ -406,7 +583,12 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     flyIntroToken = 0,
     layoutKey = "",
     suspended = false,
+    seed = null,
+    centerPull = 0,
+    gapFill = 0,
+    gapMin = 60,
   } = opts
+  const pure = seed != null
 
   const [nodes, setNodes] = useState<PlanetNode[]>([])
   const simRef = useRef<Simulation<PlanetNode, undefined> | null>(null)
@@ -447,7 +629,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const positionsKey = useMemo(
     () =>
       Object.entries(positions)
-        .map(([name, p]) => `${name}:${p.x},${p.y},${p.pin ? "1" : "0"}`)
+        .map(([name, p]) => `${name}:${p.x},${p.y},${p.pin ? "1" : "0"}${p.hold ? "h" : ""}`)
         .sort()
         .join("|"),
     [positions],
@@ -511,7 +693,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // still match, so persistence stays fast across toggles (same year → same sig →
     // hit) while a stale entry (e.g. cached during first load before valuations
     // settled, or after a knob/canvas/refresh change) is re-resolved.
-    const layoutSig = `${inputsKey}|${anchorDiam}|${collidePadding}|${entityRadius}|${sizeSpacing}|${sectorPull}|${repulsion}|${connectionStrength}|${boundsKey}|${labelRadiiKey}|${positionsKey}|${restartToken}`
+    const layoutSig = `${inputsKey}|${anchorDiam}|${collidePadding}|${entityRadius}|${sizeSpacing}|${sectorPull}|${repulsion}|${connectionStrength}|${boundsKey}|${labelRadiiKey}|${positionsKey}|${restartToken}|${seed}|${centerPull}|${gapFill}|${gapMin}`
+    // Starting jitter in [-0.5, 0.5): random, or seeded per planet when `seed` is set.
+    const jit = (name: string, axis: string) =>
+      (pure ? hash01(`${seed}|${axis}|${name}`) : Math.random()) - 0.5
 
     const active = inputs
     const centerByName = new Map(active.map((c) => [c.name, c.center]))
@@ -527,6 +712,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const targetX = pos ? pos.x : center.x
       const targetY = pos ? pos.y : center.y
       const pinned = !!pos?.pin
+      const hold = !!pos?.hold && !pinned
       const labelR = labelRadii[c.name] ?? 0
       const existing = map.get(c.name)
       if (existing) {
@@ -541,6 +727,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         existing.targetX = targetX
         existing.targetY = targetY
         existing.pinned = pinned
+        existing.hold = hold
         existing.labelRadius = labelR
         existing.labelColor = c.labelColor
         existing.labelText = c.labelText
@@ -557,7 +744,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         // Skip the snap during a re-settle — we want to tween from the current
         // position, not jump to the new target first.
         const comingFromLinear = prevViewModeRef.current === "linear"
-        if (!comingFromLinear && !resettleRequested && (prevTargetX !== targetX || prevTargetY !== targetY)) {
+        if (!pure && !comingFromLinear && !resettleRequested && (prevTargetX !== targetX || prevTargetY !== targetY)) {
           existing.x = targetX
           existing.y = targetY
           existing.vx = 0
@@ -574,11 +761,13 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         targetR: r,
         hue: c.hue,
         style: c.style,
-        x: targetX + (Math.random() - 0.5) * 120,
-        y: targetY + (Math.random() - 0.5) * 120,
+        // A held planet starts exactly at its home (no jitter).
+        x: targetX + (hold ? 0 : jit(c.name, "x") * 120),
+        y: targetY + (hold ? 0 : jit(c.name, "y") * 120),
         targetX,
         targetY,
         pinned,
+        hold,
         fx: pinned && pos ? pos.x : null,
         fy: pinned && pos ? pos.y : null,
         labelRadius: labelR,
@@ -616,6 +805,28 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     }
 
     simRef.current?.stop()
+
+    // One place builds the force set, so every settle path stays in step.
+    const midX = (bounds.x0 + bounds.x1) / 2
+    const midY = (bounds.y0 + bounds.y1) / 2
+    const buildSim = () => {
+      const s = forceSimulation<PlanetNode>(built)
+        // A held planet is sprung to its home at HOLD_STRENGTH and exerts no
+        // repulsion; everything else gets the sector pull + charge as usual.
+        .force("x", forceX<PlanetNode>((d) => d.targetX).strength((d) => (d.hold ? HOLD_STRENGTH : sectorPull)))
+        .force("y", forceY<PlanetNode>((d) => d.targetY).strength((d) => (d.hold ? HOLD_STRENGTH : sectorPull)))
+        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
+        .force("charge", heldExempt(forceManyBody<PlanetNode>().strength((d) => (d.hold ? 0 : -repulsion))))
+        .force("link", connectionForce(linkPairs, connectionStrength))
+      if (centerPull > 0) {
+        s.force("centerX", forceX<PlanetNode>(midX).strength((d) => (d.hold ? 0 : centerPull)))
+        s.force("centerY", forceY<PlanetNode>(midY).strength((d) => (d.hold ? 0 : centerPull)))
+      }
+      if (gapFill > 0) {
+        s.force("gapFill", gapFillForce(gapFill, gapMin, bounds, collidePadding, entityRadius, sizeSpacing))
+      }
+      return s.force("bounds", boundsForce(bounds))
+    }
 
     const prevMode = prevViewModeRef.current
     prevViewModeRef.current = viewMode
@@ -688,7 +899,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const t0 = performance.now()
       let rafId: number | null = null
       const tick = (now: number) => {
-        const t = Math.min(1, (now - t0) / TWEEN_MS)
+        const t = Math.max(0, Math.min(1, (now - t0) / TWEEN_MS)) // rAF time can predate t0 after a long solve
         const k = 1 - Math.pow(1 - t, 3)
         for (const n of built) {
           const s = startPos.get(n.name)!
@@ -730,13 +941,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     if (isFirstAnim) {
       hasFirstAnimRef.current = true
 
-      const sim = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-        .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-        .force("link", connectionForce(linkPairs, connectionStrength))
-        .force("bounds", boundsForce(bounds))
+      const sim = buildSim()
         .alpha(0.9)
         .alphaDecay(0.022)
         .velocityDecay(0.72)
@@ -772,8 +977,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       // Reset to each planet's resolved center (with mild noise) for the tween start.
       for (const n of built) {
         const center = centerByName.get(n.name) ?? {x: n.targetX, y: n.targetY}
-        n.x = center.x + (Math.random() - 0.5) * 80
-        n.y = center.y + (Math.random() - 0.5) * 80
+        n.x = center.x + jit(n.name, "ix") * 80
+        n.y = center.y + jit(n.name, "iy") * 80
         n.vx = 0
         n.vy = 0
         n.fx = null
@@ -788,7 +993,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       introRef.current = {t0, ms: TWEEN_MS, settled}
 
       const tweenTick = (now: number) => {
-        const t = Math.min(1, (now - t0) / TWEEN_MS)
+        const t = Math.max(0, Math.min(1, (now - t0) / TWEEN_MS)) // rAF time can predate t0 after a long solve
         const k = 1 - Math.pow(1 - t, 3)
         for (const n of built) {
           const s = startPos.get(n.name)!
@@ -836,7 +1041,9 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // the per-year cache; on a miss, resolve it once (fresh settle) and cache it, so
     // toggling back and forth lands on the same map each time. No live sim — a
     // deterministic morph between two pre-resolved layouts.
-    if (resettleRequested && !isEditMode && hasFirstAnimRef.current && prevMode !== "linear" && built.length > 0) {
+    // Deterministic mode (`seed`) sends EVERY rebuild through here, so the
+    // layout is always the from-scratch solve for the current inputs.
+    if ((resettleRequested || (pure && !resumingFromSuspend)) && !isEditMode && hasFirstAnimRef.current && prevMode !== "linear" && built.length > 0) {
       const startPos = new Map(built.map((n) => [n.name, {x: n.x, y: n.y}]))
       const startR = new Map(built.map((n) => [n.name, n.r]))
       const savedFx = new Map(built.map((n) => [n.name, {fx: n.fx ?? null, fy: n.fy ?? null}]))
@@ -851,20 +1058,18 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         for (const n of built) {
           n.r = n.targetR
           if (n.fx == null) {
-            const center = centerByName.get(n.name) ?? {x: n.targetX, y: n.targetY}
-            n.x = center.x + (Math.random() - 0.5) * 120
-            n.y = center.y + (Math.random() - 0.5) * 120
+            // Deterministic mode seats every planet exactly as a first load would
+            // (at its target + seeded jitter), so this solve lands on the same map.
+            const center = pure
+              ? {x: n.targetX, y: n.targetY}
+              : (centerByName.get(n.name) ?? {x: n.targetX, y: n.targetY})
+            n.x = center.x + (n.hold ? 0 : jit(n.name, "x") * 120)
+            n.y = center.y + (n.hold ? 0 : jit(n.name, "y") * 120)
             n.vx = 0
             n.vy = 0
           }
         }
-        const s = forceSimulation<PlanetNode>(built)
-          .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-          .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-          .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-          .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-          .force("link", connectionForce(linkPairs, connectionStrength))
-          .force("bounds", boundsForce(bounds))
+        const s = buildSim()
           .alpha(0.9)
           .alphaDecay(0.022)
           .velocityDecay(0.72)
@@ -899,7 +1104,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const t0 = performance.now()
       const morph = target
       const tick = (now: number) => {
-        const t = Math.min(1, (now - t0) / TWEEN_MS)
+        const t = Math.max(0, Math.min(1, (now - t0) / TWEEN_MS)) // rAF time can predate t0 after a long solve
         const k = 1 - Math.pow(1 - t, 3)
         for (const n of built) {
           const a = startPos.get(n.name) ?? {x: n.x, y: n.y}
@@ -949,13 +1154,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const firstBuild = !hasFirstAnimRef.current
       if (firstBuild) {
         hasFirstAnimRef.current = true
-        const prewarm = forceSimulation<PlanetNode>(built)
-          .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-          .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-          .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-          .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-          .force("link", connectionForce(linkPairs, connectionStrength))
-          .force("bounds", boundsForce(bounds))
+        const prewarm = buildSim()
           .alpha(0.9)
           .alphaDecay(0.022)
           .velocityDecay(0.72)
@@ -964,13 +1163,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 8, 1)
       }
 
-      const sim = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-        .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-        .force("link", connectionForce(linkPairs, connectionStrength))
-        .force("bounds", boundsForce(bounds))
+      const sim = buildSim()
         // First build starts cool — the pre-warm already settled the layout, so
         // the live sim only maintains it (smooth initial load). A re-build from a
         // knob/data change starts WARM so soft alpha-scaled forces (notably the
@@ -1040,13 +1233,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         n.vy = 0
         n.r = n.targetR // settle for the FINAL sizes; the shown size keeps easing below
       }
-      const s = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-        .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-        .force("link", connectionForce(linkPairs, connectionStrength))
-        .force("bounds", boundsForce(bounds))
+      const s = buildSim()
         .alpha(0.4)
         .alphaDecay(0.05)
         .velocityDecay(0.72)
@@ -1075,7 +1262,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const t0 = performance.now()
       introRef.current = {t0, ms: remaining, settled}
       const tick = (now: number) => {
-        const t = Math.min(1, (now - t0) / remaining)
+        const t = Math.max(0, Math.min(1, (now - t0) / remaining))
         const k = 1 - Math.pow(1 - t, 3)
         for (const n of built) {
           const a = startPos.get(n.name)!
@@ -1124,13 +1311,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     // (Skipped when resuming from `suspended`: the driver restored a layout that
     // was already settled, and a pre-warm would nudge it.)
     if (!resumingFromSuspend) {
-      const prewarm = forceSimulation<PlanetNode>(built)
-        .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-        .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-        .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-        .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-        .force("link", connectionForce(linkPairs, connectionStrength))
-        .force("bounds", boundsForce(bounds))
+      const prewarm = buildSim()
         .alpha(0.4)
         .alphaDecay(0.05)
         .velocityDecay(0.72)
@@ -1144,13 +1325,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       separateOverlaps(built, collidePadding, entityRadius, sizeSpacing, bounds, 20, 1)
       ejectFromFixed(built, collidePadding, entityRadius, sizeSpacing, 4)
     }
-    const sim = forceSimulation<PlanetNode>(built)
-      .force("x", forceX<PlanetNode>((d) => d.targetX).strength(sectorPull))
-      .force("y", forceY<PlanetNode>((d) => d.targetY).strength(sectorPull))
-      .force("collide", liveCollide(collidePadding, 0.9, 2, entityRadius, sizeSpacing))
-      .force("charge", forceManyBody<PlanetNode>().strength(-repulsion))
-      .force("link", connectionForce(linkPairs, connectionStrength))
-      .force("bounds", boundsForce(bounds))
+    const sim = buildSim()
       // Cool maintaining sim — the pre-warm above already resolved the layout
       // (including a full re-settle), so this only holds separation + eases r.
       .alpha(0.12)
@@ -1183,7 +1358,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       sim.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken, resettleToken, flyIntroToken, suspended])
+  }, [inputsKey, viewMode, positionsKey, anchorDiam, collidePadding, entityRadius, sizeSpacing, sectorPull, repulsion, labelRadiiKey, connectionsKey, connectionStrength, boundsKey, restartToken, resettleToken, flyIntroToken, suspended, seed, centerPull, gapFill, gapMin])
 
   // Wake/cool the sim on drag enter/leave. The tick callback already nudges
   // alphaTarget on every tick, but the sim can be fully cooled (alpha=0) when
