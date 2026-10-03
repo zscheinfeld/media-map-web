@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { isSanityConfigured, sanityQuery } from "./sanityClient";
 
 // ── About / Welcome modal ───────────────────────────────────────────────────
@@ -11,8 +11,14 @@ import { isSanityConfigured, sanityQuery } from "./sanityClient";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FONT = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
-const YELLOW = "#FFEC44";
-const CARD_BG = "#0b1224";
+const YELLOW = "#FCFC06"; // same yellow as the game cards
+// Card fill — the game cards' navy (#070C1D), solid here so the sticky tab bar
+// (which must cover scrolling content) blends in exactly. The map behind is
+// dimmed + blurred by the dialog layer instead.
+const CARD_FILL = "#070c1d";
+const CARD_BG = CARD_FILL;
+/** Length of the close animation (mm-dim-out / mm-card-out in App.css). */
+const MODAL_EXIT_MS = 260;
 
 // Height reserved for the sticky tab bar so scroll-to lands sections just below it.
 const TABS_HEIGHT = 52;
@@ -193,13 +199,27 @@ function useAboutContent(): AboutContent {
 // ── Component ────────────────────────────────────────────────────────────────
 export function AboutModal({
   open,
-  onClose,
+  onClose: onCloseProp,
   onDownloadMap,
 }: {
   open: boolean;
   onClose: () => void;
   onDownloadMap: () => void;
 }) {
+  // Every way out (✕, backdrop click, Esc) plays the exit animation first, then
+  // tells the parent — so the dim fades out and the card drops away.
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const onClose = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    window.setTimeout(() => {
+      closingRef.current = false;
+      setClosing(false);
+      onCloseProp();
+    }, MODAL_EXIT_MS);
+  }, [onCloseProp]);
   const content = useAboutContent();
   const sections = content.sections;
   const narrow = useIsNarrow();
@@ -401,8 +421,6 @@ export function AboutModal({
         position: "fixed",
         inset: 0,
         zIndex: 1000,
-        background: "rgba(2,5,12,0.72)",
-        backdropFilter: "blur(3px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -410,10 +428,28 @@ export function AboutModal({
         fontFamily: FONT,
       }}
     >
+      {/* Dim + blur over the map, as its own layer BEHIND the card. It must not
+          be an ancestor of the scrolling card body: when a scrolling element sits
+          inside a backdrop-filter element, browsers recomposite the blur as you
+          scroll, which shows up as the screen flashing. */}
+      {/* The fade lives on this layer (not the dialog): an ancestor that's
+          animating opacity would stop the blur from seeing the map. */}
+      <div
+        aria-hidden
+        className={closing ? "mm-dim-out" : "mm-dim-in"}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(2,5,12,0.85)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+        }}
+      />
       {/* Wrapper holds the card (and, on mobile, the close button above it) so
           the pair shares one height cap and stays centered together. */}
       <div
         style={{
+          position: "relative",
           width: "min(800px, 100%)",
           // `dvh` tracks the VISIBLE viewport (excludes mobile browser toolbars);
           // plain `vh` is the full screen on iOS Safari, so the card ran under
@@ -431,6 +467,7 @@ export function AboutModal({
       )}
       <div
         onClick={(e) => e.stopPropagation()}
+        className={closing ? "mm-card-out" : "mm-card-in"}
         style={{
           position: "relative",
           width: "100%",
@@ -438,10 +475,11 @@ export function AboutModal({
           minHeight: 0, // let the card shrink so its body scrolls within the cap
           display: "flex",
           flexDirection: "column",
-          background: CARD_BG,
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 20,
-          boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+          // Shared look with the game's cards: navy fill, 0.5px inside stroke,
+          // soft white glow, 48px corners. (The map's blur is on the dim layer.)
+          background: CARD_FILL,
+          borderRadius: 24,
+          boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.25), 0 0 52px 15px rgba(255,255,255,0.18)",
           overflow: "hidden",
         }}
       >
@@ -514,6 +552,12 @@ export function AboutModal({
                 gap: TAB_GAP,
                 flexWrap: "nowrap",
                 overflowX: "auto",
+                // Sideways only: with overflowX auto the browser makes Y scrollable
+                // too, and the active-tab underline overflows by a pixel or two,
+                // so the row could nudge up/down by accident.
+                overflowY: "hidden",
+                touchAction: "pan-x",
+                overscrollBehavior: "contain",
                 WebkitOverflowScrolling: "touch",
                 alignItems: "center",
                 // Centered when the tabs fit (desktop); left-aligned when they
@@ -557,7 +601,9 @@ export function AboutModal({
                       position: "absolute",
                       left: 0,
                       right: 0,
-                      bottom: -1,
+                      // Inside the row (not -1): overflowing by a pixel gave the
+                      // row vertical scroll room, so it nudged up by accident.
+                      bottom: 0,
                       height: 2,
                       background: isActive ? "white" : isHovered ? "rgba(255,255,255,0.3)" : "transparent",
                       borderRadius: 1,
@@ -658,7 +704,7 @@ function ModalButton({
   const colors = hover
     ? { background: "#000", color: "white", border: "1px solid #fff" }
     : variant === "blue"
-      ? { background: "#5865F2", color: "white", border: "1px solid transparent" }
+      ? { background: "#3657FD", color: "white", border: "1px solid transparent" }
       : { background: "#c8ccd4", color: "#1a1a1a", border: "1px solid transparent" };
   const style: React.CSSProperties = {
     display: "inline-flex",

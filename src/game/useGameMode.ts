@@ -31,6 +31,8 @@ const SPEED_MAX = 820;
 export const PADDLE_W = 150;
 /** Paddle's gap from the bottom of the map, px (matches the Time Machine button's inset). */
 const PADDLE_BOTTOM_PX = 16;
+/** Length of the cards' close animation (mm-dim-out / mm-card-out in App.css). */
+const CARD_EXIT_MS = 260;
 /** The sidebar's collapse transition (MediaMap `Sidebar`): the paddle is placed after it. */
 const SIDEBAR_COLLAPSE_MS = 320;
 const PADDLE_KEY_SPEED = 1100; // px/s with ← / →
@@ -53,7 +55,8 @@ type Mover = {
 type Walls = { x0: number; y0: number; x1: number; y1: number; supp: number };
 
 /** Screen-px rect for the paddle <img>. `animate` = CSS-transition a move;
- *  `visible` = fade (the paddle fades in at the bottom when the game starts). */
+ *  `visible` = shown (hidden during the welcome card; fades up into place when
+ *  the countdown starts). */
 export type PaddleRect = { left: number; top: number; w: number; h: number; animate: boolean; visible: boolean };
 
 export type GameHud = {
@@ -348,6 +351,8 @@ export function useGameMode({
   const startCountdown = (from: number) => {
     setCountdown(from);
     setPhaseBoth("countdown");
+    // The paddle fades up into place as the countdown begins.
+    setPaddle((p) => (p ? { ...p, visible: true } : p));
     let n = from;
     countdownTimerRef.current = window.setInterval(() => {
       n -= 1;
@@ -390,8 +395,8 @@ export function useGameMode({
       const cRect = container.getBoundingClientRect();
       containerRectRef.current = cRect;
       paddleXRef.current = cRect.width / 2;
+      // Placed now, but hidden until the countdown starts (startCountdown).
       setPaddle({ left: cRect.left + cRect.width / 2 - PADDLE_W / 2, top: cRect.bottom - bottomGap - h, w: PADDLE_W, h, animate: false, visible: false });
-      window.setTimeout(() => setPaddle((p) => (p ? { ...p, visible: true } : p)), 40);
     }, SIDEBAR_COLLAPSE_MS + 160);
 
     onActiveChange(true);
@@ -406,8 +411,14 @@ export function useGameMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const exit = useCallback(() => {
-    if (phaseRef.current === "idle") return;
+  // Closing from a card (welcome / countdown / end) plays the cards' exit
+  // animation before tearing down; closing mid-round is immediate.
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+
+  const teardown = (exitAlreadyAnnounced = false) => {
+    closingRef.current = false;
+    setClosing(false);
     stopLoops();
     restore();
     // Fade the paddle out, then drop it (the logo fades back in on its own).
@@ -416,7 +427,24 @@ export function useGameMode({
     setHud(EMPTY_HUD);
     setPhaseBoth("idle");
     propsRef.current.onActiveChange(false);
-    propsRef.current.onExit();
+    if (!exitAlreadyAnnounced) propsRef.current.onExit();
+  };
+
+  const exit = useCallback(() => {
+    const ph = phaseRef.current;
+    if (ph === "idle" || closingRef.current) return;
+    if (ph === "intro" || ph === "countdown" || ph === "ended") {
+      closingRef.current = true;
+      stopLoops(); // freeze the countdown so the round can't start mid-fade
+      setClosing(true);
+      // Tell the app now (it re-opens the sidebar), so the sidebar slides back
+      // in WHILE the card fades out rather than after it.
+      propsRef.current.onExit();
+      window.setTimeout(() => teardown(true), CARD_EXIT_MS);
+      return;
+    }
+    teardown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const replay = useCallback(() => {
@@ -477,6 +505,7 @@ export function useGameMode({
 
   return {
     phase,
+    closing,
     active: phase !== "idle",
     countdown,
     hud,

@@ -1885,6 +1885,9 @@ const CAROUSEL_VISIBLE_HALFWIDTH = 8; // how many slots to render on each side
  * Reuses the *active* simulation's positions for visual continuity — only
  * sizes change based on each month's mocked valuations.
  */
+/** Royal blue shared by the Substack CTA and the Time Machine's Explore button. */
+const EXPLORE_BLUE = "#3657FD";
+
 function MapThumbnail({
   date,
   baseCompanies,
@@ -1894,6 +1897,8 @@ function MapThumbnail({
   isActive,
   isSelected,
   onClick,
+  exploreHover = false,
+  onExploreHoverChange,
 }: {
   date: MapDate;
   baseCompanies: SheetCompany[];
@@ -1903,6 +1908,9 @@ function MapThumbnail({
   isActive: boolean;
   isSelected: boolean;
   onClick: () => void;
+  /** Selected thumb only: the shared "explore" hover (this thumb OR the button). */
+  exploreHover?: boolean;
+  onExploreHoverChange?: (hovered: boolean) => void;
 }) {
   const valByName = useMemo(() => {
     const m = new Map<string, number>();
@@ -1923,7 +1931,7 @@ function MapThumbnail({
   // Border priority: selected (strongest) > hovered (signals clickability) >
   // active > default. Hover only kicks in when the thumb isn't already selected.
   const border = isSelected
-    ? "2px solid rgba(180, 200, 255, 0.9)"
+    ? `2px solid ${exploreHover ? EXPLORE_BLUE : "rgba(180, 200, 255, 0.9)"}`
     : isHovered
       ? "2px solid rgba(255,255,255,0.7)"
       : isActive
@@ -1933,8 +1941,9 @@ function MapThumbnail({
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      aria-label={isSelected ? `Explore the ${formatDate(date)} map` : `Show ${formatDate(date)}`}
+      onMouseEnter={() => { setIsHovered(true); if (isSelected) onExploreHoverChange?.(true); }}
+      onMouseLeave={() => { setIsHovered(false); if (isSelected) onExploreHoverChange?.(false); }}
       style={{
         flex: "0 0 auto",
         width: contentWidth,
@@ -1959,8 +1968,12 @@ function MapThumbnail({
             "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)",
           borderRadius: 10,
           border,
+          // The focused map keeps its pale-blue glow; it turns royal blue (the
+          // Explore button's colour) while it or the button is hovered.
           boxShadow: isSelected
-            ? "0 0 32px rgba(120, 160, 255, 0.45)"
+            ? exploreHover
+              ? `0 0 40px ${hexToRgba(EXPLORE_BLUE, 0.85)}`
+              : "0 0 32px rgba(120, 160, 255, 0.45)"
             : isActive
               ? "0 0 16px rgba(80, 120, 200, 0.25)"
               : "none",
@@ -1981,7 +1994,7 @@ function MapThumbnail({
             if (r < 2) return null;
             // Thumbnail dots are too small for visible stripes; show the first
             // stripe color (or the flat fill) as a representative dot.
-            const primary = n.style?.fill ?? n.style?.stripes?.[0] ?? null;
+            const primary = n.style?.fill ?? n.style?.ombre?.stops?.[0] ?? n.style?.stripes?.[0] ?? null;
             const fill = primary ?? `hsl(${n.hue}, 65%, 55%)`;
             const stroke = n.style?.stroke
               ?? (primary ? hexToRgba(primary, 0.5) : `hsla(${n.hue}, 70%, 75%, 0.5)`);
@@ -2149,7 +2162,11 @@ function Carousel({
                 canvas={canvas}
                 isActive={isActive}
                 isSelected={isSelected}
-                onClick={() => onSelect(d)}
+                // The highlighted map opens it (same as Explore); a neighbour
+                // only slides into focus.
+                onClick={isSelected ? onExplore : () => onSelect(d)}
+                exploreHover={isSelected && exploreHover}
+                onExploreHoverChange={setExploreHover}
               />
             </div>
           );
@@ -2174,22 +2191,22 @@ function Carousel({
           gap: 6,
           padding: "6px 12px",
           borderRadius: 8,
-          // Hover changes color only (no scale/position — the transform stays put).
-          background: exploreHover ? "rgba(120,160,255,0.34)" : "rgba(120,160,255,0.18)",
-          border: `1px solid ${exploreHover ? "rgba(180,205,255,0.9)" : "rgba(150,180,255,0.5)"}`,
-          color: "white",
+          // Royal blue (the Substack CTA's colour); hovering it OR the highlighted
+          // map flips it to white with blue text. Colour only — the transform stays put.
+          background: exploreHover ? "#ffffff" : EXPLORE_BLUE,
+          border: `1px solid ${exploreHover ? "#ffffff" : EXPLORE_BLUE}`,
+          color: exploreHover ? EXPLORE_BLUE : "#ffffff",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: 1,
           cursor: "pointer",
-          backdropFilter: "blur(6px)",
           zIndex: 3,
           transition: "background 160ms, color 160ms, border-color 160ms",
         }}
       >
-        EXPLORE MAP
-        <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, lineHeight: 1, opacity: 0.7 }}>arrow_forward</span>
+        EXPLORE THIS MAP
+        <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>arrow_forward</span>
       </button>
     </div>
   );
@@ -5787,6 +5804,7 @@ export default function MediaMap() {
           hud={game.hud}
           totals={game.totals}
           paddle={game.paddle}
+          closing={game.closing}
           onBegin={game.begin}
           onExit={game.exit}
           onReplay={game.replay}
@@ -5854,7 +5872,10 @@ export default function MediaMap() {
               transition: "top 240ms ease, opacity 360ms ease",
             }}
           >
-            <img src="/Evan-logo-new.png" alt="" draggable={false} style={{ width: 96, height: "auto", display: "block" }} />
+            {/* The logo is white artwork on transparency, so it's drawn as a CSS
+                mask filled with `background-color` — that lets hover recolour it
+                (see .eshap-logo--faint in App.css). 2625×933 source. */}
+            <span className="eshap-logo-mark" aria-hidden style={{ width: 96, height: Math.round((96 * 933) / 2625) }} />
           </button>
         )}
 
@@ -6133,14 +6154,14 @@ export default function MediaMap() {
                 }}
               >
                 <button
-                  aria-label="About the Media Universe"
-                  title="About"
+                  aria-label="Download the map and more about the Media Universe"
+                  title="Download"
                   className="mm-hover"
                   onClick={() => setAboutOpen(true)}
                   style={{
                     ...zoomBtnStyle,
                     // Label stays white (zoomBtnStyle color); only the icon is grey.
-                    // Mobile: icon-only square; desktop: auto-width pill with the ABOUT label.
+                    // Mobile: icon-only square; desktop: auto-width pill with the DOWNLOAD label.
                     ...(isMobile
                       ? {}
                       : {
@@ -6156,8 +6177,8 @@ export default function MediaMap() {
                         }),
                   }}
                 >
-                  {!isMobile && <span className="cap-center">ABOUT</span>}
-                  <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 18, display: "block", lineHeight: 1, color: ICON_GREY }}>info</span>
+                  {!isMobile && <span className="cap-center">DOWNLOAD</span>}
+                  <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 18, display: "block", lineHeight: 1, color: ICON_GREY }}>download</span>
                 </button>
               </div>
             )}

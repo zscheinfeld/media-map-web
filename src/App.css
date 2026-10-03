@@ -81,9 +81,62 @@ html, body, #root {
 }
 
 /* About-modal body: custom scrollbar with a blue handle. */
+/* Modals (About + game cards): the dim/blur fades in, the card fades up. */
+@keyframes mm-dim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mm-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.mm-dim-in {
+  animation: mm-dim-in 280ms ease-out both;
+}
+.mm-card-in {
+  animation: mm-card-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both;
+}
+@keyframes mm-dim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mm-card-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(12px); }
+}
+/* Closing: the reverse — card drops away, dim fades out (260ms in total;
+   the components wait that long before unmounting). */
+.mm-dim-out {
+  animation: mm-dim-out 260ms ease-in 40ms both;
+  pointer-events: none;
+}
+.mm-card-out {
+  animation: mm-card-out 220ms ease-in both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-dim-in, .mm-card-in, .mm-dim-out, .mm-card-out { animation-duration: 1ms; animation-delay: 0ms; }
+}
+
+/* Game cards' scroll area (narrow / short windows): light-blue scrollbar. */
+.mm-blue-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #8196fe transparent;
+}
+.mm-blue-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.mm-blue-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mm-blue-scroll::-webkit-scrollbar-thumb {
+  background: #8196fe;
+  border-radius: 8px;
+}
+
 .about-scroll {
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #5981ff transparent; /* thumb, track (Firefox) */
+  scrollbar-color: #8196fe transparent; /* thumb, track (Firefox) */
 }
 .about-scroll::-webkit-scrollbar {
   width: 8px;
@@ -92,13 +145,13 @@ html, body, #root {
   background: transparent;
 }
 .about-scroll::-webkit-scrollbar-thumb {
-  background: #5981ff;
+  background: #8196fe;
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .about-scroll::-webkit-scrollbar-thumb:hover {
-  background: #6f92ff;
+  background: #9aabfe;
   background-clip: padding-box;
 }
 
@@ -120,10 +173,33 @@ html, body, #root {
 .eshap-logo:hover {
   opacity: 0.8;
 }
-/* The on-map logo (top-left) sits quietly at 25%; brightens a little on hover. */
+/* Game welcome illustration: planets drift gently up and down. */
+@keyframes mm-bob {
+  0%, 100% { transform: translateY(calc(var(--bob, 3px) * -1)); }
+  50% { transform: translateY(var(--bob, 3px)); }
+}
+.mm-bob {
+  animation: mm-bob 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-bob { animation: none; }
+}
+
+/* The on-map logo (top-left): white at 60%; on hover, full-strength yellow. */
 .eshap-logo--faint {
-  opacity: 0.25;
+  opacity: 0.6;
+  transition: opacity 150ms ease;
 }
 .eshap-logo--faint:hover {
-  opacity: 0.5;
+  opacity: 1;
+}
+.eshap-logo-mark {
+  display: block;
+  background-color: #ffffff;
+  -webkit-mask: url("/Evan-logo-new.png") center / contain no-repeat;
+  mask: url("/Evan-logo-new.png") center / contain no-repeat;
+  transition: background-color 150ms ease;
+}
+.eshap-logo--faint:hover .eshap-logo-mark {
+  background-color: #fcfc06;
 }
