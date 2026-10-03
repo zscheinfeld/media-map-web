@@ -4107,10 +4107,16 @@ export default function MediaMap() {
   }, [K, tabletType, tabletOverrides, fullMirror, fullTypeOverrides, labelSizePx, phoneNameThreshold]);
   const labLocked = !!K && llab.applied.lockLayout;
   // Name size as DRAWN (tablet-aware); `labelPxOf` below is the size spacing is measured at.
+  // Linear is one strip of planets side by side with room for every name, so
+  // every name there uses the LARGE size — the small size is for the crowded map.
   const typePxOf = useCallback(
     (valuation_b: number, isEntity?: boolean) =>
-      KT ? (!isEntity && valuation_b >= KT.labelThresholdB ? KT.labelLargePx : KT.labelSmallPx) : labelSizePx,
-    [KT, labelSizePx],
+      KT
+        ? layoutMode === "linear" || (!isEntity && valuation_b >= KT.labelThresholdB)
+          ? KT.labelLargePx
+          : KT.labelSmallPx
+        : labelSizePx,
+    [KT, labelSizePx, layoutMode],
   );
   // Name size for a planet: large or small type either side of the threshold
   // (entities are always small). Lab off → the one live size.
