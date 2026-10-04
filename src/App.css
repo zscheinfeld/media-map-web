@@ -134,6 +134,21 @@ html, body, #root {
   border-radius: 8px;
 }
 
+/* Inline links in the About modal's body copy: demi weight, light blue,
+   yellow on hover; underline 8% of the type size thick, offset 12.5%. */
+.about-link {
+  color: #8196fe;
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.125em;
+  transition: color 140ms ease;
+}
+.about-link:hover,
+.about-link:focus-visible {
+  color: #fcfc06;
+}
+
 .about-scroll {
   scrollbar-width: thin; /* Firefox */
   scrollbar-color: #8196fe transparent; /* thumb, track (Firefox) */
