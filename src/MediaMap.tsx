@@ -2692,6 +2692,7 @@ const AGG_COLOR_OVERRIDES: Record<string, string> = {
   amazon: "#18266E",
   walmart: "#EF6262",
   nvidia: "#A1FF62",
+  samsung: "#FF3FDE",
 };
 
 /** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
