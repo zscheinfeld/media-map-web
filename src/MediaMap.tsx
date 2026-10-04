@@ -4931,15 +4931,44 @@ export default function MediaMap() {
   );
   // Dragging planets / sector wells in the lab's Arrange tab.
   const arrange = llab.arrange && layoutMode === "map" && !gameActive;
+  // The year Sanity's own data last set each planet's position / each sector's
+  // well, as of the year `sn` is resolved at — for the positions and wells the
+  // layout lab layers its edits over (see `mobilePinnedOf`, `inputsOf`). A lab
+  // edit yields to a later-dated one here (see `positionsAt`).
+  const labBaseYearsOf = (sn: ResolvedSanityMap | null) => {
+    const pos: Record<string, number> = {};
+    const wells: Record<string, number> = {};
+    if (!sn) return { positions: pos, sectors: wells };
+    if (!layoutMobile) return { positions: sn.since.positions, sectors: sn.since.centers };
+    // A phone view, in the order `mobilePinnedOf` stacks its sources.
+    const inherits = inheritsFullLayout(activeType);
+    if (activeType === "full" || inherits) {
+      Object.assign(pos, sn.since.positions);
+      Object.assign(wells, sn.since.centers);
+      if (inherits) for (const name of Object.keys(mobileLayouts.full.positions)) delete pos[name]; // set in code: undated
+    }
+    for (const name of Object.keys(activeLayout.positions)) delete pos[name];
+    for (const name of Object.keys(mobileSectorCentersOf(null))) delete wells[name];
+    if (activeType === "square") {
+      if (Object.keys(sn.mobilePositions).length) Object.assign(pos, sn.since.mobilePositions);
+      if (Object.keys(sn.mobileCenterBySector).length) {
+        for (const name of Object.keys(sn.mobileCenterBySector)) delete wells[name];
+        Object.assign(wells, sn.since.mobileCenters);
+      }
+    }
+    return { positions: pos, sectors: wells };
+  };
   // Placement + sector-well edits in force at the viewed year.
   const labYear = activeDate.year;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const labBaseYears = useMemo(() => labBaseYearsOf(sanity), [sanity, layoutMobile, activeType, activeLayout, mobileLayouts]);
   const labPositions = useMemo(
-    () => (llab.active ? positionsAt(llab.applied, labMode, labYear) : null),
-    [llab.active, llab.applied, labMode, labYear],
+    () => (llab.active ? positionsAt(llab.applied, labMode, labYear, labBaseYears.positions) : null),
+    [llab.active, llab.applied, labMode, labYear, labBaseYears],
   );
   const labSectors = useMemo(
-    () => (llab.active ? sectorsAt(llab.applied, labMode, labYear) : {}),
-    [llab.active, llab.applied, labMode, labYear],
+    () => (llab.active ? sectorsAt(llab.applied, labMode, labYear, labBaseYears.sectors) : {}),
+    [llab.active, llab.applied, labMode, labYear, labBaseYears],
   );
   // Text is measured for spacing, so re-measure once the web font has loaded —
   // otherwise a cold load (fallback font) lays out differently from a warm one.
@@ -5260,16 +5289,17 @@ export default function MediaMap() {
     const anchorY = anchorDiamOf(displayed, effY.packingDensity);
     const unknown = Array.from(new Set(base.map((c) => c.sector))).filter((x) => !isKnownSector(x)).sort();
     const basePos = layoutMobile ? mobilePinnedOf(sn, mobilePositionsOf(sn)) : sn ? sn.positions : positions;
+    const baseYears = labBaseYearsOf(sn);
     return {
       inputs: inputsOf({
         displayed,
         sn,
-        labSectors: llab.active ? sectorsAt(llab.applied, labMode, date.year) : {},
+        labSectors: llab.active ? sectorsAt(llab.applied, labMode, date.year, baseYears.sectors) : {},
         desktopCenter: desktopCenterOf(sn, unknown),
         mobileCenters: mobileSectorCentersOf(sn),
       }),
       bounds: physicsBounds,
-      positions: withLabPositions(basePos, llab.active ? positionsAt(llab.applied, labMode, date.year) : null),
+      positions: withLabPositions(basePos, llab.active ? positionsAt(llab.applied, labMode, date.year, baseYears.positions) : null),
       anchorDiam: anchorY,
       collidePadding: effY.collidePadding,
       entityRadius: effY.entityRadius,
@@ -6486,7 +6516,7 @@ export default function MediaMap() {
   useEffect(() => {
     if (!llab.enabled) return;
     (window as unknown as { __mmLayout?: unknown }).__mmLayout = {
-      nodes, get yearLayouts() { return getSolvedYears(); }, bounds: physicsBounds, canvas, mode: labMode, knobs: K, typeKnobs: KT, tabletType,
+      nodes, get yearLayouts() { return getSolvedYears(); }, labBaseYears, sanityPositions: sanity?.positions ?? {}, bounds: physicsBounds, canvas, mode: labMode, knobs: K, typeKnobs: KT, tabletType,
       pinSources: {
         sanityDesktop: Object.keys(sanity?.positions ?? {}),
         sanityMobile: Object.keys(sanity?.mobilePositions ?? {}),
@@ -6494,7 +6524,7 @@ export default function MediaMap() {
         fileThisView: Object.keys(activeLayout.positions),
       },
     };
-  }, [llab.enabled, nodes, physicsBounds, canvas, labMode, K, KT, tabletType]);
+  }, [llab.enabled, nodes, physicsBounds, canvas, labMode, K, KT, tabletType, labBaseYears, sanity]);
 
   // ---- Layout lab panel wiring (only rendered with ?layout=1) ------------
   const labGoToYear = (year: number) => {

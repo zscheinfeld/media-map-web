@@ -155,6 +155,11 @@ function toCoreStyle(s: SanityPlanetStyle): PlanetStyle | null {
 }
 
 const overrideMoment = (o: {start_date?: string}): Moment => sanityDateToMoment(o.start_date) ?? UNDATED
+/** The year an override is dated (undefined for an undated one). */
+const overrideYear = (o: {start_date?: string}): number | undefined => {
+  const m = overrideMoment(o)
+  return m ? Number(m.slice(0, 4)) : undefined
+}
 
 /** Sector center at moment T: latest dated override ≤ T, else the baseline. */
 function sectorCenterAt(sector: RawSector | null | undefined, at: Moment): Coord | undefined {
@@ -220,6 +225,17 @@ export type ResolvedSanityMap = {
   mobilePositions: Record<string, {x: number; y: number; pin?: boolean}>
   /** Sector center in the square (mobile) layout, if authored (mobile_center). */
   mobileCenterBySector: Record<string, Coord>
+  /**
+   * The year each active override above is dated (absent = an undated baseline).
+   * Lets a layer on top (the layout lab) tell whether its own, earlier-dated
+   * edit has been superseded by a later one made here.
+   */
+  since: {
+    positions: Record<string, number>
+    mobilePositions: Record<string, number>
+    centers: Record<string, number>
+    mobileCenters: Record<string, number>
+  }
   /** Connections whose [start,end] window covers T. */
   connections: ResolvedConnection[]
   /** Layout-knob values active at T (forward-propagated), or null. */
@@ -253,6 +269,11 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
   const positions: ResolvedSanityMap["positions"] = {}
   const mobilePositions: ResolvedSanityMap["mobilePositions"] = {}
   const mobileCenterBySector: ResolvedSanityMap["mobileCenterBySector"] = {}
+  const since: ResolvedSanityMap["since"] = {positions: {}, mobilePositions: {}, centers: {}, mobileCenters: {}}
+  const noteYear = (into: Record<string, number>, name: string, o: {start_date?: string}) => {
+    const y = overrideYear(o)
+    if (y !== undefined) into[name] = y
+  }
   const detailByName: Record<string, CompanyDetail> = {}
   const tickerByName: Record<string, string> = {}
 
@@ -260,9 +281,17 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     if (!hueBySector[name]) hueBySector[name] = hashHue(name)
     if (!(name in styleBySector)) styleBySector[name] = toCoreStyle(sector?.default_style)
     const center = sectorCenterAt(sector, at)
-    if (center && !centerBySector[name]) centerBySector[name] = center
+    if (center && !centerBySector[name]) {
+      centerBySector[name] = center
+      const o = activeAt(sector?.desktop_center_overrides ?? [], at, overrideMoment)
+      if (o) noteYear(since.centers, name, o)
+    }
     const mobileCenter = mobileSectorCenterAt(sector, at)
-    if (mobileCenter && !mobileCenterBySector[name]) mobileCenterBySector[name] = mobileCenter
+    if (mobileCenter && !mobileCenterBySector[name]) {
+      mobileCenterBySector[name] = mobileCenter
+      const o = activeAt(sector?.mobile_center_overrides ?? [], at, overrideMoment)
+      if (o) noteYear(since.mobileCenters, name, o)
+    }
   }
 
   for (const s of raw.sectors) {
@@ -281,9 +310,15 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     if (c.ticker) tickerByName[c.name] = c.ticker
     styleByName[c.name] = mergeStyle(toCoreStyle(c.sector?.default_style), toCoreStyle(c.planet_style))
     const activePos = activeAt(c.position_overrides ?? [], at, overrideMoment)
-    if (activePos) positions[c.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+    if (activePos) {
+      positions[c.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+      noteYear(since.positions, c.name, activePos)
+    }
     const activeMobilePos = activeAt(c.mobile_position_overrides ?? [], at, overrideMoment)
-    if (activeMobilePos) mobilePositions[c.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
+    if (activeMobilePos) {
+      mobilePositions[c.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
+      noteYear(since.mobilePositions, c.name, activeMobilePos)
+    }
     // Latest manual valuation effective at T (forward-propagated by as_of_date).
     const activeManual = activeAt(
       c.manual_valuations ?? [],
@@ -319,9 +354,15 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
       style: null,
     })
     const activePos = activeAt(e.position_overrides ?? [], at, overrideMoment)
-    if (activePos) positions[e.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+    if (activePos) {
+      positions[e.name] = {x: activePos.x, y: activePos.y, pin: activePos.pin}
+      noteYear(since.positions, e.name, activePos)
+    }
     const activeMobilePos = activeAt(e.mobile_position_overrides ?? [], at, overrideMoment)
-    if (activeMobilePos) mobilePositions[e.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
+    if (activeMobilePos) {
+      mobilePositions[e.name] = {x: activeMobilePos.x, y: activeMobilePos.y, pin: activeMobilePos.pin}
+      noteYear(since.mobilePositions, e.name, activeMobilePos)
+    }
   }
 
   const connections: ResolvedConnection[] = raw.connections
@@ -352,7 +393,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
     bgRaw?.top && bgRaw.middle && bgRaw.bottom ? [bgRaw.top, bgRaw.middle, bgRaw.bottom] : null
   const panelBg = raw.settings?.panel_background ?? null
 
-  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, connections, settings, squareSettings, detailByName, tickerByName, styleBySector, background, panelBg}
+  return {companies, entities, centerBySector, hueBySector, styleByName, positions, mobilePositions, mobileCenterBySector, since, connections, settings, squareSettings, detailByName, tickerByName, styleBySector, background, panelBg}
 }
 
 // --- GROQ + fetch hook -----------------------------------------------------
