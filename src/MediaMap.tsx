@@ -6580,6 +6580,7 @@ export default function MediaMap() {
               <button
                 key={key}
                 aria-label={isActive ? `Currently showing ${formatDate(d)}` : `Switch to ${formatDate(d)}`}
+                className={timelineOpen ? "tm-btn" : undefined}
                 onClick={() => { if (!isActive) selectDate(d); }}
                 onMouseEnter={() => setHoveredViewKey(key)}
                 onMouseLeave={() => setHoveredViewKey(prev => prev === key ? null : prev)}
@@ -6605,7 +6606,9 @@ export default function MediaMap() {
                   fontSize: 13,
                   fontWeight: 500,
                   letterSpacing: 1,
-                  cursor: isActive ? "default" : "pointer",
+                  // Always a pointer: the pill has a hover state even when it is
+                  // the year already showing (clicking it then does nothing).
+                  cursor: "pointer",
                   textAlign: "left",
                   transition: "background 160ms, color 160ms, border-color 160ms",
                   whiteSpace: "nowrap",
@@ -6637,6 +6640,8 @@ export default function MediaMap() {
           {/* Explicit Timeline trigger — always the bottom pill */}
           <button
             aria-label={timelineOpen ? "Time machine open (use close button to close)" : "Open time machine"}
+            // In the Time Machine the light pills go dark on hover (App.css).
+            className={timelineOpen ? "tm-btn" : undefined}
             onClick={() => (timelineOpen ? setTimelineOpen(false) : openTimeline())}
             onMouseEnter={() => setTimelineButtonHovered(true)}
             onMouseLeave={() => setTimelineButtonHovered(false)}
@@ -6678,6 +6683,7 @@ export default function MediaMap() {
         {timelineOpen && (
           <button
             aria-label="Close timeline"
+            className="tm-btn"
             onClick={() => setTimelineOpen(false)}
             style={{
               position: "absolute",
@@ -6730,6 +6736,7 @@ export default function MediaMap() {
             >
               <button
                 aria-label="Previous month"
+                className="tm-btn"
                 onClick={() => canPrev && step(-1)}
                 disabled={!canPrev}
                 style={arrowBtnStyle(canPrev)}
@@ -6738,6 +6745,7 @@ export default function MediaMap() {
               </button>
               <button
                 aria-label="Next month"
+                className="tm-btn"
                 onClick={() => canNext && step(1)}
                 disabled={!canNext}
                 style={arrowBtnStyle(canNext)}
