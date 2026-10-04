@@ -203,6 +203,15 @@ html, body, #root {
   .mm-dim-in, .mm-card-in, .mm-dim-out, .mm-card-out { animation-duration: 1ms; animation-delay: 0ms; }
 }
 
+/* A scroll area that draws no scrollbar of its own (the phone detail panel
+   draws one itself, since phones can't style theirs). */
+.mm-hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.mm-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Game cards' scroll area (narrow / short windows): light-blue scrollbar. */
 .mm-blue-scroll {
   scrollbar-width: thin;

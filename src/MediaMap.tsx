@@ -125,6 +125,31 @@ function useMediaQuery(query: string): boolean {
 let stampCounter = 0;
 const nextStampId = () => ++stampCounter;
 
+/** The window's height, px, kept current on resize (a phone's toolbar showing / hiding). */
+function useWindowHeight(): number {
+  const [h, setH] = useState<number>(() => (typeof window !== "undefined" ? window.innerHeight : 800));
+  useEffect(() => {
+    const on = () => setH(window.innerHeight);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return h;
+}
+
+// Phone: a selected planet's detail panel sits across the bottom of the screen
+// — as wide as the row of controls at the top, this share of the window tall —
+// and the map shows the planet in the space left between that row and the panel.
+// The top row (view tabs, settings) stays in view and in reach.
+const MOBILE_DETAIL_BOTTOM = 16;
+const MOBILE_DETAIL_SIDE = 16;
+const MOBILE_DETAIL_HEIGHT_SHARE = 0.62;
+/** Where the top row of controls ends, px from the top (16 + the pill's height). */
+const MOBILE_TOP_CONTROLS_BOTTOM = 58;
+// How big the focused planet is drawn in that space: at most this share of the
+// screen's width and of the space's height (small planets stop at the max zoom).
+const MOBILE_FOCUS_WIDTH_SHARE = 0.5;
+const MOBILE_FOCUS_HEIGHT_SHARE = 0.76;
+
 function useIsMobile(): boolean {
   const [m, setM] = useState<boolean>(() =>
     typeof window !== "undefined" && window.matchMedia(MOBILE_MEDIA_QUERY).matches,
@@ -906,9 +931,13 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
   );
 }
 
-function MobileSectorTriggerBar({ onOpen }: { onOpen: () => void }) {
+/** How the phone's bottom controls leave and return around a focused planet. */
+const MOBILE_FOCUS_STEP_ASIDE = "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease";
+
+function MobileSectorTriggerBar({ onOpen, hidden = false }: { onOpen: () => void; hidden?: boolean }) {
   return (
     <div
+      aria-hidden={hidden}
       style={{
         flex: "0 0 auto",
         display: "flex",
@@ -917,6 +946,12 @@ function MobileSectorTriggerBar({ onOpen }: { onOpen: () => void }) {
         background: "rgba(7,14,32,0.95)",
         borderTop: "1px solid rgba(255,255,255,0.10)",
         boxSizing: "border-box",
+        // Steps aside (slides down and fades) while a planet is in focus. It
+        // keeps its place in the layout, so the map above it doesn't resize.
+        transform: hidden ? "translateY(100%)" : "translateY(0)",
+        opacity: hidden ? 0 : 1,
+        pointerEvents: hidden ? "none" : undefined,
+        transition: MOBILE_FOCUS_STEP_ASIDE,
       }}
     >
       <button
@@ -1105,6 +1140,9 @@ function HistoryChart({ series }: { series: { month: string; value: number }[] }
   );
 }
 
+/** Phone detail panel: gap between its scroll bar and the panel's top / bottom edge, px. */
+const DETAIL_SCROLL_INSET = 12;
+
 function PlanetDetailPanel({
   node,
   detail,
@@ -1112,6 +1150,7 @@ function PlanetDetailPanel({
   history,
   isPresent,
   onClose,
+  mobileHeight = null,
 }: {
   node: PlanetNode | null;
   detail: CompanyDetail | null;
@@ -1120,34 +1159,83 @@ function PlanetDetailPanel({
   /** True when the viewed year is the present — Vitals only show then. */
   isPresent: boolean;
   onClose: () => void;
+  /**
+   * Phone: the panel's height, px. It then sits across the bottom of the
+   * screen (see MOBILE_DETAIL_BOTTOM) and its contents scroll inside it; null =
+   * the desktop side panel.
+   */
+  mobileHeight?: number | null;
 }) {
   const open = node !== null;
   const valuation = node?.valuation_b ?? 0;
+  const mobile = mobileHeight !== null;
+
+  // Phone: the panel is cropped, so it shows its own scroll bar (phones only
+  // flash theirs while scrolling, and can't be styled) — the light blue of the
+  // other scroll bars. `thumb` is its top and height, px, within the track.
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [thumb, setThumb] = useState<{ top: number; h: number } | null>(null);
+  const nodeName = node?.name ?? null;
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!mobile || !el) return;
+    el.scrollTop = 0; // a newly picked planet starts at the top
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const track = el.clientHeight - 2 * DETAIL_SCROLL_INSET;
+      if (el.scrollHeight <= el.clientHeight + 1 || track <= 0) return setThumb(null);
+      const h = Math.max(28, (el.clientHeight / el.scrollHeight) * track);
+      const top = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * (track - h);
+      setThumb({ top, h });
+    };
+    const queue = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    queue();
+    el.addEventListener("scroll", queue, { passive: true });
+    const ro = new ResizeObserver(queue);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener("scroll", queue);
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [mobile, nodeName, mobileHeight]);
 
   return (
     <aside
       aria-hidden={!open}
+      data-detail-panel=""
       style={{
         position: "fixed",
         // Inset on all four sides so the panel floats — clear of the view-mode
         // toggle (top-right) above and the zoom controls (bottom-right) below,
         // with the same 16px right margin as those controls. Corner radius
         // matches the floating control groups.
-        top: 72,
-        right: 16,
-        bottom: 80,
-        width: 340,
-        maxWidth: "calc(100vw - 32px)",
-        background: "rgba(7,14,32,0.92)",
+        ...(mobile
+          ? {
+              // Phone: across the bottom, as wide as the controls row up top.
+              bottom: `calc(${MOBILE_DETAIL_BOTTOM}px + env(safe-area-inset-bottom))`,
+              left: MOBILE_DETAIL_SIDE,
+              right: MOBILE_DETAIL_SIDE,
+              height: mobileHeight ?? undefined,
+            }
+          : { top: 72, right: 16, bottom: 80, width: 340, maxWidth: "calc(100vw - 32px)" }),
+        // Phone: a little more solid, since it lies over the bottom controls.
+        background: mobile ? "rgba(7,14,32,0.97)" : "rgba(7,14,32,0.92)",
         border: "1px solid rgba(255,255,255,0.15)",
         borderRadius: 10,
         backdropFilter: "blur(6px)",
         boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
         color: "#e6edf7",
         fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-        padding: "22px 24px",
+        // Phone: the contents scroll in an inner box (below), so the ✕ and the
+        // scroll bar stay put.
+        padding: mobile ? 0 : "22px 24px",
         boxSizing: "border-box",
-        overflowY: "auto",
+        overflowY: mobile ? "hidden" : "auto",
         // Fade up from a slight offset below the resting position. Smoother
         // and less directional than a slide-in from the edge.
         transform: open ? "translateY(0)" : "translateY(14px)",
@@ -1159,19 +1247,39 @@ function PlanetDetailPanel({
       }}
     >
       {node && (
-        <>
+        <div
+          ref={scrollerRef}
+          className={mobile ? "mm-hide-scrollbar" : undefined}
+          style={
+            mobile
+              ? {
+                  height: "100%",
+                  overflowY: "auto",
+                  padding: "22px 24px",
+                  boxSizing: "border-box",
+                  // Reaching either end doesn't start scrolling the page behind.
+                  overscrollBehavior: "contain",
+                }
+              : undefined
+          }
+        >
+         <div>
           <button
             onClick={onClose}
             aria-label="Close detail panel"
             style={{
+              // Placed against the panel, not the scrolling box inside it — so on
+              // a phone it stays in the corner while the contents scroll past.
               position: "absolute",
               top: 14,
               right: 14,
-              width: 28,
-              height: 28,
+              width: mobile ? 32 : 28,
+              height: mobile ? 32 : 28,
               display: "grid",
               placeItems: "center",
-              background: "rgba(255,255,255,0.08)",
+              // Phone: solid, as text scrolls underneath it.
+              background: mobile ? "#1b2236" : "rgba(255,255,255,0.08)",
+              zIndex: 1,
               border: "1px solid rgba(255,255,255,0.18)",
               borderRadius: 6,
               color: "white",
@@ -1272,7 +1380,23 @@ function PlanetDetailPanel({
               />
             </PanelSection>
           )}
-        </>
+         </div>
+        </div>
+      )}
+      {mobile && open && thumb && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            right: 5,
+            top: DETAIL_SCROLL_INSET + thumb.top,
+            width: 4,
+            height: thumb.h,
+            borderRadius: 4,
+            background: "#8196fe", // the other scroll bars' light blue (App.css)
+            pointerEvents: "none",
+          }}
+        />
       )}
     </aside>
   );
@@ -3228,6 +3352,12 @@ function sectorDotBackground(sector: string): string {
   return customBg ?? primary ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
 }
 
+// Phone: the frozen Company column's width, px (it was as wide as the longest
+// name on one line, 200px — over half the screen). Names wrap inside it.
+const LIST_COMPANY_COL_MOBILE = 140;
+const LIST_COMPANY_PAD_LEFT = 20;
+const LIST_COMPANY_PAD_RIGHT_MOBILE = 8;
+
 function CompanyListView({
   rows,
   sort,
@@ -3293,14 +3423,17 @@ function CompanyListView({
     let raf = 0;
     const paint = () => {
       raf = 0;
-      const cells = tbody.querySelectorAll<HTMLElement>("td[data-frozen]");
-      const n = cells.length;
-      if (!n) return;
-      const rect = tbody.getBoundingClientRect();
-      const rowH = rect.height / n;
+      const cells = Array.from(tbody.querySelectorAll<HTMLElement>("td[data-frozen]"));
+      if (!cells.length) return;
       const vh = window.innerHeight || 1;
+      // Rows differ in height (a wrapped name is taller), so each cell is
+      // measured. All the reads first, then the writes.
+      const mids = cells.map((cell) => {
+        const r = cell.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
       cells.forEach((cell, i) => {
-        cell.style.backgroundColor = sampleListGradient((rect.top + (i + 0.5) * rowH) / vh, bgStops);
+        cell.style.backgroundColor = sampleListGradient(mids[i] / vh, bgStops);
       });
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
@@ -3397,7 +3530,14 @@ function CompanyListView({
                 <th
                   key={col.key}
                   onClick={() => onSort(col.key)}
-                  style={{ ...th, ...(col.key === "company" ? { ...stickyHead, paddingLeft: 20 } : {}), textAlign: col.align, color: active ? "#fff" : th.color }}
+                  style={{
+                    ...th,
+                    ...(col.key === "company"
+                      ? { ...stickyHead, paddingLeft: LIST_COMPANY_PAD_LEFT, ...(isMobile ? { paddingRight: LIST_COMPANY_PAD_RIGHT_MOBILE } : {}) }
+                      : {}),
+                    textAlign: col.align,
+                    color: active ? "#fff" : th.color,
+                  }}
                   aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   {col.label}
@@ -3446,7 +3586,31 @@ function CompanyListView({
                 cursor: "pointer",
               }}
             >
-              <td data-frozen={isMobile ? "" : undefined} style={{ ...td, fontWeight: 700, ...stickyCell(hoveredRow === r.name), paddingLeft: 20 }}>{usdFlag(r.name).display}</td>
+              <td
+                data-frozen={isMobile ? "" : undefined}
+                style={{
+                  ...td,
+                  fontWeight: 700,
+                  ...stickyCell(hoveredRow === r.name),
+                  paddingLeft: LIST_COMPANY_PAD_LEFT,
+                  ...(isMobile ? { paddingRight: LIST_COMPANY_PAD_RIGHT_MOBILE, whiteSpace: "normal", lineHeight: 1.25 } : {}),
+                }}
+              >
+                {isMobile ? (
+                  // A table cell takes its width from its content, so the
+                  // column's width is set on a box inside it.
+                  <div
+                    style={{
+                      width: LIST_COMPANY_COL_MOBILE - LIST_COMPANY_PAD_LEFT - LIST_COMPANY_PAD_RIGHT_MOBILE,
+                      overflowWrap: "break-word",
+                    }}
+                  >
+                    {usdFlag(r.name).display}
+                  </div>
+                ) : (
+                  usdFlag(r.name).display
+                )}
+              </td>
               <td style={td}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span
@@ -4423,6 +4587,10 @@ export default function MediaMap() {
   // Name of the planet currently shown in the right-side detail panel.
   // Set on click in non-edit mode; cleared by the panel's close button.
   const [inspectedPlanet, setInspectedPlanet] = useState<string | null>(null);
+  const windowH = useWindowHeight();
+  // Phone: a planet is in focus (its detail panel is open across the bottom) —
+  // the bottom controls, which it covers, step aside.
+  const mobileFocus = isMobile && inspectedPlanet !== null;
   // --- Search (top bar, beside the view tabs) ---
   const [searchOpen, setSearchOpen] = useState(false);
   // Game mode (easter egg on the map's logo). Declared up here because the
@@ -6425,8 +6593,35 @@ export default function MediaMap() {
     zoomRafRef.current = requestAnimationFrame(tick);
   };
 
-  // Click-to-focus on a planet.
-  const focusOnPlanet = (node: PlanetNode) => {
+  // Click-to-focus on a planet. On a phone, when its detail panel will open
+  // (`underPanel`), the planet is framed in the space the panel leaves: centred
+  // between the top row of controls and the panel's top edge.
+  const focusOnPlanet = (node: PlanetNode, underPanel = false) => {
+    const el = containerRef.current;
+    if (underPanel && isMobile && el && node.r > 0) {
+      const box = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      // The panel's top edge: measured (it is in the page even while closed;
+      // offsetTop ignores its closing transform), else worked out.
+      const panel = document.querySelector<HTMLElement>("[data-detail-panel]");
+      const panelTop = panel ? panel.offsetTop : vh - MOBILE_DETAIL_BOTTOM - Math.round(vh * MOBILE_DETAIL_HEIGHT_SHARE);
+      const spaceTop = MOBILE_TOP_CONTROLS_BOTTOM;
+      const spaceH = Math.max(80, panelTop - spaceTop);
+      const targetY = spaceTop + spaceH / 2; // window px
+      const diam = Math.max(24, Math.min(box.width * MOBILE_FOCUS_WIDTH_SHARE, spaceH * MOBILE_FOCUS_HEIGHT_SHARE));
+      // Slide units per px at zoom 1 (the "meet" fit), then at the target zoom.
+      const fit = Math.max(canvas.w / box.width, canvas.h / box.height);
+      const targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, fit / ((2 * node.r) / diam)));
+      const su = fit / targetZoom;
+      // The view's centre is drawn at the map area's centre; put the planet
+      // `dy` px from that (above it, here).
+      const dy = targetY - (box.top + box.height / 2);
+      animateView(targetZoom, {
+        x: node.x - (canvas.x + canvas.w / 2),
+        y: node.y - (canvas.y + canvas.h / 2) - dy * su,
+      });
+      return;
+    }
     const targetViewW = Math.max(node.r * 6, canvas.w / MAX_ZOOM);
     const targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, canvas.w / targetViewW));
     const targetPan = {
@@ -6444,7 +6639,7 @@ export default function MediaMap() {
   const SIDE_PANEL_COVER_PX = 340 + 16 + 16; // panel width + its right margin + a gap
   const travelToNode = (node: PlanetNode, panelWillOpen: boolean) => {
     if (layoutMode !== "linear") {
-      focusOnPlanet(node);
+      focusOnPlanet(node, panelWillOpen);
       return;
     }
     const el = containerRef.current;
@@ -7417,10 +7612,20 @@ export default function MediaMap() {
                       } else {
                         setSelectedPlanet(node.name);
                       }
+                    } else if (mobileFocus) {
+                      // Phone, a planet already in focus: a tap anywhere on the
+                      // map — a planet included — backs out, like the ✕.
+                      setInspectedPlanet(null);
+                      if (isSyntheticMouse()) setHoveredPlanet(null);
+                      if (layoutMode !== "linear") resetView(); // Linear keeps its strip zoom
                     } else if (!node.isEntity) {
                       // Entities (text-only sub-brands) have no detail panel.
                       travelToNode(node, true);
                       setInspectedPlanet(node.name);
+                      // A tap leaves the planet "hovered" (the browser's emulated
+                      // mouse events, and a finger never moves off again), which
+                      // drew the white hover ring around the planet in focus.
+                      if (isSyntheticMouse()) setHoveredPlanet(null);
                     }
                   }}
                   // No sector-hover dimming mid-game: the cursor sweeps across the
@@ -7978,9 +8183,12 @@ export default function MediaMap() {
             // The whole stack steps aside while the Time Machine is open: the year
             // pills pick the MAP's year, and once you're in, the Time Machine
             // button has done its job (Close Timeline is the way out).
-            opacity: timelineOpen ? 0 : 1,
-            pointerEvents: timelineOpen ? "none" : undefined,
-            transition: "opacity 200ms ease",
+            // On a phone it also steps aside (down and out) while a planet is in
+            // focus, with the other bottom controls: the detail panel sits there.
+            opacity: timelineOpen || mobileFocus ? 0 : 1,
+            pointerEvents: timelineOpen || mobileFocus ? "none" : undefined,
+            transform: mobileFocus ? "translateY(28px)" : "translateY(0)",
+            transition: mobileFocus || isMobile ? MOBILE_FOCUS_STEP_ASIDE : "opacity 200ms ease",
           }}
         >
           {displayedViewDates.map(d => {
@@ -8149,7 +8357,11 @@ export default function MediaMap() {
               flexDirection: "row",
               gap: 8,
               zIndex: 10,
-              transition: "bottom 240ms ease, right 240ms ease",
+              // Phone: steps aside while a planet is in focus (see the year pills).
+              opacity: mobileFocus ? 0 : 1,
+              pointerEvents: mobileFocus ? "none" : undefined,
+              transform: mobileFocus ? "translateY(28px)" : "translateY(0)",
+              transition: `bottom 240ms ease, right 240ms ease, ${MOBILE_FOCUS_STEP_ASIDE}`,
             }}
           >
             {/* − / + / refresh. In List (nothing to zoom) it fades out and back in;
@@ -8176,10 +8388,10 @@ export default function MediaMap() {
                 transition: viewMode === "list" ? "opacity 220ms ease, visibility 0s linear 220ms" : "opacity 220ms ease",
               }}
             >
-              {/* On a phone's Map view you pinch to zoom, so − / + are left out
-                  there. They stay in Linear and Aggregate, where a pinch does
-                  nothing and these are the only way to zoom. */}
-              {!(isMobile && viewMode === "map") && (
+              {/* On a phone − / + are left out of the Map view (you pinch to
+                  zoom) and of Linear (you swipe along the strip). They stay in
+                  Aggregate, where they are the only way to zoom. */}
+              {!(isMobile && (viewMode === "map" || viewMode === "linear")) && (
                 <>
                   <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>−</button>
                   <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>+</button>
@@ -8286,7 +8498,7 @@ export default function MediaMap() {
 
       {/* Mobile-only: bottom pill bar that opens the sectors drawer. */}
       {isMobile && (
-        <MobileSectorTriggerBar onOpen={() => setMobileSectorsOpen(true)} />
+        <MobileSectorTriggerBar onOpen={() => setMobileSectorsOpen(true)} hidden={mobileFocus} />
       )}
       {isMobile && (
         <MobileSectorDrawer
@@ -8323,6 +8535,7 @@ export default function MediaMap() {
           setInspectedPlanet(null);
           if (layoutMode !== "linear") resetView(); // Linear keeps its strip zoom
         }}
+        mobileHeight={isMobile ? Math.round(windowH * MOBILE_DETAIL_HEIGHT_SHARE) : null}
       />
 
       {/* Connection hover tooltip — follows the cursor along a hovered line. */}
@@ -8396,7 +8609,12 @@ const zoomBtnStyle: React.CSSProperties = {
   width: 34,
   height: 34,
   display: "grid",
-  placeItems: "center",
+  // Spelled out, not `placeItems`: Refresh and Download add `alignItems` for
+  // their desktop (labelled) form, and when the window narrows to the phone
+  // layout React removes it again — which also wiped the align-items half of a
+  // `placeItems` shorthand and left the icons sitting high.
+  alignItems: "center",
+  justifyItems: "center",
   background: "rgba(255,255,255,0.1)",
   color: "white",
   // No stroke at all — not even a transparent one: the hover highlight
