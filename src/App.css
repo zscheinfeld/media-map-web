@@ -94,6 +94,31 @@ html, body, #root {
   mask: url("/substack-flag.svg") center / contain no-repeat;
 }
 
+/* Time Machine: a subtle hover for the translucent buttons (Close timeline,
+   the Time Machine and date pills, the step arrows) — the fill AND the stroke
+   go a shade darker. A black veil is laid over the whole button, border
+   included (inset: -1px reaches over the 1px border), and the label is lifted
+   above it, so each button keeps its own colours and its white text. */
+.tm-btn {
+  position: relative;
+}
+.tm-btn::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background-color 160ms ease;
+}
+.tm-btn > * {
+  position: relative;
+  z-index: 1;
+}
+.tm-btn:hover:not(:disabled)::after {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 /* About-modal tab bar: horizontally scrollable on mobile with no visible bar. */
 .about-tabs {
   scrollbar-width: none; /* Firefox */
