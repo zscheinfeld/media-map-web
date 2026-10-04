@@ -47,6 +47,11 @@ export type PlanetProps = {
   idPrefix?: string
 }
 
+// How text appears and disappears (a name revealed by zooming in, the valuation
+// line): a short fade, and a matching slide when the name makes room.
+const LABEL_FADE = "opacity 200ms ease"
+const LABEL_SHIFT = "transform 200ms ease"
+
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
 // stroke, and a foreignObject label. Edit-mode cues (red pinned ring, yellow
 // selection ring) render when isEditMode is set. No data-source coupling.
@@ -96,49 +101,68 @@ export function Planet({
   // outline). SVG text scales correctly with the viewBox on every browser —
   // HTML-in-foreignObject labels mis-scale AND get text-inflated on iOS Safari
   // (giant ghost labels). Shared by the planet body + the entity branch.
-  const renderNameLabel = (withValuation: boolean) => {
+  // Text never pops in or out: a name that the zoom (or the caller's rules)
+  // hides or reveals fades, and so does the valuation line — the name slides up
+  // half a line to make room for it rather than jumping. So the label is always
+  // in the DOM; `shown` and `withValuation` only set where it is fading TO.
+  const renderNameLabel = (withValuation: boolean, shown: boolean = true) => {
     const words = (node.labelText ?? node.name).trim().split(/\s+/)
-    const valText = withValuation ? formatValuation(node.valuation_b) : null
     const lineH = labelFontPx
-    const gap = valText ? labelFontPx * 0.15 : 0
-    const totalH = words.length * lineH + (valText ? gap + lineH : 0)
-    const top = node.y - totalH / 2
-    const rows = words.map((w, i) => ({text: w, y: top + lineH / 2 + i * lineH, opacity: 1, isVal: false}))
-    if (valText)
-      rows.push({text: valText, y: top + words.length * lineH + gap + lineH / 2, opacity: 0.85, isVal: true})
+    const gap = labelFontPx * 0.15
+    const nameH = words.length * lineH
+    // The name is laid out centred on the planet; with a valuation under it the
+    // pair is centred instead, which lifts the name by half the extra height.
+    const top = node.y - nameH / 2
+    const lift = withValuation ? (gap + lineH) / 2 : 0
     // Company name = ITC Franklin Gothic Medium (500) + 2% tracking; the valuation
-    // number stays Book (400) with normal tracking. Weight/spacing are set per
-    // <tspan> so both share one <text> (and one outline). Tracking is 2% of the
-    // font size, in slide units, so it scales with zoom like everything else.
+    // number is Book (400) with normal tracking, in its own <text> so it can fade
+    // on its own. Tracking is 2% of the font size, in slide units, so it scales
+    // with zoom like everything else.
     const nameTracking = 0.02 * labelFontPx
+    const face = {
+      x: node.x,
+      textAnchor: "middle" as const,
+      dominantBaseline: "central" as const,
+      fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+      fontSize: labelFontPx,
+      fill: node.labelColor ?? "#fff",
+      stroke: "#000",
+      strokeWidth: labelStrokePx * slideUnitsPerPx,
+      paintOrder: "stroke" as const,
+    }
     return (
-      <text
-        x={node.x}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily='"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif'
-        fontSize={labelFontPx}
-        fill={node.labelColor ?? "#fff"}
-        stroke="#000"
-        strokeWidth={labelStrokePx * slideUnitsPerPx}
-        paintOrder="stroke"
-        // In edit mode the visible text is a grab/select target (entities have no
-        // circle); otherwise it's click-through.
-        style={{pointerEvents: isEditMode ? "auto" : "none", cursor: isEditMode ? "grab" : undefined}}
-      >
-        {rows.map((r, i) => (
-          <tspan
-            key={i}
-            x={node.x}
-            y={r.y}
-            opacity={r.opacity}
-            fontWeight={r.isVal ? 400 : 500}
-            letterSpacing={r.isVal ? 0 : nameTracking}
+      <g style={{opacity: shown ? 1 : 0, transition: LABEL_FADE}}>
+        <text
+          {...face}
+          fontWeight={500}
+          letterSpacing={nameTracking}
+          style={{
+            // In edit mode the visible text is a grab/select target (entities have
+            // no circle); otherwise — and whenever it is hidden — it's click-through.
+            pointerEvents: isEditMode && shown ? "auto" : "none",
+            cursor: isEditMode ? "grab" : undefined,
+            transform: `translateY(${-lift}px)`,
+            transition: LABEL_SHIFT,
+          }}
+        >
+          {words.map((w, i) => (
+            <tspan key={i} x={node.x} y={top + lineH / 2 + i * lineH}>
+              {w}
+            </tspan>
+          ))}
+        </text>
+        {/* Entities never carry a valuation; a company always has the line, faded out until it shows. */}
+        {!node.isEntity && (
+          <text
+            {...face}
+            y={node.y + nameH / 2 + gap / 2}
+            fontWeight={400}
+            style={{pointerEvents: "none", opacity: withValuation ? 0.85 : 0, transition: LABEL_FADE}}
           >
-            {r.text}
-          </tspan>
-        ))}
-      </text>
+            {formatValuation(node.valuation_b)}
+          </text>
+        )}
+      </g>
     )
   }
 
@@ -188,17 +212,16 @@ export function Planet({
         {/* Entities are all-label. Hidden when the caller suppresses them (e.g.
             mobile, zoomed out); revealed on hover, in edit mode, or once the
             caller stops suppressing (zoomed in past its threshold). */}
-        {(isEditMode || isHovered || highlighted || !entityLabelSuppressed) && renderNameLabel(false)}
+        {renderNameLabel(false, isEditMode || isHovered || highlighted || !entityLabelSuppressed)}
       </g>
     )
   }
 
   // Name-only pass: just the label, click-through, dimming with its planet.
   if (part === "label") {
-    if (!showLabel) return null
     return (
       <g style={{opacity: dimmed ? 0.2 : 1, transition: "opacity 220ms ease", pointerEvents: "none"}}>
-        {renderNameLabel(showValuation)}
+        {renderNameLabel(showValuation, showLabel)}
       </g>
     )
   }
@@ -342,7 +365,7 @@ export function Planet({
           pointerEvents="none"
         />
       )}
-      {part !== "body" && showLabel && renderNameLabel(showValuation)}
+      {part !== "body" && renderNameLabel(showValuation, showLabel)}
     </g>
   )
 }
