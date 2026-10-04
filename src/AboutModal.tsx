@@ -17,6 +17,8 @@ const YELLOW = "#FCFC06"; // same yellow as the game cards
 // dimmed + blurred by the dialog layer instead.
 const CARD_FILL = "#070c1d";
 const CARD_BG = CARD_FILL;
+/** Phone: the gap left above the close button and below the card, px (was 10% of the screen each). */
+const ABOUT_MOBILE_GAP = 20;
 /** Length of the close animation (mm-dim-out / mm-card-out in App.css). */
 const MODAL_EXIT_MS = 260;
 
@@ -476,8 +478,10 @@ export function AboutModal({
           width: "min(800px, 100%)",
           // `dvh` tracks the VISIBLE viewport (excludes mobile browser toolbars);
           // plain `vh` is the full screen on iOS Safari, so the card ran under
-          // the URL bar and bottom toolbar. Mobile also gets a shorter cap.
-          maxHeight: narrow ? "min(80dvh, 720px)" : "min(90dvh, 900px)",
+          // the URL bar and bottom toolbar. Mobile fills the screen but for a
+          // small gap above the close button and below the card
+          // (ABOUT_MOBILE_GAP each).
+          maxHeight: narrow ? `min(calc(100dvh - ${2 * ABOUT_MOBILE_GAP}px), 900px)` : "min(90dvh, 900px)",
           display: "flex",
           flexDirection: "column",
         }}
