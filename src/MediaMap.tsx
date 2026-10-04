@@ -2664,23 +2664,34 @@ const VIEW_ICONS: Record<AppViewMode, string> = {
 // collapse to their single most-saturated swatch. The +/- buttons zoom the time axis.
 
 type AppViewMode = ViewMode | "aggregate";
-type AggBand = { name: string; sector: string; color: string; values: number[] };
+type AggBand = { name: string; sector: string; color: string; /** Outline, for near-black bands. */ stroke?: string; values: number[] };
 type AggregateData = { dates: MapDate[]; bands: AggBand[]; maxTotal: number };
 
 // Same blue gradient the maps use, so the aggregate view feels of a piece.
 const AGG_GRADIENT = LIST_BG_GRADIENT;
 const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
+// Near-black bands (Apple's charcoal, the AI companies' black) would vanish into
+// the dark background and each other, so they get a thin light outline.
+const AGG_DARK_OUTLINE = "#ACACAC";
+const AGG_DARK_OUTLINE_PX = 0.5;
+/** True for a hex colour that is black or a very dark neutral (not a dark blue/red). */
+function isNearBlack(c: string): boolean {
+  const m = c.trim().match(/^#([0-9a-f]{6})$/i);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  return Math.max(n >> 16, (n >> 8) & 255, n & 255) <= 64;
+}
 
 // Per-company band colour for the Aggregate view (keyed by lowercased company
 // name). A company listed here always uses this colour; everyone else takes the
 // most saturated colour of their planet's palette.
 const AGG_COLOR_OVERRIDES: Record<string, string> = {
   alphabet: "#EF1A1A",
-  apple: "#8196FE",
+  apple: "#2D2D36",
   microsoft: "#FFC000",
   amazon: "#18266E",
   walmart: "#EF6262",
-  nvidia: "#42DCB7",
+  nvidia: "#A1FF62",
 };
 
 /** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
@@ -2869,7 +2880,7 @@ function AggregateView({
   // One single-color path per company (discrete yearly bars). A dark stroke +
   // the 2px year gap separate bars horizontally and companies vertically.
   const shapes = useMemo(() => {
-    if (!plotW || !plotH || !scale) return [] as { fill: string; sector: string; name: string; d: string }[];
+    if (!plotW || !plotH || !scale) return [] as { fill: string; stroke?: string; sector: string; name: string; d: string }[];
     // Intro transform (driven by the tuning controls): each bar slides up from
     // `posOffset` px low and grows in height (top eased down by `heightPct`% of its
     // final height), staggered left→right by month and slightly per company.
@@ -2899,7 +2910,7 @@ function AggregateView({
         up = nu;
         lo = nl;
       }
-      return { fill: b.color, sector: b.sector, name: b.name, d: barsPath(xLeft, barW, up, lo, b.values, M) };
+      return { fill: b.color, stroke: b.stroke, sector: b.sector, name: b.name, d: barsPath(xLeft, barW, up, lo, b.values, M) };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bands, stacks, plotW, plotH, scale, barW, slotW, M, intro]);
@@ -2987,6 +2998,27 @@ function AggregateView({
               }}
             />
           ))}
+          {/* Outlines for the near-black bands, drawn over every fill so the
+              neighbouring bands' dark gap lines don't swallow them. */}
+          {shapes.map((s, idx) =>
+            s.stroke ? (
+              <path
+                key={`o${idx}`}
+                d={s.d}
+                fill="none"
+                stroke={s.stroke}
+                strokeWidth={AGG_DARK_OUTLINE_PX}
+                pointerEvents="none"
+                style={{
+                  opacity:
+                    (highlightSector && s.sector !== highlightSector) || (highlightCompany && s.name !== highlightCompany)
+                      ? 0.12
+                      : 1,
+                  transition: "opacity 160ms ease",
+                }}
+              />
+            ) : null,
+          )}
           {pinnedOutline && <path d={pinnedOutline} fill="none" stroke="#fff" strokeWidth={1.4} />}
           {hoverOutline && <path d={hoverOutline} fill="none" stroke="#fff" strokeWidth={1.2} />}
         </svg>
@@ -3821,7 +3853,7 @@ export default function MediaMap() {
           ? Math.max(0, valAt(c, d))
           : 0,
       );
-      return { name: c.name, sector: c.sector, color, values };
+      return { name: c.name, sector: c.sector, color, stroke: isNearBlack(color) ? AGG_DARK_OUTLINE : undefined, values };
     });
     // Stacking order is decided PER MONTH in AggregateView (largest on top for
     // that month), so no global ordering is applied here.
