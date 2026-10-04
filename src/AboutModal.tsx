@@ -684,6 +684,11 @@ function withLinks(text: string): React.ReactNode[] {
     if (!isSafeHref(href)) continue;
     if (at > last) out.push(text.slice(last, at));
     const external = /^https?:\/\//i.test(href);
+    // Spaces typed just inside the brackets ("[text ](url)") stay outside the
+    // link, so the underline doesn't run under them.
+    const lead = label.match(/^\s*/)?.[0] ?? "";
+    const trail = label.match(/\s*$/)?.[0] ?? "";
+    if (lead) out.push(lead);
     out.push(
       <a
         key={`${at}-${href}`}
@@ -691,9 +696,10 @@ function withLinks(text: string): React.ReactNode[] {
         href={href}
         {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       >
-        {label}
+        {label.trim()}
       </a>,
     );
+    if (trail && label.trim()) out.push(trail);
     last = at + whole.length;
   }
   if (last < text.length) out.push(text.slice(last));
