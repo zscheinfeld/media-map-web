@@ -354,14 +354,14 @@ export function AboutModal({
     <button
       onClick={onClose}
       aria-label="Close"
-      // Same hover as the map's zoom / refresh / ABOUT buttons (App.css).
-      className="mm-hover"
+      // Same hover and 0.5px hairline as the map's buttons (App.css).
+      className="mm-hover mm-hairline"
       style={{
         width: 40,
         height: 40,
         borderRadius: 10,
         background: narrow ? CARD_BG : "rgba(255,255,255,0.06)",
-        border: "1px solid rgba(255,255,255,0.16)",
+        border: "none",
         color: "white",
         fontSize: 18,
         cursor: "pointer",
