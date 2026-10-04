@@ -321,10 +321,12 @@ export function LayoutLabPanel({
           </button>
           <button
             onClick={() => setState((s) => ({ ...s, seeds: { ...s.seeds, [mode]: seedFor(s, mode) + 1 } }))}
-            disabled={typeOnly}
-            style={{ ...btn, opacity: typeOnly ? 0.45 : 1 }}
+            disabled={typeOnly || state.shuffleEachLoad}
+            style={{ ...btn, opacity: typeOnly || state.shuffleEachLoad ? 0.45 : 1 }}
             title={
-              typeOnly
+              state.shuffleEachLoad
+                ? "Every page load already gets a new arrangement — press Reload map to see another"
+                : typeOnly
                 ? "This view uses the desktop layout — shuffle it from Desktop"
                 : `Try a different starting arrangement for ${DEVICE_LABELS[mode]} only (seed ${seedFor(state, mode)}). The same seed always gives the same map.`
             }
@@ -343,6 +345,60 @@ export function LayoutLabPanel({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        {tab === "physics" && (
+          <fieldset style={fs}>
+            <legend style={lg}>Arrangement</legend>
+            <Toggle on={state.shuffleEachLoad} onChange={(v) => setState((s) => ({ ...s, shuffleEachLoad: v }))}>
+              New arrangement on every visit
+            </Toggle>
+            {state.shuffleEachLoad ? (
+              <>
+                <p style={hint}>
+                  Each page load starts the planets from a different scatter, so small planets land in different
+                  spots each visit. It holds for the whole visit — resizing never reshuffles. Reload map shows
+                  another.
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ flex: 1, fontSize: 11, color: "#8f98a6", fontVariantNumeric: "tabular-nums" }}>
+                    You are looking at #{lab.sessionSeed}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setState((s) => ({ ...s, shuffleEachLoad: false, seeds: { ...s.seeds, [mode]: lab.sessionSeed } }));
+                      note("Kept");
+                    }}
+                    disabled={typeOnly}
+                    style={{ ...btn, padding: "3px 8px", fontSize: 11, opacity: typeOnly ? 0.45 : 1 }}
+                    title={`Use this arrangement for everyone on ${DEVICE_LABELS[mode]} (turns "new arrangement on every visit" off)`}
+                  >
+                    Keep this one
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={hint}>Everyone gets the same arrangement on every load. Shuffle tries the next one, or type a number.</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ flex: 1, color: "#8f98a6", fontSize: 12 }}>Arrangement # ({DEVICE_LABELS[mode]})</span>
+                  <input
+                    key={`${mode}-${seedFor(state, mode)}`}
+                    defaultValue={seedFor(state, mode)}
+                    inputMode="numeric"
+                    disabled={typeOnly}
+                    onBlur={(e) => {
+                      const v = Math.round(Number(e.target.value));
+                      if (e.target.value.trim() !== "" && Number.isFinite(v) && v !== seedFor(state, mode)) {
+                        setState((s) => ({ ...s, seeds: { ...s.seeds, [mode]: v } }));
+                      } else e.target.value = String(seedFor(state, mode));
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    style={{ ...field, width: 110, textAlign: "right", fontFamily: "ui-monospace, Menlo, monospace" }}
+                  />
+                </div>
+              </>
+            )}
+          </fieldset>
+        )}
         {tab === "physics" && followToggle}
         {typeOnly && tab !== "type" && tabletNote}
         {!typeOnly && tab === "physics" && (

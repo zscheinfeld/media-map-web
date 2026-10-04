@@ -212,7 +212,7 @@ export function GameOverlay({
                 <button onClick={onExit} className="mm-hover" style={{ ...bigBtn, background: "#1f2630", color: "#fff" }}>
                   Back to Map
                 </button>
-                <button onClick={onReplay} className="mm-hover" style={{ ...bigBtn, background: "#3657FD", color: "#fff" }} autoFocus>
+                <button onClick={onReplay} className="mm-blue-btn" style={{ ...bigBtn, border: undefined }} autoFocus>
                   Play Again <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 18, lineHeight: 1, marginLeft: 8 }}>arrow_forward</span>
                 </button>
               </div>

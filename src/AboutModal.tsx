@@ -22,6 +22,12 @@ const MODAL_EXIT_MS = 260;
 
 // Height reserved for the sticky tab bar so scroll-to lands sections just below it.
 const TABS_HEIGHT = 52;
+/** Space above the tab row once it is stuck to the top of the card. */
+const TABS_TOP_PAD = 16;
+/** Height the stuck tab bar covers (what a section must clear when jumped to). */
+const TABS_STUCK = TABS_HEIGHT + TABS_TOP_PAD;
+/** Padding inside the modal card on desktop (phone keeps 32px). */
+const DESKTOP_PAD = 64;
 const TAB_GAP = 28;
 
 // ── Content model ────────────────────────────────────────────────────────────
@@ -230,22 +236,24 @@ export function AboutModal({
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [showRightFade, setShowRightFade] = useState(false);
-  // Trailing spacer width (mobile) so even the LAST tab can scroll to the left
-  // edge of the column — otherwise the row's max scroll stops short of it.
+  // Trailing spacer width so even the LAST tab can scroll to the left edge of
+  // the column — otherwise the row's max scroll stops short of it.
   const [tabEndSpacer, setTabEndSpacer] = useState(0);
 
   const idOf = (i: number) => `sec-${i}`;
 
-  // Show the right-edge fade only while the tab row has more to scroll to.
+  // Show the right-edge fade only while a tab is actually cut off on the right
+  // (the trailing spacer alone doesn't count).
   const updateFade = () => {
     const el = tabScrollRef.current;
-    if (!el) return;
-    setShowRightFade(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+    const last = tabRefs.current[sections.length - 1];
+    if (!el || !last) return;
+    setShowRightFade(last.getBoundingClientRect().right - el.getBoundingClientRect().right > 4);
   };
   const measureTabSpacer = () => {
     const el = tabScrollRef.current;
     const last = tabRefs.current[sections.length - 1];
-    if (!el || !last || !narrow) {
+    if (!el || !last) {
       setTabEndSpacer(0);
       return;
     }
@@ -265,9 +273,9 @@ export function AboutModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, narrow, sections.length]);
 
-  // Keep the active tab left-aligned with the column: slide the tab row so the
-  // current tab's left edge sits at the row's left edge (mobile, where the row
-  // overflows; a no-op on desktop where the tabs fit and are centered).
+  // Keep the active tab left-aligned with the column: as the content scrolls
+  // from section to section, the tab row slides so the current tab's left edge
+  // sits at the row's left edge (desktop and phone alike).
   useEffect(() => {
     if (!open) return;
     const row = tabScrollRef.current;
@@ -292,8 +300,16 @@ export function AboutModal({
     if (!open) return;
     const root = scrollRef.current;
     if (!root) return;
+    // A short last section can never rise into the band the observer watches,
+    // so being at the very bottom counts as being in it (and wins over the
+    // observer, which would otherwise hand the tab back to the section above).
+    const atBottom = () => root.scrollTop > 0 && root.scrollTop + root.clientHeight >= root.scrollHeight - 4;
     const obs = new IntersectionObserver(
       (entries) => {
+        if (atBottom()) {
+          setActive(sections.length - 1);
+          return;
+        }
         for (const e of entries) {
           if (e.isIntersecting) {
             const idx = Number((e.target as HTMLElement).dataset.index);
@@ -301,10 +317,17 @@ export function AboutModal({
           }
         }
       },
-      { root, rootMargin: `-${TABS_HEIGHT + 40}px 0px -55% 0px`, threshold: 0 },
+      { root, rootMargin: `-${TABS_STUCK + 40}px 0px -55% 0px`, threshold: 0 },
     );
     for (const el of Object.values(sectionRefs.current)) if (el) obs.observe(el);
-    return () => obs.disconnect();
+    const onScroll = () => {
+      if (atBottom()) setActive(sections.length - 1);
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      obs.disconnect();
+      root.removeEventListener("scroll", onScroll);
+    };
   }, [open, sections.length]);
 
   // Reset to the top + first tab each time it opens.
@@ -321,7 +344,7 @@ export function AboutModal({
     const el = sectionRefs.current[idOf(i)];
     const root = scrollRef.current;
     if (!el || !root) return;
-    root.scrollTo({ top: Math.max(0, el.offsetTop - TABS_HEIGHT - 8), behavior: "smooth" });
+    root.scrollTo({ top: Math.max(0, el.offsetTop - TABS_STUCK - 8), behavior: "smooth" });
     setActive(i);
   };
 
@@ -363,7 +386,7 @@ export function AboutModal({
             key={key}
             style={{
               margin: "0 0 14px",
-              fontSize: 22,
+              fontSize: narrow ? 22 : 28,
               fontWeight: 600,
               letterSpacing: 0.5,
               textTransform: "uppercase",
@@ -374,7 +397,7 @@ export function AboutModal({
           </h2>
         );
       case "body":
-        return <Paragraphs key={key} text={b.text} />;
+        return <Paragraphs key={key} text={b.text} fontSize={narrow ? 16 : 18} />;
       case "primary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
@@ -483,8 +506,24 @@ export function AboutModal({
           overflow: "hidden",
         }}
       >
-        {/* Fixed header — stays while the body scrolls beneath it. */}
-        <div style={{ position: "relative", flex: "0 0 auto", padding: "32px 32px 24px" }}>
+        {/* Desktop: the close button stays put in the card's top-right corner
+            (it sits in the padding, clear of the content column). */}
+        {!narrow && <div style={{ position: "absolute", top: 24, right: 24, zIndex: 3 }}>{closeButton}</div>}
+
+        {/* Scroll body: title → hero photo → sticky tabs → sections. The title
+            and photo scroll away; the tab bar then sticks to the top. */}
+        <div
+          ref={scrollRef}
+          className="about-scroll"
+          style={{
+            position: "relative",
+            flex: "1 1 auto",
+            overflowY: "auto",
+            // No top padding here: it lives on the title (below) so the sticky
+            // tab bar can sit flush with the top of the card at `top: 0`.
+            padding: narrow ? "0 32px 32px" : `0 ${DESKTOP_PAD}px ${DESKTOP_PAD}px`,
+          }}
+        >
           <div
             style={{
               textAlign: "center",
@@ -494,22 +533,15 @@ export function AboutModal({
               lineHeight: "87%",
               letterSpacing: narrow ? "-1.08px" : "-1.92px",
               textTransform: "uppercase",
+              paddingTop: narrow ? 32 : DESKTOP_PAD,
+              marginBottom: 24,
             }}
           >
             Welcome to the
             <br />
             Media Universe
           </div>
-          {/* Desktop: close button in the header's top-right corner. */}
-          {!narrow && <div style={{ position: "absolute", top: 24, right: 24 }}>{closeButton}</div>}
-        </div>
 
-        {/* Scroll body: hero photo → sticky tabs → sections. */}
-        <div
-          ref={scrollRef}
-          className="about-scroll"
-          style={{ position: "relative", flex: "1 1 auto", overflowY: "auto", padding: "0 32px 32px" }}
-        >
           {/* Hero photo (scrolls away). */}
           <div
             style={{
@@ -536,7 +568,10 @@ export function AboutModal({
           <div
             style={{
               position: "sticky",
+              // Sticks at the very top of the card now that the title scrolls
+              // away, with a little room of its own above the tab row.
               top: 0,
+              paddingTop: TABS_TOP_PAD,
               zIndex: 2,
               background: CARD_BG,
               borderBottom: "1px solid rgba(255,255,255,0.14)",
@@ -562,7 +597,7 @@ export function AboutModal({
                 alignItems: "center",
                 // Centered when the tabs fit (desktop); left-aligned when they
                 // overflow (mobile) so the first tab is reachable by scrolling.
-                justifyContent: narrow ? "flex-start" : "center",
+                justifyContent: "flex-start",
                 height: TABS_HEIGHT,
               }}
             >
@@ -620,7 +655,7 @@ export function AboutModal({
               aria-hidden
               style={{
                 position: "absolute",
-                top: 0,
+                top: TABS_TOP_PAD,
                 right: 0,
                 width: 56,
                 height: TABS_HEIGHT,
@@ -646,11 +681,12 @@ export function AboutModal({
                   paddingBottom: last ? 0 : 64,
                   marginBottom: last ? 0 : 64,
                   borderBottom: last ? "none" : "1px solid rgba(255,255,255,0.14)",
-                  scrollMarginTop: TABS_HEIGHT + 8,
+                  scrollMarginTop: TABS_STUCK + 8,
                 }}
               >
-                {/* Centered ~500px reading column within the wider modal. */}
-                <div style={{ maxWidth: 500, margin: "0 auto" }}>{s.blocks.map(renderBlock)}</div>
+                {/* Desktop: copy runs the full width inside the modal's padding.
+                    Phone: unchanged (the column cap never bites at that width). */}
+                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map(renderBlock)}</div>
               </div>
             );
           })}
@@ -707,7 +743,7 @@ function withLinks(text: string): React.ReactNode[] {
 }
 
 /** Split a plain-text body on blank lines into <p> paragraphs. */
-function Paragraphs({ text }: { text: string }) {
+function Paragraphs({ text, fontSize }: { text: string; fontSize: number }) {
   const paras = text
     .split(/\n\s*\n/)
     .map((s) => s.trim())
@@ -715,7 +751,7 @@ function Paragraphs({ text }: { text: string }) {
   return (
     <>
       {paras.map((p, i) => (
-        <p key={i} style={pStyle}>
+        <p key={i} style={{ ...pStyle, fontSize }}>
           {withLinks(p)}
         </p>
       ))}
@@ -736,14 +772,18 @@ function ModalButton({
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
-  // Hover: black fill + white text + white stroke for every primary CTA (no
-  // movement/scale). The border is always present (transparent off-hover) so the
-  // box size never changes.
-  const colors = hover
-    ? { background: "#000", color: "white", border: "1px solid #fff" }
-    : variant === "blue"
-      ? { background: "#3657FD", color: "white", border: "1px solid transparent" }
-      : { background: "#c8ccd4", color: "#1a1a1a", border: "1px solid transparent" };
+  // Hover (no movement/scale): the royal blue button turns white with blue
+  // text, like every other royal blue button on the site; the grey one goes
+  // black with a white stroke. The border is always present (transparent
+  // off-hover) so the box size never changes.
+  const colors =
+    variant === "blue"
+      ? hover
+        ? { background: "#fff", color: "#3657FD", border: "1px solid #fff" }
+        : { background: "#3657FD", color: "white", border: "1px solid transparent" }
+      : hover
+        ? { background: "#000", color: "white", border: "1px solid #fff" }
+        : { background: "#c8ccd4", color: "#1a1a1a", border: "1px solid transparent" };
   const style: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
