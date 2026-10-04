@@ -2031,6 +2031,9 @@ const TM_VISIBLE_STEPS = 3.5;
 // Moving between years: one step takes TM_SLIDE_MS; each further step of a
 // longer jump adds `jumpExtraMs` (up to six steps' worth).
 const TM_SLIDE_MS = 640;
+// A swipe let go: the carousel keeps the finger's speed and a critically damped
+// spring brings it to rest on a year. Higher = stiffer (shorter coast, quicker stop).
+const TM_SWIPE_OMEGA = 0.0075; // per ms
 // "Explore this map": how quickly everything except the focused map clears away.
 const TM_EXPLORE_FADE_MS = 220;
 // Phones get their own copy of every setting — one per phone view, since the
@@ -2355,6 +2358,7 @@ function MapThumbnail({
   labelDim,
   brightness,
   exploring = false,
+  moving = false,
   planetMode,
   strokeBigPx,
   strokeSmallPx,
@@ -2386,6 +2390,8 @@ function MapThumbnail({
   brightness: number;
   /** "Explore this map" is playing: the year label clears away. */
   exploring?: boolean;
+  /** The carousel is turning: fade and dimming track it, with no easing of their own. */
+  moving?: boolean;
   /** How the planets are drawn (TM_OUTLINE / TM_REALISTIC / TM_HYBRID). */
   planetMode: number;
   /** Outline thickness, px on the focused map: planets at/over the threshold, and under it. */
@@ -2542,8 +2548,9 @@ function MapThumbnail({
               ? `border-color ${EXPLORE_HOVER_TRANSITION}, box-shadow ${EXPLORE_HOVER_TRANSITION}`
               : `border-color 200ms ease, box-shadow ${FOCUS_GLOW_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`) +
             // Size and place follow the carousel frame by frame (no easing of
-            // their own); only the hover lift is eased.
-            ", filter 200ms ease, opacity 200ms ease",
+            // their own); only the hover lift is eased — and not while the
+            // carousel turns, where an eased fade would trail a step behind.
+            (moving ? "" : ", filter 200ms ease, opacity 200ms ease"),
         }}
       >
         <svg
@@ -2580,7 +2587,7 @@ function MapThumbnail({
           // The years fade with distance on their own setting, separate from the maps.
           opacity: exploring ? 0 : Math.min(1, labelDim * (isHovered ? 1.35 : 1)),
           pointerEvents: "auto",
-          transition: "color 220ms ease, font-size 220ms ease, opacity 200ms ease",
+          transition: `color 220ms ease, font-size 220ms ease${moving ? "" : ", opacity 200ms ease"}`,
         }}
       >
         {formatDate(date)}
@@ -2611,7 +2618,8 @@ function Carousel({
   onSelect: (d: MapDate) => void;
   /** A drag / swipe ended: settle on this year (index into `dates`). */
   onSettle: (index: number) => void;
-  onExplore: () => void;
+  /** Open the focused map — or the given one, when a swipe is still coasting to it. */
+  onExplore: (d?: MapDate) => void;
   tuning: TmTuning;
   /** Valuation ($B) from which a planet counts as "bigger" (its own stroke slider). */
   bigThresholdB: number;
@@ -2635,9 +2643,19 @@ function Carousel({
   // Dragging / swiping sideways turns the carousel by hand: `drag` is how far
   // (in years) the finger has pulled it from where it was, 1:1.
   const [drag, setDrag] = useState<number | null>(null);
-  const [settleKick, setSettleKick] = useState(0);
+  // A swipe let go coasts to rest on a year HERE, inside the carousel; the rest
+  // of the page hears of the new year only once it lands (`onSettle`). Telling
+  // it at the moment of release re-rendered the whole map before the coast
+  // could start — a visible freeze on a phone. `base` is the year the page was
+  // on; if that changes under the coast (an arrow, the strip) the coast is over.
+  const [settle, setSettle] = useState<{ target: number; base: number } | null>(null);
+  if (settle && settle.base !== position) setSettle(null);
+  const settleTarget = settle && settle.base === position ? settle.target : null;
   const shown = Math.max(0, Math.min(dates.length - 1, (animate ? glide : position) + (drag ?? 0)));
   const shownRef = useRef(position);
+  // The frame request of whatever is moving the carousel (a jump's tween or a
+  // swipe's coast) — one at a time.
+  const glideRafRef = useRef(0);
   const jumpExtraMs = tuning.jumpExtraMs;
   useEffect(() => {
     if (!animate) {
@@ -2650,22 +2668,69 @@ function Carousel({
     // One step takes the usual slide time; further jumps take a little longer.
     const ms = TM_SLIDE_MS + Math.min(6, Math.max(0, dist - 1)) * jumpExtraMs;
     const t0 = performance.now();
-    let raf = 0;
     const tick = (now: number) => {
       const u = Math.max(0, Math.min(1, (now - t0) / ms));
       const k = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; // ease in-out (cubic)
       const v = u >= 1 ? position : from + (position - from) * k;
       shownRef.current = v;
       setGlide(v);
-      if (u < 1) raf = requestAnimationFrame(tick);
+      if (u < 1) glideRafRef.current = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-    // The jump's length is fixed when it starts. (`settleKick`: a drag that
-    // ends on the year it started from still has to glide back to it.)
+    glideRafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(glideRafRef.current);
+    // The jump's length is fixed when it starts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [position, animate, settleKick]);
-  const activeIdx = selectedIdx;
+  }, [position, animate]);
+  const onSettleRef = useRef(onSettle);
+  useEffect(() => {
+    onSettleRef.current = onSettle;
+  });
+  // The coast after a swipe: x(t) = target + (A + B·t)·e^(−ωt) — it leaves at
+  // the finger's speed (`v0`, years/ms) and eases onto the year, with no
+  // stop-and-restart. Only the carousel re-renders while it runs.
+  const coastTo = (from: number, target: number, v0: number) => {
+    cancelAnimationFrame(glideRafRef.current);
+    setSettle({ target, base: position });
+    const A = from - target;
+    // At either end of the years there is nowhere to overshoot to: arrive no
+    // faster than the spring can absorb, rather than running into the end.
+    const atEnd = target <= 0 || target >= dates.length - 1;
+    const vMax = TM_SWIPE_OMEGA * Math.abs(A);
+    const v = atEnd ? Math.max(-vMax, Math.min(vMax, v0)) : v0;
+    const B = v + TM_SWIPE_OMEGA * A;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.max(0, now - t0);
+      const e = Math.exp(-TM_SWIPE_OMEGA * t);
+      let v = target + (A + B * t) * e;
+      const speed = Math.abs((B - TM_SWIPE_OMEGA * (A + B * t)) * e);
+      // At rest to the eye (well under a pixel off, barely moving): land.
+      const done = t > 1600 || (Math.abs(v - target) < 0.004 && speed < 0.00003);
+      if (done) v = target;
+      shownRef.current = v;
+      setGlide(v);
+      if (done) {
+        setSettle(null);
+        onSettleRef.current(target);
+      } else glideRafRef.current = requestAnimationFrame(tick);
+    };
+    glideRafRef.current = requestAnimationFrame(tick);
+  };
+  /** Cut a coast short: land on its year now (something needs the year settled). */
+  const landNow = (target: number) => {
+    cancelAnimationFrame(glideRafRef.current);
+    shownRef.current = target;
+    setGlide(target);
+    setSettle(null);
+    onSettle(target);
+  };
+  // While a finger turns the carousel the focus (glow, bold year) rides on
+  // whichever map is in front, rather than sticking to the year it started on.
+  // After it is let go, the focus goes to the year it is coasting to.
+  const frontIdx = drag !== null ? Math.round(shown) : (settleTarget ?? selectedIdx);
+  const activeIdx = frontIdx;
+  // In motion: the maps' fade and dimming follow frame by frame (see MapThumbnail).
+  const moving = drag !== null || !animate || settleTarget !== null || Math.abs(shown - position) > 0.002;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
   const [exploreHover, setExploreHover] = useState(false);
@@ -2704,6 +2769,7 @@ function Carousel({
 
   // Track the previous selected index. During a slide, render all the slots
   // the carousel passes through so it never goes blank mid-transition.
+  // (Keyed on the map in front, so a long swipe keeps its far side mounted too.)
   const prevSelectedIdxRef = useRef(selectedIdx);
   const [renderRange, setRenderRange] = useState({
     minIdx: Math.max(0, selectedIdx - CAROUSEL_VISIBLE_HALFWIDTH),
@@ -2712,7 +2778,7 @@ function Carousel({
 
   useEffect(() => {
     const prev = prevSelectedIdxRef.current;
-    const target = selectedIdx;
+    const target = frontIdx;
     prevSelectedIdxRef.current = target;
     // Union the previous + target windows so the entire transition path stays mounted.
     const unionMin = Math.max(0, Math.min(prev, target) - CAROUSEL_VISIBLE_HALFWIDTH);
@@ -2730,7 +2796,7 @@ function Carousel({
       });
     }, TRANSITION_MS);
     return () => window.clearTimeout(timer);
-  }, [selectedIdx, dates.length]);
+  }, [frontIdx, dates.length]);
 
   const slots: number[] = [];
   for (let i = renderRange.minIdx; i <= renderRange.maxIdx; i++) slots.push(i);
@@ -2774,12 +2840,18 @@ function Carousel({
   const onPointerMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d || e.pointerId !== d.id) return;
-    const dx = e.clientX - d.x0;
+    let dx = e.clientX - d.x0;
     if (!d.moved) {
       if (Math.abs(dx) < 6) return;
       d.moved = true;
       draggedRef.current = true;
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      // Caught mid-glide: it stops where it is and follows the finger from there.
+      cancelAnimationFrame(glideRafRef.current);
+      // Measure the pull from here, so the carousel doesn't jump by the 6px
+      // it took to tell a drag from a tap.
+      d.x0 = e.clientX;
+      dx = 0;
     }
     // Finger speed (px/ms), lightly smoothed, for the flick at the end.
     const dt = Math.max(1, e.timeStamp - d.lastT);
@@ -2793,28 +2865,33 @@ function Carousel({
     if (!d || e.pointerId !== d.id) return;
     dragRef.current = null;
     if (!d.moved) return;
-    // Let go: carry on a little with the flick, then settle on the nearest year.
+    // Let go: the carousel keeps the finger's speed, slows, and comes to rest on
+    // a year — the one it would coast to (see TM_SWIPE_OMEGA).
     const now = shown;
     const stale = e.timeStamp - d.lastT > 120; // paused before lifting → no flick
-    const fling = stale ? 0 : Math.max(-2, Math.min(2, (-d.v * 180) / stepPx));
-    const target = Math.max(0, Math.min(dates.length - 1, Math.round(now + fling)));
+    const v0 = stale ? 0 : Math.max(-0.03, Math.min(0.03, -d.v / stepPx)); // years/ms
+    const coast = Math.max(-5, Math.min(5, v0 / TM_SWIPE_OMEGA));
+    const target = Math.max(0, Math.min(dates.length - 1, Math.round(now + coast)));
     shownRef.current = now;
     setGlide(now);
     setDrag(null);
-    setSettleKick((k) => k + 1);
-    onSettle(target);
+    if (animate) coastTo(now, target, v0);
+    else onSettle(target);
     // The click that follows this pointerup belongs to the drag, not to a map.
     window.setTimeout(() => {
       draggedRef.current = false;
     }, 0);
   };
-  /** A click handler that ignores the click a drag ends with. */
-  const unlessDragged = (fn: () => void) => () => {
-    if (!draggedRef.current) fn();
+  // Explore pressed while a swipe is still coasting: land first, and open the
+  // year it was heading for.
+  const explore = () => {
+    if (settleTarget === null) return onExplore();
+    landNow(settleTarget);
+    onExplore(dates[settleTarget]);
   };
 
-  const canPrev = selectedIdx > 0;
-  const canNext = selectedIdx < dates.length - 1;
+  const canPrev = frontIdx > 0;
+  const canNext = frontIdx < dates.length - 1;
   const stepBtn = (enabled: boolean): React.CSSProperties => ({
     ...arrowBtnStyle(enabled),
     width: 34,
@@ -2847,7 +2924,7 @@ function Carousel({
     >
       {slots.map((i) => {
         const d = dates[i];
-        const isSelected = i === selectedIdx;
+        const isSelected = i === frontIdx;
         const isActive = i === activeIdx;
         // Steps back from the focus (fractional while scrubbing).
         const o = i - shown;
@@ -2900,7 +2977,11 @@ function Carousel({
               isSelected={isSelected}
               // The focused map opens it (same as Explore); a neighbour only
               // comes into focus.
-              onClick={unlessDragged(isSelected ? onExplore : () => onSelect(d))}
+              onClick={() => {
+                if (draggedRef.current) return; // the click a drag ends with
+                if (isSelected) explore();
+                else onSelect(d);
+              }}
               exploreHover={isSelected && exploreHover}
               onExploreHoverChange={setExploreHover}
               width={focusW}
@@ -2911,6 +2992,7 @@ function Carousel({
               labelDim={labelDim}
               brightness={brightness}
               exploring={exploring}
+              moving={moving}
               planetMode={tuning.planetMode}
               strokeBigPx={tuning.strokeBigPx}
               strokeSmallPx={tuning.strokeSmallPx}
@@ -2940,7 +3022,7 @@ function Carousel({
         <button
           aria-label="Previous year"
           className="tm-btn"
-          onClick={() => canPrev && onSelect(dates[selectedIdx - 1])}
+          onClick={() => canPrev && onSelect(dates[frontIdx - 1])}
           disabled={!canPrev}
           style={stepBtn(canPrev)}
         >
@@ -2950,7 +3032,7 @@ function Carousel({
             the Time Machine. */}
         <button
           aria-label="Explore the map at this view"
-          onClick={onExplore}
+          onClick={explore}
           onMouseEnter={() => setExploreHover(true)}
           onMouseLeave={() => setExploreHover(false)}
           style={{
@@ -2980,7 +3062,7 @@ function Carousel({
         <button
           aria-label="Next year"
           className="tm-btn"
-          onClick={() => canNext && onSelect(dates[selectedIdx + 1])}
+          onClick={() => canNext && onSelect(dates[frontIdx + 1])}
           disabled={!canNext}
           style={stepBtn(canNext)}
         >
@@ -3494,6 +3576,10 @@ function barsPath(xLeft: (i: number) => number, barW: number, upper: number[], l
  *  rise by this much in Aggregate so they end at the plot's bottom edge instead
  *  of sitting on the years. */
 const AGG_PAD_BOTTOM = 26;
+// Touch scrubbing on a zoomed chart: a finger held within this many px of the
+// left / right edge scrolls the chart, up to this many px per frame.
+const AGG_EDGE_SCROLL_PX = 44;
+const AGG_EDGE_SCROLL_SPEED = 9;
 /** Distance from the view's right edge to the right edge of the last bar (the
  *  plot's right padding plus half the gap between columns). */
 const AGG_LAST_BAR_RIGHT = 15;
@@ -3555,7 +3641,8 @@ function AggregateView({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
-  const [hover, setHover] = useState<{ i: number; k: number | null; sx: number; sy: number } | null>(null);
+  const [hover, setHover] = useState<{ i: number; k: number | null; sx: number; sy: number; touch?: boolean; scrollLeft?: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   // Mobile drops the caption below the view-tab pill (top 16 + ~40 tall) and lets
   // it wrap to two lines, so the chart starts lower to clear it.
   const captionTop = isMobile ? 66 : 12;
@@ -3731,17 +3818,87 @@ function AggregateView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightCompany, bands, stacks, scale, barW, slotW, M]);
 
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    if (M === 0 || slotW <= 0 || !scale) return;
+  // The band + year under a point of the screen (mouse pointer or finger).
+  const hoverAt = (clientX: number, clientY: number, touch: boolean) => {
+    const svg = svgRef.current;
+    if (!svg || M === 0 || slotW <= 0 || !scale) return;
+    const rect = svg.getBoundingClientRect();
+    const sx = clientX - rect.left, sy = clientY - rect.top;
     const i = Math.max(0, Math.min(M - 1, Math.floor((sx - padL) / slotW)));
     let k: number | null = null;
     for (let b = 0; b < bands.length; b++) {
       if (bands[b].values[i] > 0 && sy >= stacks.upper[b][i] && sy <= stacks.lower[b][i]) { k = b; break; }
     }
-    setHover({ i, k, sx, sy });
+    setHover({ i, k, sx, sy, touch, scrollLeft: scrollRef.current?.scrollLeft ?? 0 });
   };
+  const hoverAtRef = useRef(hoverAt);
+  useEffect(() => {
+    hoverAtRef.current = hoverAt;
+  });
+
+  // Touch: a finger dragged over the chart scrubs it — the tooltip follows from
+  // band to band (the chart's own sideways scroll is switched off for touch,
+  // `touchAction: none`). A zoomed chart is wider than the screen, so holding
+  // the finger near the left or right edge scrolls it along instead. The
+  // tooltip stays up after the finger lifts, where it can be read.
+  const touchRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const edgeRafRef = useRef<number | null>(null);
+  const stopEdgeScroll = () => {
+    if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
+    edgeRafRef.current = null;
+  };
+  const edgeScrollStep = () => {
+    edgeRafRef.current = null;
+    const t = touchRef.current, el = scrollRef.current;
+    if (!t || !el) return;
+    const box = el.getBoundingClientRect();
+    const fromLeft = t.x - box.left, fromRight = box.right - t.x;
+    // Faster the closer the finger is to the edge.
+    const pull = fromLeft < AGG_EDGE_SCROLL_PX ? -(1 - Math.max(0, fromLeft) / AGG_EDGE_SCROLL_PX)
+      : fromRight < AGG_EDGE_SCROLL_PX ? 1 - Math.max(0, fromRight) / AGG_EDGE_SCROLL_PX
+      : 0;
+    if (pull === 0) return;
+    const before = el.scrollLeft;
+    el.scrollLeft = before + pull * AGG_EDGE_SCROLL_SPEED;
+    if (el.scrollLeft === before) return; // already at that end
+    hoverAtRef.current(t.x, t.y, true);
+    edgeRafRef.current = requestAnimationFrame(edgeScrollStep);
+  };
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "mouse") return;
+    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    hoverAt(e.clientX, e.clientY, true);
+  };
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "mouse") {
+      hoverAt(e.clientX, e.clientY, false);
+      return;
+    }
+    const t = touchRef.current;
+    if (!t || t.id !== e.pointerId) return;
+    t.x = e.clientX;
+    t.y = e.clientY;
+    hoverAt(e.clientX, e.clientY, true);
+    if (edgeRafRef.current === null) edgeRafRef.current = requestAnimationFrame(edgeScrollStep);
+  };
+  const onPointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (touchRef.current?.id !== e.pointerId) return;
+    touchRef.current = null;
+    stopEdgeScroll();
+  };
+  useEffect(
+    () => () => {
+      if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
+    },
+    [],
+  );
+  // Leaving the view drops a tooltip a finger left behind.
+  useEffect(() => {
+    if (active) return;
+    const id = window.setTimeout(() => setHover(null), 0);
+    return () => window.clearTimeout(id);
+  }, [active]);
 
   const hoverBand = hover?.k != null ? bands[hover.k] : null;
 
@@ -3771,11 +3928,18 @@ function AggregateView({
           chart weren't scrolled, i.e. off-screen whenever it was zoomed in. */}
       <div ref={scrollRef} style={{ position: "relative", width: "100%", height: "100%", overflowX: "auto", overflowY: "hidden" }}>
         <svg
+          ref={svgRef}
           width={svgW}
           height={dims.h}
-          onMouseMove={onMove}
-          onMouseLeave={() => setHover(null)}
-          style={{ display: "block", cursor: "crosshair" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
+          onPointerLeave={(e) => {
+            if (e.pointerType === "mouse") setHover(null);
+          }}
+          // A finger on the chart scrubs the tooltip rather than scrolling it.
+          style={{ display: "block", cursor: "crosshair", touchAction: "none" }}
         >
           {dims.w > 0 && dates.map((d, i) => (
             <g key={i}>
@@ -3828,8 +3992,14 @@ function AggregateView({
           <div
             style={{
               position: "absolute",
-              left: Math.min(hover.sx + 14, svgW - 190),
-              top: Math.max(8, Math.min(hover.sy + 14, dims.h - 70)),
+              // Under a finger the tooltip sits above it, centred, kept on screen;
+              // beside a mouse pointer it sits below and to the right.
+              left: hover.touch
+                ? Math.max((hover.scrollLeft ?? 0) + 8, Math.min(hover.sx - 80, (hover.scrollLeft ?? 0) + dims.w - 200))
+                : Math.min(hover.sx + 14, svgW - 190),
+              top: hover.touch
+                ? Math.max(8, hover.sy - 78)
+                : Math.max(8, Math.min(hover.sy + 14, dims.h - 70)),
               pointerEvents: "none",
               background: "rgba(6,12,28,0.95)",
               border: "1px solid rgba(255,255,255,0.18)",
@@ -4588,9 +4758,9 @@ export default function MediaMap() {
   // Otherwise (other views, reduced motion, layout not ready) it closes at once
   // and the map flies out from its wells, as before.
   const [exploring, setExploring] = useState<MapDate | null>(null);
-  const onExploreMap = () => {
+  const onExploreMap = (d?: MapDate) => {
     if (exploring) return;
-    const target = timelineFocus;
+    const target = d ?? timelineFocus;
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
     setActiveDate(target);
     const canGrow =
@@ -6575,7 +6745,9 @@ export default function MediaMap() {
         w = Math.max(w, measureLabelTextWidth(formatValuation(n.valuation_b), 10, 400) * (px / 10));
       }
       const cx = n.x / su;
-      const cy = n.y / su;
+      // A name that stays put (see `nameStaysPut`) has its market cap hanging
+      // below it; a Large Cap pair is centred.
+      const cy = n.y / su + (withValAll && n.sector !== "Large Cap" ? (px * 1.15) / 2 : 0);
       const box = { l: cx - w / 2 - half, r: cx + w / 2 + half, t: cy - h / 2 - half, b: cy + h / 2 + half };
       if (placed.some((p) => p.l < box.r && p.r > box.l && p.t < box.b && p.b > box.t)) continue;
       placed.push(box);
@@ -7208,6 +7380,7 @@ export default function MediaMap() {
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        nameStaysPut={n.sector !== "Large Cap"}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7223,6 +7396,7 @@ export default function MediaMap() {
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        nameStaysPut={n.sector !== "Large Cap"}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7271,6 +7445,7 @@ export default function MediaMap() {
                   }
                   onPlanetMouseDown={(isEditMode || mobileEdit || arrange || dlArrange) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                  nameStaysPut={n.sector !== "Large Cap"}
                   // Mobile view: show names by on-screen size (tunable threshold).
                   // Desktop: only Large Cap until zoomed in.
                   labelSuppressed={nameHidden(
@@ -7309,6 +7484,7 @@ export default function MediaMap() {
                     labelSizePx={renderLabelPx(n)}
                     labelStrokePx={labelStrokePxEff}
                     showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                    nameStaysPut={n.sector !== "Large Cap"}
                     labelSuppressed={nameHidden(
                       n,
                       mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap",
