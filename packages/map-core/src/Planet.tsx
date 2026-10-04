@@ -17,6 +17,13 @@ export type PlanetProps = {
   onPlanetMouseDown?: (node: PlanetNode, e: ReactMouseEvent) => void
   /** Render the valuation line under the name. Caller owns the rule (zoom threshold, Large Cap, etc.). */
   showValuation?: boolean
+  /**
+   * Keep the name centred on the planet whether or not the valuation shows; the
+   * valuation then hangs under it. For planets whose valuation comes and goes
+   * (with zoom), so the name never moves. Off (default): name + valuation are
+   * centred as a pair.
+   */
+  nameStaysPut?: boolean
   /** Hide the name label unless hovered. Caller owns the rule (e.g. mobile shows only Large Cap). */
   labelSuppressed?: boolean
   /** Below this on-screen diameter the label is hidden (unless hovered). 0 = always show. */
@@ -48,9 +55,9 @@ export type PlanetProps = {
 }
 
 // How text appears and disappears (a name revealed by zooming in, the valuation
-// line): a short fade, and a matching slide when the name makes room.
+// line): a short fade. Position is never eased — text that eased toward a
+// zoom-dependent place lagged behind the zoom and bobbed.
 const LABEL_FADE = "opacity 200ms ease"
-const LABEL_SHIFT = "transform 200ms ease"
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
 // stroke, and a foreignObject label. Edit-mode cues (red pinned ring, yellow
@@ -67,6 +74,7 @@ export function Planet({
   isSelected = false,
   onPlanetMouseDown,
   showValuation = false,
+  nameStaysPut = false,
   labelSuppressed = false,
   labelMinScreenDiameter = 0,
   entityLabelSuppressed = false,
@@ -102,18 +110,18 @@ export function Planet({
   // HTML-in-foreignObject labels mis-scale AND get text-inflated on iOS Safari
   // (giant ghost labels). Shared by the planet body + the entity branch.
   // Text never pops in or out: a name that the zoom (or the caller's rules)
-  // hides or reveals fades, and so does the valuation line — the name slides up
-  // half a line to make room for it rather than jumping. So the label is always
-  // in the DOM; `shown` and `withValuation` only set where it is fading TO.
+  // hides or reveals fades, and so does the valuation line. So the label is
+  // always in the DOM; `shown` and `withValuation` only set where it is fading TO.
   const renderNameLabel = (withValuation: boolean, shown: boolean = true) => {
     const words = (node.labelText ?? node.name).trim().split(/\s+/)
     const lineH = labelFontPx
     const gap = labelFontPx * 0.15
     const nameH = words.length * lineH
-    // The name is laid out centred on the planet; with a valuation under it the
-    // pair is centred instead, which lifts the name by half the extra height.
-    const top = node.y - nameH / 2
-    const lift = withValuation ? (gap + lineH) / 2 : 0
+    // The name is laid out centred on the planet. With a valuation under it the
+    // pair is centred instead, which lifts the name by half the extra height —
+    // unless the name stays put, and the valuation just hangs below it.
+    const lift = withValuation && !nameStaysPut ? (gap + lineH) / 2 : 0
+    const top = node.y - nameH / 2 - lift
     // Company name = ITC Franklin Gothic Medium (500) + 2% tracking; the valuation
     // number is Book (400) with normal tracking, in its own <text> so it can fade
     // on its own. Tracking is 2% of the font size, in slide units, so it scales
@@ -141,8 +149,6 @@ export function Planet({
             // no circle); otherwise — and whenever it is hidden — it's click-through.
             pointerEvents: isEditMode && shown ? "auto" : "none",
             cursor: isEditMode ? "grab" : undefined,
-            transform: `translateY(${-lift}px)`,
-            transition: LABEL_SHIFT,
           }}
         >
           {words.map((w, i) => (
@@ -155,7 +161,7 @@ export function Planet({
         {!node.isEntity && (
           <text
             {...face}
-            y={node.y + nameH / 2 + gap / 2}
+            y={node.y + nameH / 2 + (nameStaysPut ? gap + lineH / 2 : gap / 2)}
             fontWeight={400}
             style={{pointerEvents: "none", opacity: withValuation ? 0.85 : 0, transition: LABEL_FADE}}
           >
