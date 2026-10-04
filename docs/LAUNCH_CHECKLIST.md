@@ -48,6 +48,7 @@ The Studio Map Editor's **year picker** scopes appearance windows, connections, 
 
 ## 4. Front-end polish
 - [ ] Restyle toward the light mockup; loading-moment animation; final responsive passes.
+- [ ] **Time Machine: loading animation for the year maps.** Each year's thumbnail now shows that year's real layout, solved in the background ([src/yearLayouts.ts](../src/yearLayouts.ts)). On desktop the years are normally ready before the Time Machine is opened; on a phone (solved only on open) or when it is opened within a couple of seconds of page load, a map starts as an empty frame and its planets fade in when its year finishes (nearest the focused year first, ~2s for all of them). Design a proper loading state for that gap — e.g. a shimmer / pulse on the empty frame, or planets growing in from their sector wells — and decide whether the opening animation should wait for the focused year. Today: a plain 320ms fade (`MapThumbnail`), no placeholder.
 
 ## 3b. Content entry
 - [x] **Vitals entered** — ✅ done (2026-10-01). The client has entered company vitals (the time-bound fact tags, e.g. "Minecraft" / "230M MAU") in Studio; they show in the side panel for the present year.

@@ -38,6 +38,13 @@ export type PlanetProps = {
    * skipped for "label".)
    */
   part?: "all" | "body" | "label"
+  /**
+   * Prefix for this planet's SVG ids (gradient / clip / glow). Needed when the
+   * same company is drawn more than once on a page (the Time Machine draws
+   * every year's map): ids are document-wide, so two copies would otherwise
+   * share one clip circle and one would be clipped at the other's size.
+   */
+  idPrefix?: string
 }
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
@@ -61,11 +68,12 @@ export function Planet({
   highlighted = false,
   labelStrokePx = 1.2,
   part = "all",
+  idPrefix = "",
 }: PlanetProps) {
   const safeName = node.name.replace(/[^a-z0-9]/gi, "_")
-  const gradId = `planet-${safeName}`
-  const clipId = `planet-clip-${safeName}`
-  const glowFilterId = `planet-glow-${safeName}`
+  const gradId = `${idPrefix}planet-${safeName}`
+  const clipId = `${idPrefix}planet-clip-${safeName}`
+  const glowFilterId = `${idPrefix}planet-glow-${safeName}`
   const hue = node.hue
   const style = node.style
   // Ombré recipe wins over a plain stripe list (style-lab experiment).

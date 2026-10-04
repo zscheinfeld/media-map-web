@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./solve": {
+      "types": "./dist/solveLayout.d.ts",
+      "import": "./dist/solveLayout.js",
+      "default": "./dist/solveLayout.js"
     }
   },
   "files": [

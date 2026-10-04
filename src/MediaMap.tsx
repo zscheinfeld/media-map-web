@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import {
   usePhysicsLayout,
+  type SolveLayoutOptions,
   Planet,
   ConnectionLine,
   computeAnchorDiam,
@@ -16,13 +17,14 @@ import { COMPANY_POSITIONS, type PlanetPosition } from "./layout";
 import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
-import { useSanityMapDocs, useResolvedSanityMap, type CompanyDetail, type ValuationType } from "./sanityMap";
+import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type CompanyDetail, type ResolvedSanityMap, type ValuationType } from "./sanityMap";
 import { buildExportPng, clearTextWidthCache, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
+import { getSolvedYears, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
 import { GameOverlay } from "./game/GameOverlay";
-import { ghostStyleFor } from "./game/ghostStyle";
+import { ghostColorFor, ghostStyleFor } from "./game/ghostStyle";
 import { bgGradientOf, useStyleLab } from "./styleLab/styleLab";
 import { StyleLabPanel } from "./styleLab/StyleLabPanel";
 import {
@@ -69,7 +71,7 @@ import {
   valuationForDate,
   type MapDate,
 } from "./historical";
-import { useValuations, valuationAt, isHiddenAt, latestYear, latestUpdated, type ValuationData } from "./loadValuations";
+import { useValuations, valuationAt, isHiddenAt, latestYear, latestUpdated } from "./loadValuations";
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -1922,14 +1924,284 @@ const editorMiniBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const THUMB_ANCHOR_VAL = 4308;
-const THUMB_ANCHOR_DIAM = 1143;
 
-// Carousel slot sizing
-const CAROUSEL_SLOT_W = 220;
-const CAROUSEL_NEIGHBOR_W = 180;  // visual width of non-selected
-const CAROUSEL_SELECTED_W = 360;  // visual width of selected
 const CAROUSEL_VISIBLE_HALFWIDTH = 8; // how many slots to render on each side
+
+// ---- Time Machine layout ----
+// A depth carousel: the focused year's map sits front and centre, its
+// neighbours step back behind it on both sides — each one smaller, dimmer and
+// tucked closer in than the last. The numbers below are tunable live with
+// ?tm=1 (a small panel in the Time Machine); the defaults are what ships.
+type TmTuning = {
+  /** Width of the focused map, px. */
+  focusW: number;
+  /** Size of the furthest-back maps, as a fraction of the focused one. */
+  depth: number;
+  /** Distance from the focused map's centre to its first neighbour's, px. */
+  spread: number;
+  /** How much more see-through each map is than the one in front of it (0 = all solid). */
+  opacityStep: number;
+  /** How much darker each map is than the one in front of it (0 = no dimming). */
+  dimStep: number;
+  /** The same as opacityStep, but for the year labels under the maps. */
+  labelOpacityStep: number;
+  /** Opening animation: how long each map takes to arrive, ms. */
+  introMs: number;
+  /** Opening animation: how long the Explore row and the year strip take to arrive, ms. */
+  introUiMs: number;
+  /** Opening animation: delay between one map and the next one out, ms. */
+  introStagger: number;
+  /** Opening animation: 0 = constant speed, 1 = fast start with a long, soft landing. */
+  introEase: number;
+  /** Opening animation: how far below its place each map starts, px (negative = above). */
+  introRise: number;
+  /** Height and corner radius of the Explore button, px. */
+  exploreH: number;
+  exploreRadius: number;
+  /** Distance between the year ticks in the strip, px. */
+  tickSpread: number;
+  /** Height of an ordinary tick, px. */
+  tickH: number;
+  /** Height of the focused year's tick, px. */
+  tickActiveH: number;
+  /**
+   * Padding of the year strip, px: between the years and the bottom of the
+   * screen, and the same again between the focused tick and the strip's top.
+   */
+  stripBottom: number;
+  /**
+   * How the planets in the year maps are drawn: 0 = outlines only (like game
+   * mode), 1 = realistic (as on the map itself, stripes and all), 2 = hybrid —
+   * realistic on the focused / hovered map, outlines on the rest.
+   */
+  planetMode: number;
+  /** Outline thickness of the bigger planets in the year maps, px on the focused map. */
+  strokeBigPx: number;
+  /** The same, for the smaller planets. */
+  strokeSmallPx: number;
+};
+const TM_OUTLINE = 0;
+const TM_REALISTIC = 1;
+const TM_HYBRID = 2;
+const TM_DEFAULTS: TmTuning = {
+  // Tuned by eye in the ?tm=1 panel, 2026-10-04.
+  focusW: 535, depth: 0.38, spread: 250, opacityStep: 0.11, dimStep: 0.47, labelOpacityStep: 0.51,
+  introMs: 900, introUiMs: 500, introStagger: 110, introEase: 0.9, introRise: 90,
+  // The mock draws every button ~1.38× the site's size (its 34px buttons are
+  // ~47px there), so its 64px Explore button with 16px corners is 47px / 12px here.
+  exploreH: 47, exploreRadius: 12,
+  tickSpread: 63, tickH: 28, tickActiveH: 41, stripBottom: 16,
+  planetMode: TM_REALISTIC, strokeBigPx: 0.85, strokeSmallPx: 0.85,
+};
+// How quickly size and spacing fall away with each step back.
+const TM_SCALE_FALLOFF = 0.6;
+const TM_SPREAD_FALLOFF = 0.66;
+// Maps more than this many steps back fade out entirely, so the back of the
+// stack ends cleanly instead of smearing into a pile.
+const TM_VISIBLE_STEPS = 3.5;
+const TM_SLIDE = "640ms cubic-bezier(0.65, 0, 0.35, 1)";
+const TM_TUNING_KEY = "mm-time-machine-tuning-v1";
+
+/** Opening-animation easing: blends from linear (0) to a strong ease-out (1). */
+function tmIntroEasing(intensity: number): string {
+  const e = Math.max(0, Math.min(1, intensity));
+  const mix = (a: number, b: number) => (a + (b - a) * e).toFixed(3);
+  return `cubic-bezier(${mix(1 / 3, 0.16)}, ${mix(1 / 3, 1)}, ${mix(2 / 3, 0.3)}, ${mix(2 / 3, 1)})`;
+}
+
+// Year labels — one size for the years under the maps and the years in the strip.
+const TM_YEAR_PX = 11;
+const TM_YEAR_FOCUS_PX = 13;
+// Year strip: the tick's gap (3) + the year under it (14).
+const TM_STRIP_LABEL_ROOM = 17;
+/**
+ * Full height of the year strip: its top border, the tallest tick and the year
+ * under it, and the same padding above the tick as below the year.
+ */
+const tmStripHeight = (t: TmTuning) =>
+  1 + t.stripBottom + Math.max(t.tickH, t.tickActiveH) + TM_STRIP_LABEL_ROOM + t.stripBottom;
+
+/** Time Machine tuning: the defaults, or — with ?tm=1 — live-editable values kept in this browser. */
+function useTmTuning() {
+  const enabled = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const v = new URLSearchParams(window.location.search).get("tm");
+    return v === "1" || v === "true";
+  }, []);
+  const [tuning, setTuning] = useState<TmTuning>(() => {
+    if (!enabled) return TM_DEFAULTS;
+    try {
+      const raw = JSON.parse(localStorage.getItem(TM_TUNING_KEY) ?? "null") as Partial<TmTuning> | null;
+      const out = { ...TM_DEFAULTS };
+      for (const k of Object.keys(TM_DEFAULTS) as (keyof TmTuning)[]) {
+        if (raw && typeof raw[k] === "number" && Number.isFinite(raw[k])) out[k] = raw[k] as number;
+      }
+      return out;
+    } catch {
+      return TM_DEFAULTS;
+    }
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    try {
+      localStorage.setItem(TM_TUNING_KEY, JSON.stringify(tuning));
+    } catch {
+      /* ignore */
+    }
+  }, [enabled, tuning]);
+  return { enabled, tuning, setTuning };
+}
+
+// Whether the ?tm=1 panel is tucked away, and which tab it is on — kept for the
+// visit, so they survive the Time Machine being closed and opened again.
+let tmPanelHidden = false;
+let tmPanelTab: "layout" | "planets" = "layout";
+
+/** The ?tm=1 panel: sliders for the Time Machine's layout and its planets' look. */
+function TmTuningPanel({
+  tuning,
+  setTuning,
+  onReplay,
+}: {
+  tuning: TmTuning;
+  setTuning: (fn: (t: TmTuning) => TmTuning) => void;
+  /** Play the opening animation again. */
+  onReplay: () => void;
+}) {
+  const [flash, setFlash] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(tmPanelHidden);
+  const hide = (v: boolean) => {
+    tmPanelHidden = v;
+    setHidden(v);
+  };
+  const [tab, setTab] = useState<"layout" | "planets">(tmPanelTab);
+  const pickTab = (t: "layout" | "planets") => {
+    tmPanelTab = t;
+    setTab(t);
+  };
+  type Row = { key: keyof TmTuning; label: string; min: number; max: number; step: number; digits?: number; suffix?: string };
+  const planetRows: Row[] = [
+    { key: "strokeBigPx", label: "Bigger planet stroke", min: 0, max: 4, step: 0.05, digits: 2, suffix: "px" },
+    { key: "strokeSmallPx", label: "Smaller planet stroke", min: 0, max: 4, step: 0.05, digits: 2, suffix: "px" },
+  ];
+  const modes: { value: number; label: string; hint: string }[] = [
+    { value: TM_OUTLINE, label: "Outline", hint: "Every planet is an outline in its sector colour, as in game mode." },
+    { value: TM_REALISTIC, label: "Realistic", hint: "Every planet is drawn as on the map itself, stripes included." },
+    { value: TM_HYBRID, label: "Hybrid", hint: "Realistic on the focused or hovered map; outlines on the others." },
+  ];
+  const layoutRows: Row[] = [
+    { key: "focusW", label: "Focused map size", min: 220, max: 900, step: 5, suffix: "px" },
+    { key: "depth", label: "Depth (smallest map)", min: 0.05, max: 1, step: 0.01, digits: 2 },
+    { key: "spread", label: "Spread", min: 40, max: 600, step: 5, suffix: "px" },
+    { key: "opacityStep", label: "Opacity differential", min: 0, max: 0.9, step: 0.01, digits: 2 },
+    { key: "dimStep", label: "Dim intensity", min: 0, max: 0.9, step: 0.01, digits: 2 },
+    { key: "labelOpacityStep", label: "Year opacity differential", min: 0, max: 0.9, step: 0.01, digits: 2 },
+    { key: "introMs", label: "Intro duration", min: 100, max: 2500, step: 10, suffix: "ms" },
+    { key: "introUiMs", label: "Intro duration: bar + Explore", min: 100, max: 2500, step: 10, suffix: "ms" },
+    { key: "introStagger", label: "Intro offset", min: 0, max: 600, step: 5, suffix: "ms" },
+    { key: "introEase", label: "Intro easing intensity", min: 0, max: 1, step: 0.01, digits: 2 },
+    { key: "introRise", label: "Intro start height", min: -300, max: 300, step: 2, suffix: "px" },
+    { key: "exploreH", label: "Explore button height", min: 30, max: 90, step: 1, suffix: "px" },
+    { key: "exploreRadius", label: "Explore corner radius", min: 0, max: 45, step: 1, suffix: "px" },
+    { key: "tickSpread", label: "Hash spread", min: 24, max: 160, step: 1, suffix: "px" },
+    { key: "tickH", label: "Hash height", min: 4, max: 80, step: 1, suffix: "px" },
+    { key: "tickActiveH", label: "Focused hash height", min: 8, max: 140, step: 1, suffix: "px" },
+    { key: "stripBottom", label: "Timeline padding (top + bottom)", min: 0, max: 120, step: 1, suffix: "px" },
+  ];
+  const rows = tab === "layout" ? layoutRows : planetRows;
+  const btn: React.CSSProperties = {
+    background: "#1d2229", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: 7, padding: "5px 10px", font: "inherit", fontSize: 12, cursor: "pointer",
+  };
+  if (hidden) {
+    return (
+      <button
+        onClick={() => hide(false)}
+        style={{ ...btn, position: "absolute", top: 62, right: 16, zIndex: 40, background: "#161a21", fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif' }}
+      >
+        Show sliders
+      </button>
+    );
+  }
+  return (
+    <div
+      style={{
+        position: "absolute", top: 62, right: 16, width: 290, zIndex: 40, background: "#161a21", border: "1px solid #2a313b", borderRadius: 10,
+        padding: "12px 14px 10px", color: "#e6e9ef", fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif', fontSize: 12,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ flex: 1, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#8f98a6", fontWeight: 600 }}>Time Machine</span>
+        <button style={{ ...btn, padding: "3px 9px", fontSize: 11 }} onClick={() => hide(true)} title="Hide the sliders">Hide</button>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+        {(["layout", "planets"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => pickTab(t)}
+            style={{
+              ...btn, flex: 1, padding: "5px 0",
+              background: tab === t ? "#2a313b" : "#1d2229", color: tab === t ? "#ffffff" : "#8f98a6", fontWeight: tab === t ? 600 : 400,
+            }}
+          >
+            {t === "layout" ? "Layout" : "Planet appearance"}
+          </button>
+        ))}
+      </div>
+      {tab === "planets" && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {modes.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setTuning((t) => ({ ...t, planetMode: m.value }))}
+                style={{
+                  ...btn, flex: 1, padding: "6px 0",
+                  background: tuning.planetMode === m.value ? "#a7f3d0" : "#1d2229",
+                  color: tuning.planetMode === m.value ? "#06281c" : "#e6e9ef",
+                  border: `1px solid ${tuning.planetMode === m.value ? "#a7f3d0" : "#2a313b"}`,
+                  fontWeight: tuning.planetMode === m.value ? 600 : 400,
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ color: "#8f98a6", fontSize: 11, lineHeight: 1.35, marginTop: 7 }}>
+            {modes.find((m) => m.value === tuning.planetMode)?.hint}
+          </div>
+        </div>
+      )}
+      {rows.map((r) => (
+        <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ flex: 1, color: tuning[r.key] === TM_DEFAULTS[r.key] ? "#8f98a6" : "#e6e9ef" }}>{r.label}</span>
+          <input
+            type="range" min={r.min} max={r.max} step={r.step} value={tuning[r.key]}
+            onChange={(e) => setTuning((t) => ({ ...t, [r.key]: +e.target.value }))}
+            style={{ flex: "0 0 110px", accentColor: "#a7f3d0" }}
+          />
+          <span style={{ width: 46, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+            {tuning[r.key].toFixed(r.digits ?? 0)}{r.suffix ?? ""}
+          </span>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          style={{ ...btn, background: "#a7f3d0", color: "#06281c", border: "1px solid #a7f3d0", fontWeight: 600 }}
+          onClick={() => {
+            navigator.clipboard?.writeText(JSON.stringify(tuning, null, 2)).then(() => setFlash("Copied"), () => setFlash("Copy failed"));
+            window.setTimeout(() => setFlash(null), 1400);
+          }}
+        >
+          Copy settings
+        </button>
+        <button style={btn} onClick={onReplay} title="Play the opening animation again">Replay intro</button>
+        <button style={btn} onClick={() => setTuning(() => TM_DEFAULTS)}>Reset</button>
+        <span style={{ color: "#8f98a6", fontSize: 11 }}>{flash ?? ""}</span>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Static, non-interactive map preview used in the timeline carousel.
@@ -1946,22 +2218,32 @@ const EXPLORE_HOVER_TRANSITION = "180ms ease";
 // The slower glow used when the focus moves from one year's map to another.
 const FOCUS_GLOW_MS = 600;
 
+const noop = () => {};
 function MapThumbnail({
   date,
-  baseCompanies,
-  valData,
-  nodes,
+  layout,
   canvas,
   isActive,
   isSelected,
   onClick,
   exploreHover = false,
   onExploreHoverChange,
+  width,
+  scale,
+  labelShiftX,
+  dim,
+  labelDim,
+  brightness,
+  animate,
+  planetMode,
+  strokeBigPx,
+  strokeSmallPx,
+  bigThresholdB,
+  mapPx,
 }: {
   date: MapDate;
-  baseCompanies: SheetCompany[];
-  valData: ValuationData;
-  nodes: PlanetNode[];
+  /** This year's solved layout; undefined while it is still being worked out. */
+  layout: YearPlanet[] | undefined;
   canvas: { x: number; y: number; w: number; h: number };
   isActive: boolean;
   isSelected: boolean;
@@ -1969,15 +2251,29 @@ function MapThumbnail({
   /** Selected thumb only: the shared "explore" hover (this thumb OR the button). */
   exploreHover?: boolean;
   onExploreHoverChange?: (hovered: boolean) => void;
+  /** Layout width of the map (the focused size); `scale` shrinks it visually. */
+  width: number;
+  scale: number;
+  /** Sideways nudge for the year label, to sit under the map's visible part. */
+  labelShiftX: number;
+  /** Opacity of the map for its place in the stack (1 = focused). */
+  dim: number;
+  /** Opacity of the year label for its place in the stack. */
+  labelDim: number;
+  /** Brightness for its place in the stack (1 = focused, lower = darker). */
+  brightness: number;
+  /** Ease the scale / fade (clicks, snap) vs. track the scroll 1:1 (scrub). */
+  animate: boolean;
+  /** How the planets are drawn (TM_OUTLINE / TM_REALISTIC / TM_HYBRID). */
+  planetMode: number;
+  /** Outline thickness, px on the focused map: planets at/over the threshold, and under it. */
+  strokeBigPx: number;
+  strokeSmallPx: number;
+  /** Valuation ($B) from which a planet counts as "bigger". */
+  bigThresholdB: number;
+  /** Width of the real map on screen, px — the realistic render is a miniature of it. */
+  mapPx: number;
 }) {
-  const valByName = useMemo(() => {
-    const m = new Map<string, number>();
-    // Real value from the sheet for this year (by slug); else the legacy mock.
-    for (const c of baseCompanies)
-      m.set(c.name, valuationAt(valData, c.slug, String(date.year)) ?? valuationForDate(c, date));
-    return m;
-  }, [baseCompanies, valData, date]);
-
   // Local hover state — only used to surface a stroke that signals
   // clickability. It does NOT propagate up to the carousel, so hovering
   // a non-selected thumbnail no longer slides the strip.
@@ -1996,8 +2292,61 @@ function MapThumbnail({
     return () => window.clearTimeout(id);
   }, [isSelected]);
 
-  // Selected thumbnail is visibly larger than non-selected ones.
-  const contentWidth = isSelected ? CAROUSEL_SELECTED_W : CAROUSEL_NEIGHBOR_W;
+  // The planets, as one or two layers. Built once per layout / setting (not per
+  // frame of the carousel sliding), since a map is ~170 planets.
+  const realOn = planetMode === TM_REALISTIC || (planetMode === TM_HYBRID && (isSelected || isHovered));
+  const wantOutline = planetMode !== TM_REALISTIC;
+  const wantReal = planetMode !== TM_OUTLINE;
+  const outlineLayer = useMemo(() => {
+    if (!wantOutline || !layout) return null;
+    const suPerPx = canvas.w / width;
+    return layout.map((p) => {
+      // Text-only entities have no circle; sub-pixel planets are skipped.
+      if (p.isEntity || p.r < 2) return null;
+      return (
+        <circle
+          key={p.name}
+          cx={p.x}
+          cy={p.y}
+          r={p.r}
+          fill="none"
+          stroke={ghostColorFor(p as unknown as PlanetNode)}
+          strokeWidth={(p.valuation_b >= bigThresholdB ? strokeBigPx : strokeSmallPx) * suPerPx}
+        />
+      );
+    });
+  }, [wantOutline, layout, canvas.w, width, bigThresholdB, strokeBigPx, strokeSmallPx]);
+  const realLayer = useMemo(() => {
+    if (!wantReal || !layout) return null;
+    // Pixel-sized details (glow, stripe hairlines) are scaled as if this were the
+    // real map shrunk to thumbnail size; the outline thickness is the slider's.
+    const mini = mapPx / width;
+    return layout.map((p) => {
+      if (p.isEntity || p.r < 2) return null;
+      const strokeWidthPx = (p.valuation_b >= bigThresholdB ? strokeBigPx : strokeSmallPx) * mini;
+      const node = {
+        ...p, targetR: p.r, targetX: p.x, targetY: p.y, pinned: false, style: { ...(p.style ?? {}), strokeWidthPx },
+      } as PlanetNode;
+      return (
+        <Planet
+          key={p.name}
+          part="body"
+          idPrefix={`tm${date.year}-`}
+          node={node}
+          slideUnitsPerPx={canvas.w / mapPx}
+          isHovered={false}
+          onHoverChange={noop}
+          onClick={noop}
+          dimmed={false}
+        />
+      );
+    });
+  }, [wantReal, layout, canvas.w, width, mapPx, bigThresholdB, strokeBigPx, strokeSmallPx, date.year]);
+
+  // The map box is laid out at the focused size and shrunk with a transform;
+  // the label rides up under the shrunken map's bottom edge.
+  const boxH = width / (canvas.w / canvas.h);
+  const labelLift = -(boxH * (1 - scale)) / 2;
 
   // Border priority: selected (strongest) > hovered (signals clickability) >
   // active > default. Hover only kicks in when the thumb isn't already selected.
@@ -2017,7 +2366,7 @@ function MapThumbnail({
       onMouseLeave={() => { setIsHovered(false); if (isSelected) onExploreHoverChange?.(false); }}
       style={{
         flex: "0 0 auto",
-        width: contentWidth,
+        width,
         background: "transparent",
         border: "none",
         padding: 0,
@@ -2026,15 +2375,23 @@ function MapThumbnail({
         flexDirection: "column",
         alignItems: "center",
         gap: 8,
-        opacity: isSelected ? 1 : isHovered ? 0.9 : 0.7,
-        transition:
-          "width 700ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease",
+        // The button's own box is the full focused size; only the (scaled) map
+        // and its label take the pointer, so a small map at the back doesn't
+        // catch clicks meant for the ones around it.
+        pointerEvents: "none",
       }}
     >
       <div
         style={{
           width: "100%",
           aspectRatio: `${canvas.w / canvas.h}`,
+          transform: `scale(${scale})`,
+          transformOrigin: "center",
+          // A map further back is more see-through; hovering one lifts it a little.
+          opacity: isSelected ? 1 : Math.min(1, dim * (isHovered ? 1.35 : 1)),
+          // Darker the further back; hovering a map at the back lifts it part-way.
+          filter: `brightness(${isSelected ? 1 : isHovered ? Math.min(1, brightness + (1 - brightness) * 0.5) : brightness})`,
+          pointerEvents: "auto",
           background:
             "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)",
           borderRadius: 10,
@@ -2052,9 +2409,11 @@ function MapThumbnail({
           // Hover (only once this map has settled as the focused one) uses the
           // same timing as the Explore button; a change of focus keeps the
           // slower glow.
-          transition: hoverTimed
-            ? `border-color ${EXPLORE_HOVER_TRANSITION}, box-shadow ${EXPLORE_HOVER_TRANSITION}`
-            : `border-color 200ms ease, box-shadow ${FOCUS_GLOW_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+          transition:
+            (hoverTimed
+              ? `border-color ${EXPLORE_HOVER_TRANSITION}, box-shadow ${EXPLORE_HOVER_TRANSITION}`
+              : `border-color 200ms ease, box-shadow ${FOCUS_GLOW_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`) +
+            (animate ? `, transform ${TM_SLIDE}, filter ${TM_SLIDE}, opacity ${TM_SLIDE}` : ", filter 200ms ease, opacity 200ms ease"),
         }}
       >
         <svg
@@ -2063,34 +2422,22 @@ function MapThumbnail({
           viewBox={`${canvas.x} ${canvas.y} ${canvas.w} ${canvas.h}`}
           preserveAspectRatio="xMidYMid meet"
         >
-          {nodes.map(n => {
-            const v = valByName.get(n.name) ?? 0;
-            const r = (THUMB_ANCHOR_DIAM * Math.sqrt(Math.max(v, 0) / THUMB_ANCHOR_VAL)) / 2;
-            if (r < 2) return null;
-            // Thumbnail dots are too small for visible stripes; show the first
-            // stripe color (or the flat fill) as a representative dot.
-            const primary = n.style?.fill ?? n.style?.ombre?.stops?.[0] ?? n.style?.stripes?.[0] ?? null;
-            const fill = primary ?? `hsl(${n.hue}, 65%, 55%)`;
-            const stroke = n.style?.stroke
-              ?? (primary ? hexToRgba(primary, 0.5) : `hsla(${n.hue}, 70%, 75%, 0.5)`);
-            return (
-              <circle
-                key={n.name}
-                cx={n.x}
-                cy={n.y}
-                r={r}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={Math.max(1, r * 0.04)}
-              />
-            );
-          })}
+          {/* The planets fade in once this year's layout has been solved. They
+              never take the pointer — the whole map is one button. */}
+          <g style={{ opacity: layout ? 1 : 0, transition: "opacity 320ms ease", pointerEvents: "none" }}>
+            {outlineLayer && (
+              <g style={{ opacity: wantReal && realOn ? 0 : 1, transition: "opacity 320ms ease" }}>{outlineLayer}</g>
+            )}
+            {realLayer && (
+              <g style={{ opacity: realOn ? 1 : 0, transition: "opacity 320ms ease" }}>{realLayer}</g>
+            )}
+          </g>
         </svg>
       </div>
       <div
         style={{
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-          fontSize: isSelected ? 13 : 11,
+          fontSize: isSelected ? TM_YEAR_FOCUS_PX : TM_YEAR_PX,
           fontWeight: isSelected ? 700 : isActive ? 600 : 500,
           color: isSelected
             ? "rgba(255,255,255,0.95)"
@@ -2098,7 +2445,11 @@ function MapThumbnail({
               ? "rgba(220, 230, 255, 0.85)"
               : "rgba(255,255,255,0.55)",
           letterSpacing: 1,
-          transition: "color 220ms ease, font-size 220ms ease",
+          transform: `translate(${labelShiftX}px, ${labelLift}px)`,
+          // The years fade with distance on their own setting, separate from the maps.
+          opacity: isSelected ? 1 : Math.min(1, labelDim * (isHovered ? 1.35 : 1)),
+          pointerEvents: "auto",
+          transition: `color 220ms ease, font-size 220ms ease${animate ? `, transform ${TM_SLIDE}, opacity ${TM_SLIDE}` : ", opacity 200ms ease"}`,
         }}
       >
         {formatDate(date)}
@@ -2111,31 +2462,32 @@ function Carousel({
   dates,
   position,
   animate,
-  baseCompanies,
-  valData,
-  nodes,
   canvas,
   onSelect,
   onExplore,
+  tuning,
+  bigThresholdB,
 }: {
   dates: MapDate[];
-  /** Fractional index into `dates` — the carousel's horizontal position. */
+  /** Fractional index into `dates` — the carousel's position. */
   position: number;
-  /** Ease the transform (clicks/snap) vs. track the scroll 1:1 (wheel scrub). */
+  /** Ease the transforms (clicks/snap) vs. track the scroll 1:1 (wheel scrub). */
   animate: boolean;
-  baseCompanies: SheetCompany[];
-  valData: ValuationData;
-  nodes: PlanetNode[];
   canvas: { x: number; y: number; w: number; h: number };
   onSelect: (d: MapDate) => void;
   onExplore: () => void;
+  tuning: TmTuning;
+  /** Valuation ($B) from which a planet counts as "bigger" (its own stroke slider). */
+  bigThresholdB: number;
 }) {
-  // Nearest whole year — drives which thumb is enlarged + the render window.
+  // Nearest whole year — the focused map + the centre of the render window.
   const selectedIdx = Math.max(0, Math.min(dates.length - 1, Math.round(position)));
   const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
   const [exploreHover, setExploreHover] = useState(false);
+  // Each year's solved layout, by year (missing while still being solved).
+  const layouts = useSolvedYears();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -2147,8 +2499,28 @@ function Carousel({
     return () => ro.disconnect();
   }, []);
 
+  // Opening animation: when the Time Machine opens, the focused map arrives
+  // first and the others follow outward, one beat apart. Only on open — maps
+  // that mount later (stepping through years) just appear in place.
+  const [entering, setEntering] = useState(true);
+  const introTotal = Math.max(tuning.introMs, tuning.introUiMs) + tuning.introStagger * (TM_VISIBLE_STEPS + 1) + 80;
+  useEffect(() => {
+    const id = window.setTimeout(() => setEntering(false), introTotal);
+    return () => window.clearTimeout(id);
+    // Timed once per opening (a replay remounts the carousel).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const introStyle = (stepsOut: number, ms = tuning.introMs): React.CSSProperties | undefined =>
+    entering
+      ? ({
+          animation: `tm-in ${ms}ms ${tmIntroEasing(tuning.introEase)} ${Math.round(stepsOut * tuning.introStagger)}ms both`,
+          // How far below its place the map starts (read by the tm-in keyframes).
+          "--tm-rise": `${tuning.introRise}px`,
+        } as React.CSSProperties)
+      : undefined;
+
   // Track the previous selected index. During a slide, render all the slots
-  // the strip passes through so the carousel never goes blank mid-transition.
+  // the carousel passes through so it never goes blank mid-transition.
   const prevSelectedIdxRef = useRef(selectedIdx);
   const [renderRange, setRenderRange] = useState({
     minIdx: Math.max(0, selectedIdx - CAROUSEL_VISIBLE_HALFWIDTH),
@@ -2180,10 +2552,37 @@ function Carousel({
   const slots: number[] = [];
   for (let i = renderRange.minIdx; i <= renderRange.maxIdx; i++) slots.push(i);
 
-  // Translate the strip so the (fractional) position lands at the viewport
-  // center — so wheel scrubbing tracks continuously, not just per whole year.
-  const selectedCenter = position * CAROUSEL_SLOT_W + CAROUSEL_SLOT_W / 2;
-  const translateX = containerW > 0 ? containerW / 2 - selectedCenter : 0;
+  // On a narrow screen the focused map shrinks to fit, and the spread with it.
+  const fit = containerW > 0 ? Math.min(1, (containerW * 0.84) / tuning.focusW) : 1;
+  const focusW = tuning.focusW * fit;
+  const spread = tuning.spread * fit;
+  const focusH = focusW / (canvas.w / canvas.h);
+  // The map, its label and the Explore row are centred as one group.
+  const LABEL_SPACE = 30; // label + its gap under the map
+  const ROW_GAP = 22; // label → Explore row
+  const groupH = focusH + LABEL_SPACE + ROW_GAP + tuning.exploreH;
+  const mapCenterY = `calc(50% - ${(groupH - focusH) / 2}px)`;
+  const exploreTop = `calc(50% - ${(groupH - focusH) / 2}px + ${focusH / 2 + LABEL_SPACE + ROW_GAP}px)`;
+
+  // Where a map sits `o` steps from the focus: its size and sideways offset.
+  // Each step sideways is shorter than the last, so the stack bunches up toward
+  // the back instead of marching off-screen.
+  const place = (o: number) => {
+    const steps = Math.abs(o);
+    return {
+      scale: tuning.depth + (1 - tuning.depth) * Math.pow(TM_SCALE_FALLOFF, steps),
+      x: Math.sign(o) * spread * ((1 - Math.pow(TM_SPREAD_FALLOFF, steps)) / (1 - TM_SPREAD_FALLOFF)),
+    };
+  };
+
+  const canPrev = selectedIdx > 0;
+  const canNext = selectedIdx < dates.length - 1;
+  const stepBtn = (enabled: boolean): React.CSSProperties => ({
+    ...arrowBtnStyle(enabled),
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+  });
 
   return (
     <div
@@ -2192,98 +2591,150 @@ function Carousel({
         flex: 1,
         position: "relative",
         overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        padding: "24px 0",
+        // Its own stacking context: the maps' z-order stays inside the carousel
+        // and can't climb over the controls around it.
+        zIndex: 0,
       }}
     >
+      {slots.map((i) => {
+        const d = dates[i];
+        const isSelected = i === selectedIdx;
+        const isActive = i === activeIdx;
+        // Steps back from the focus (fractional while scrubbing).
+        const o = i - position;
+        const steps = Math.abs(o);
+        const { scale, x } = place(o);
+        // The year label sits under the part of the map you can actually see.
+        // A map at the back is partly covered by the one in front of it, so
+        // its label moves out to the middle of the exposed strip instead of
+        // staying centred (where it would be hidden behind that map).
+        let labelShiftX = 0;
+        const j = i + (o < 0 ? 1 : -1); // the map in front of this one
+        if (steps > 0 && j >= 0 && j < dates.length) {
+          const front = place(o + (o < 0 ? 1 : -1));
+          const half = (focusW * scale) / 2;
+          const frontHalf = (focusW * front.scale) / 2;
+          const stripMid =
+            o < 0
+              ? (x - half + Math.min(x + half, front.x - frontHalf)) / 2
+              : (x + half + Math.max(x - half, front.x + frontHalf)) / 2;
+          // Eases in over the first step, so the focused map's label stays put.
+          labelShiftX = (stripMid - x) * Math.min(1, steps);
+        }
+        // Each step back is a little more see-through and a little darker.
+        const farFade = Math.max(0, Math.min(1, TM_VISIBLE_STEPS + 0.5 - steps));
+        const dim = Math.pow(1 - tuning.opacityStep, steps) * farFade;
+        const labelDim = Math.pow(1 - tuning.labelOpacityStep, steps) * farFade;
+        const brightness = Math.pow(1 - tuning.dimStep, steps);
+        return (
+          <div
+            key={`${d.year}-${d.month}`}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: mapCenterY,
+              // Centred on the MAP (not the map + label), then moved sideways.
+              transform: `translate(-50%, ${-focusH / 2}px) translateX(${x}px)`,
+              zIndex: 100 - Math.round(steps * 10),
+              transition: animate ? `transform ${TM_SLIDE}` : "none",
+              pointerEvents: "none",
+              visibility: dim <= 0.001 ? "hidden" : "visible",
+            }}
+          >
+            <div className="tm-enter" style={introStyle(steps)}>
+            <MapThumbnail
+              date={d}
+              layout={layouts[d.year]}
+              canvas={canvas}
+              isActive={isActive}
+              isSelected={isSelected}
+              // The focused map opens it (same as Explore); a neighbour only
+              // comes into focus.
+              onClick={isSelected ? onExplore : () => onSelect(d)}
+              exploreHover={isSelected && exploreHover}
+              onExploreHoverChange={setExploreHover}
+              width={focusW}
+              scale={scale}
+              labelShiftX={labelShiftX}
+              dim={dim}
+              labelDim={labelDim}
+              brightness={brightness}
+              animate={animate}
+              planetMode={tuning.planetMode}
+              strokeBigPx={tuning.strokeBigPx}
+              strokeSmallPx={tuning.strokeSmallPx}
+              bigThresholdB={bigThresholdB}
+              // The Time Machine fills the map's area, so its width is the map's.
+              mapPx={containerW || 1100}
+            />
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Step back · Explore · step forward — one row under the focused map.
+          It arrives with the first neighbours. */}
       <div
         style={{
           position: "absolute",
-          left: 0,
-          top: 0,
-          height: "100%",
-          width: dates.length * CAROUSEL_SLOT_W,
-          transform: `translateX(${translateX}px)`,
-          // Ease for clicks + the snap-on-release; none while scrubbing so the
-          // strip tracks the wheel 1:1. easeInOutCubic — symmetric in/out.
-          transition: animate ? "transform 640ms cubic-bezier(0.65, 0, 0.35, 1)" : "none",
-        }}
-      >
-        {slots.map(i => {
-          const d = dates[i];
-          const isSelected = i === selectedIdx;
-          const isActive = i === activeIdx;
-          return (
-            <div
-              key={`${d.year}-${d.month}`}
-              style={{
-                position: "absolute",
-                left: i * CAROUSEL_SLOT_W,
-                top: 0,
-                width: CAROUSEL_SLOT_W,
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: isSelected ? 2 : 1,
-              }}
-            >
-              <MapThumbnail
-                date={d}
-                baseCompanies={baseCompanies}
-                valData={valData}
-                nodes={nodes}
-                canvas={canvas}
-                isActive={isActive}
-                isSelected={isSelected}
-                // The highlighted map opens it (same as Explore); a neighbour
-                // only slides into focus.
-                onClick={isSelected ? onExplore : () => onSelect(d)}
-                exploreHover={isSelected && exploreHover}
-                onExploreHoverChange={setExploreHover}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* "Explore map" — loads the map at the selected view and closes the
-          timeline. Sits below the selected thumbnail's date label. */}
-      <button
-        aria-label="Explore the map at this view"
-        onClick={onExplore}
-        onMouseEnter={() => setExploreHover(true)}
-        onMouseLeave={() => setExploreHover(false)}
-        style={{
-          position: "absolute",
           left: "50%",
-          top: "50%",
-          // half of selected thumb height (≈ 117) + label gap (≈ 26) + button gap (16)
-          transform: "translate(-50%, calc(117px + 42px))",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "6px 12px",
-          borderRadius: 8,
-          // Royal blue (the Substack CTA's colour); hovering it OR the highlighted
-          // map flips it to white with blue text. Colour only — the transform stays put.
-          // Hover: white, like the focused map's glow, with navy text.
-          background: exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE,
-          border: `1px solid ${exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE}`,
-          color: exploreHover ? "#18266E" : "#ffffff",
-          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-          fontSize: 13,
-          fontWeight: 600,
-          letterSpacing: 1,
-          cursor: "pointer",
-          zIndex: 3,
-          transition: `background ${EXPLORE_HOVER_TRANSITION}, color ${EXPLORE_HOVER_TRANSITION}, border-color ${EXPLORE_HOVER_TRANSITION}`,
+          top: exploreTop,
+          transform: "translateX(-50%)",
+          zIndex: 200,
         }}
       >
-        EXPLORE THIS MAP
-        <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>arrow_forward</span>
-      </button>
+      <div className="tm-enter" style={{ display: "flex", alignItems: "center", gap: 12, ...introStyle(1, tuning.introUiMs) }}>
+        <button
+          aria-label="Previous year"
+          className="tm-btn"
+          onClick={() => canPrev && onSelect(dates[selectedIdx - 1])}
+          disabled={!canPrev}
+          style={stepBtn(canPrev)}
+        >
+          <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>arrow_back</span>
+        </button>
+        {/* "Explore this map" — loads the map at the focused year and closes
+            the Time Machine. */}
+        <button
+          aria-label="Explore the map at this view"
+          onClick={onExplore}
+          onMouseEnter={() => setExploreHover(true)}
+          onMouseLeave={() => setExploreHover(false)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: tuning.exploreH,
+            boxSizing: "border-box",
+            padding: "0 24px",
+            borderRadius: tuning.exploreRadius,
+            // Royal blue (the Substack CTA's colour); hovering it OR the focused
+            // map turns it white with navy text.
+            background: exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE,
+            border: `1px solid ${exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE}`,
+            color: exploreHover ? "#18266E" : "#ffffff",
+            fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+            fontSize: 13,
+            fontWeight: 500,
+            letterSpacing: 1,
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            transition: `background ${EXPLORE_HOVER_TRANSITION}, color ${EXPLORE_HOVER_TRANSITION}, border-color ${EXPLORE_HOVER_TRANSITION}`,
+          }}
+        >
+          EXPLORE THIS MAP
+        </button>
+        <button
+          aria-label="Next year"
+          className="tm-btn"
+          onClick={() => canNext && onSelect(dates[selectedIdx + 1])}
+          disabled={!canNext}
+          style={stepBtn(canNext)}
+        >
+          <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>arrow_forward</span>
+        </button>
+      </div>
+      </div>
     </div>
   );
 }
@@ -2294,38 +2745,58 @@ function TimelineStrip({
   hoveredDate,
   onSelect,
   onHover,
+  tuning,
 }: {
   dates: MapDate[];
   activeDate: MapDate;
   hoveredDate: MapDate | null;
   onSelect: (d: MapDate) => void;
   onHover: (d: MapDate | null) => void;
+  tuning: TmTuning;
 }) {
+  // Room for the tallest tick + the year under it.
+  const stripH = tmStripHeight(tuning);
+  const tickBoxH = Math.max(tuning.tickH, tuning.tickActiveH) + TM_STRIP_LABEL_ROOM;
   const stripRef = useRef<HTMLDivElement | null>(null);
+  // Opening animation: the whole strip slides up from below the screen's edge
+  // as it fades in, on the same clock as the focused map. Only on open.
+  const [entering, setEntering] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setEntering(false), tuning.introUiMs + 80);
+    return () => window.clearTimeout(id);
+    // Timed once per opening (a replay remounts the strip).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Scroll the active month into view when it changes.
   useEffect(() => {
     const el = stripRef.current?.querySelector<HTMLElement>(
       `[data-date="${activeDate.year}-${activeDate.month}"]`,
     );
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const strip = stripRef.current;
+    if (el && strip) {
+      // Scroll the strip itself, sideways only. (scrollIntoView would also
+      // scroll the Time Machine around it while the strip is sliding in.)
+      strip.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - strip.clientWidth / 2, behavior: "smooth" });
     }
   }, [activeDate]);
 
   return (
     <div
       ref={stripRef}
+      className="tm-enter"
       onMouseLeave={() => onHover(null)}
       style={{
-        height: 76,
-        flex: "0 0 76px",
+        animation: entering ? `tm-strip-in ${tuning.introUiMs}ms ${tmIntroEasing(tuning.introEase)} both` : undefined,
+        height: stripH,
+        flex: `0 0 ${stripH}px`,
+        boxSizing: "border-box",
         display: "flex",
         alignItems: "flex-end",
         // Center the ticks in the strip; `safe` falls back to left-aligned +
         // scrollable if they ever get wider than the container.
         justifyContent: "safe center",
         gap: 0,
-        padding: "0 16px 8px",
+        padding: `0 16px ${tuning.stripBottom}px`,
         overflowX: "auto",
         background: "rgba(7,14,32,0.85)",
         borderTop: "1px solid rgba(255,255,255,0.08)",
@@ -2343,8 +2814,8 @@ function TimelineStrip({
             title={formatDate(d)}
             style={{
               flex: "0 0 auto",
-              width: 44,
-              height: 60,
+              width: tuning.tickSpread,
+              height: tickBoxH,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -2356,20 +2827,18 @@ function TimelineStrip({
               cursor: "pointer",
               color: isHovered || active ? "white" : "rgba(255,255,255,0.55)",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-              fontSize: 10,
-              letterSpacing: 0.5,
+              fontSize: active ? TM_YEAR_FOCUS_PX : TM_YEAR_PX,
+              letterSpacing: 1,
               position: "relative",
             }}
           >
             <span
               style={{
                 width: isHovered ? 3 : active ? 3 : 2,
-                height: isHovered ? 36 : active ? 24 : 16,
-                background: isHovered
-                  ? "white"
-                  : active
-                    ? "rgba(180,200,255,0.95)"
-                    : "rgba(255,255,255,0.4)",
+                // The focused year's tick stands tall; a hovered one rises
+                // part-way toward it.
+                height: active ? tuning.tickActiveH : isHovered ? (tuning.tickH + tuning.tickActiveH) / 2 : tuning.tickH,
+                background: isHovered || active ? "white" : "rgba(255,255,255,0.4)",
                 borderRadius: 1,
                 transition: "height 140ms ease, width 140ms ease, background 140ms ease",
               }}
@@ -2378,8 +2847,8 @@ function TimelineStrip({
                 full label (the present year adds its month, e.g. "JUL 2026"). */}
             <span
               style={{
-                height: 12,
-                lineHeight: "12px",
+                height: 14,
+                lineHeight: "14px",
                 whiteSpace: "nowrap",
                 fontWeight: isHovered || active ? 700 : 500,
                 color: isHovered ? "white" : undefined,
@@ -3626,23 +4095,30 @@ export default function MediaMap() {
   // Square positions/centers live in Sanity (mobile_position_overrides + sector
   // mobile_center, resolved at the viewed year); merge over the MOBILE_LAYOUTS.square
   // code fallback so the Studio editor's Square-mode edits drive the live mobile map.
-  const mobilePositions = useMemo(() => {
-    if (activeType === "square" && sanity && Object.keys(sanity.mobilePositions).length) {
+  // (The `…Of(sn)` helpers below take the Sanity map resolved at ANY year, so
+  // the Time Machine can build another year's layout from the very same code
+  // the live map uses for the year on screen.)
+  const mobilePositionsOf = (sn: ResolvedSanityMap | null) => {
+    if (activeType === "square" && sn && Object.keys(sn.mobilePositions).length) {
       const merged: Record<string, MobilePosition> = { ...activeLayout.positions };
-      for (const [name, p] of Object.entries(sanity.mobilePositions)) merged[name] = { x: p.x, y: p.y };
+      for (const [name, p] of Object.entries(sn.mobilePositions)) merged[name] = { x: p.x, y: p.y };
       return merged;
     }
     return activeLayout.positions;
-  }, [activeType, activeLayout.positions, sanity]);
-  const mobileSectorCenters = useMemo(() => {
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const mobilePositions = useMemo(() => mobilePositionsOf(sanity), [activeType, activeLayout.positions, sanity]);
+  const mobileSectorCentersOf = (sn: ResolvedSanityMap | null) => {
     const base = inheritsFullLayout(activeType)
       ? { ...mobileLayouts.full.sectorCenters, ...activeLayout.sectorCenters }
       : activeLayout.sectorCenters;
-    if (activeType === "square" && sanity && Object.keys(sanity.mobileCenterBySector).length) {
-      return { ...base, ...sanity.mobileCenterBySector };
+    if (activeType === "square" && sn && Object.keys(sn.mobileCenterBySector).length) {
+      return { ...base, ...sn.mobileCenterBySector };
     }
     return base;
-  }, [activeType, activeLayout.sectorCenters, mobileLayouts.full.sectorCenters, sanity]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const mobileSectorCenters = useMemo(() => mobileSectorCentersOf(sanity), [activeType, activeLayout.sectorCenters, mobileLayouts.full.sectorCenters, sanity]);
   // Surface a failed Sanity read (otherwise it falls back to the sheet silently).
   useEffect(() => {
     if (sanityError) console.warn("[media-map] Sanity read failed — using the sheet instead:", sanityError);
@@ -3713,6 +4189,19 @@ export default function MediaMap() {
   const windowsFor = (name: string) => sanity?.detailByName[name]?.appearanceWindows ?? [];
   // Base company set: Sanity names/sectors + sheet valuations when configured,
   // else the raw sheet companies. Feeds the timeline mock + ATH/ATL stats.
+  const baseCompaniesOf = (sn: ResolvedSanityMap | null): SheetCompany[] => {
+    if (!sn) return companies;
+    return sn.companies.map((c) => {
+      const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
+      const detail = sn.detailByName[c.name];
+      // Precedence: the valuation sheet's market cap for the current year (by
+      // slug) → the manually-entered Sanity value (private/PSM) → the legacy
+      // sheet (so non-US "NA" / uncovered companies still render).
+      const valuation_b =
+        valuationAt(valData, c.slug, currentYearKey) ?? detail?.manualValue ?? sheetVal;
+      return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
+    });
+  };
   const baseCompanies = useMemo<SheetCompany[]>(() => {
     // While Sanity is configured but still loading, return NOTHING. Otherwise the
     // physics first-load animation fires on the sheet fallback, then the real
@@ -3727,17 +4216,8 @@ export default function MediaMap() {
     // arrived (and companies absent from the legacy sheet, e.g. Space X, blinked
     // in late). The Studio editor has always gated on this; the app didn't.
     if (valuationsLoading || holdForLive) return [];
-    if (!sanity) return companies;
-    return sanity.companies.map((c) => {
-      const sheetVal = sheetValByName.get(c.name.toLowerCase()) ?? 0;
-      const detail = sanity.detailByName[c.name];
-      // Precedence: the valuation sheet's market cap for the current year (by
-      // slug) → the manually-entered Sanity value (private/PSM) → the legacy
-      // sheet (so non-US "NA" / uncovered companies still render).
-      const valuation_b =
-        valuationAt(valData, c.slug, currentYearKey) ?? detail?.manualValue ?? sheetVal;
-      return { name: c.name, sector: c.sector, slug: c.slug, valuation_b };
-    });
+    return baseCompaniesOf(sanity);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sanity, sanityLoading, valuationsLoading, holdForLive, companies, sheetValByName, valData, currentYearKey]);
   // "Last updated" date per company name (join slug → date from the sheet).
   const lastUpdatedByName = useMemo(() => {
@@ -3813,6 +4293,12 @@ export default function MediaMap() {
   const [timelineOpen, setTimelineOpen] = useState(false);
 
   const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
+  // Time Machine layout numbers (tunable with ?tm=1).
+  const tm = useTmTuning();
+  const tmStripH = tmStripHeight(tm.tuning);
+  // Bumped by the tuning panel's "Replay intro": remounts the carousel so its
+  // opening animation plays again.
+  const [tmIntroToken, setTmIntroToken] = useState(0);
 
   // Timeline picker (smooth): the carousel + strip FOCUS a candidate year without
   // moving the live map — only "Explore map" commits it. `scrollIdx` is a
@@ -3884,23 +4370,24 @@ export default function MediaMap() {
   const [aggZoomTarget, setAggZoomTarget] = useState(1);
   const aggZoomBy = (f: number) => setAggZoomTarget((t) => Math.min(AGG_MAX_ZOOM, Math.max(1, t * f)));
 
+  // Hide companies whose appearance windows don't cover the viewed year, or
+  // that the sheet explicitly omitted for this year (a "-" cell). The map,
+  // list + linear views all read this; the aggregate keeps every company and
+  // windows per-year instead.
+  const displayedOf = (base: SheetCompany[], sn: ResolvedSanityMap | null, date: MapDate) => {
+    const moment = makeMoment(date.year, date.month);
+    const yearKey = String(date.year);
+    const visible = base.filter(
+      (c) =>
+        yearWindowsActiveAt(sn?.detailByName[c.name]?.appearanceWindows ?? [], moment) &&
+        !isHiddenAt(hiddenByYear, c.slug, yearKey),
+    );
+    return sameDate(date, currentDate)
+      ? visible
+      : visible.map((c) => ({ ...c, valuation_b: valAt(c, date) }));
+  };
   const displayedCompanies = useMemo(
-    () => {
-      // Hide companies whose appearance windows don't cover the viewed year, or
-      // that the sheet explicitly omitted for this year (a "-" cell). The map,
-      // list + linear views all read this; the aggregate keeps every company and
-      // windows per-year instead.
-      const activeMoment = makeMoment(activeDate.year, activeDate.month);
-      const activeYearKey = String(activeDate.year);
-      const visible = baseCompanies.filter(
-        (c) =>
-          yearWindowsActiveAt(windowsFor(c.name), activeMoment) &&
-          !isHiddenAt(hiddenByYear, c.slug, activeYearKey),
-      );
-      return sameDate(activeDate, currentDate)
-        ? visible
-        : visible.map((c) => ({ ...c, valuation_b: valAt(c, activeDate) }));
-    },
+    () => displayedOf(baseCompanies, sanity, activeDate),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [baseCompanies, activeDate, currentDate, valData, hiddenByYear, sanity],
   );
@@ -4065,13 +4552,12 @@ export default function MediaMap() {
   // sector-well handles use the exact same coordinate — otherwise the handle
   // renders in a different fallback spot than the planets it controls.
   const unknownSectorList = useMemo(() => allSectors.filter(s => !isKnownSector(s)), [allSectors]);
-  const desktopCenterForSector = useCallback(
-    (s: string) =>
-      sanity?.centerBySector[s] ??
-      sectorPositions[s] ??
-      sectorCenterFor(s, unknownSectorList.indexOf(s), unknownSectorList.length, false),
-    [sanity, sectorPositions, unknownSectorList],
-  );
+  const desktopCenterOf = (sn: ResolvedSanityMap | null, unknown: string[]) => (s: string) =>
+    sn?.centerBySector[s] ??
+    sectorPositions[s] ??
+    sectorCenterFor(s, unknown.indexOf(s), unknown.length, false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const desktopCenterForSector = useMemo(() => desktopCenterOf(sanity, unknownSectorList), [sanity, sectorPositions, unknownSectorList]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -4101,54 +4587,56 @@ export default function MediaMap() {
   // Layout knobs: Sanity's saved Map Editor settings (at the viewed moment) win
   // over the local edit-toolbar state, so the public map matches the editor's
   // spacing/density. Falls back to the local defaults when Sanity has no settings.
-  const effBase = {
-    packingDensity: sanity?.settings?.packingDensity ?? packingDensity,
-    collidePadding: sanity?.settings?.collidePadding ?? collidePadding,
-    labelSizePx: sanity?.settings?.labelSizePx ?? labelSizePx,
-    connectionPull: sanity?.settings?.connectionPull ?? connectionPull,
-    entityRadius: sanity?.settings?.entityRadius,
-    sizeSpacing: sanity?.settings?.sizeSpacing,
-    sectorPull: sanity?.settings?.sectorPull,
-    repulsion: sanity?.settings?.repulsion,
-  };
-  // On a mobile view, the active view type's own settings drive the physics so
-  // all planets spread to FILL its frame without overlapping (unplaced ones flow
-  // around the pins). Desktop = effBase.
-  // Mobile physics: Sanity's SQUARE knobs win when authored (Map Editor → Square
-  // mode), so mobile spacing is tunable in the CMS and time-scoped per year like
-  // desktop. Until then it falls back to the per-view-type values baked into
-  // mobileLayout.ts — i.e. adding the first square override is what moves mobile
-  // physics from code to the CMS, and nothing changes before that.
-  const sq = sanity?.squareSettings;
   // Layout lab: Phone 16:9 can follow the DESKTOP layout exactly (same canvas).
   // Then every layout input below is desktop's; only type stays the phone's.
   const fullMirror = llab.active && llab.applied.fullFollowsDesktop && isMobile && !mobileEdit && activeType === "full";
   const layoutMobile = mobileView && !fullMirror;
-  const effLive = {
-    ...effBase,
-    ...(layoutMobile
-      ? {
-          sectorPull: sq?.sectorPull ?? activeSettings.sectorPull,
-          collidePadding: sq?.collidePadding ?? activeSettings.collidePadding,
-          sizeSpacing: sq?.sizeSpacing ?? activeSettings.sizeSpacing,
-          repulsion: sq?.repulsion ?? activeSettings.repulsion,
-          // These four have no mobileLayout.ts equivalent, so they fall through
-          // to the desktop-authored values exactly as before.
-          packingDensity: sq?.packingDensity ?? effBase.packingDensity,
-          labelSizePx: sq?.labelSizePx ?? effBase.labelSizePx,
-          connectionPull: sq?.connectionPull ?? effBase.connectionPull,
-          entityRadius: sq?.entityRadius ?? effBase.entityRadius,
-        }
-      : {}),
+  const effLiveOf = (sn: ResolvedSanityMap | null) => {
+    const effBase = {
+      packingDensity: sn?.settings?.packingDensity ?? packingDensity,
+      collidePadding: sn?.settings?.collidePadding ?? collidePadding,
+      labelSizePx: sn?.settings?.labelSizePx ?? labelSizePx,
+      connectionPull: sn?.settings?.connectionPull ?? connectionPull,
+      entityRadius: sn?.settings?.entityRadius,
+      sizeSpacing: sn?.settings?.sizeSpacing,
+      sectorPull: sn?.settings?.sectorPull,
+      repulsion: sn?.settings?.repulsion,
+    };
+    // On a mobile view, the active view type's own settings drive the physics so
+    // all planets spread to FILL its frame without overlapping (unplaced ones flow
+    // around the pins). Desktop = effBase.
+    // Mobile physics: Sanity's SQUARE knobs win when authored (Map Editor → Square
+    // mode), so mobile spacing is tunable in the CMS and time-scoped per year like
+    // desktop. Until then it falls back to the per-view-type values baked into
+    // mobileLayout.ts — i.e. adding the first square override is what moves mobile
+    // physics from code to the CMS, and nothing changes before that.
+    const sq = sn?.squareSettings;
+    return {
+      ...effBase,
+      ...(layoutMobile
+        ? {
+            sectorPull: sq?.sectorPull ?? activeSettings.sectorPull,
+            collidePadding: sq?.collidePadding ?? activeSettings.collidePadding,
+            sizeSpacing: sq?.sizeSpacing ?? activeSettings.sizeSpacing,
+            repulsion: sq?.repulsion ?? activeSettings.repulsion,
+            // These four have no mobileLayout.ts equivalent, so they fall through
+            // to the desktop-authored values exactly as before.
+            packingDensity: sq?.packingDensity ?? effBase.packingDensity,
+            labelSizePx: sq?.labelSizePx ?? effBase.labelSizePx,
+            connectionPull: sq?.connectionPull ?? effBase.connectionPull,
+            entityRadius: sq?.entityRadius ?? effBase.entityRadius,
+          }
+        : {}),
+    };
   };
+  const effLive = effLiveOf(sanity);
 
   // ---- Layout lab: knob overrides on top of the live values --------------
   const labMode: DeviceMode = !layoutMobile ? "desktop" : activeType === "square" ? "square" : "full";
   // The live (pre-override) value of every lab knob for this mode + year. Label
   // footprint starts at the ratio the live site already has: its spacing is
   // measured at Sanity's label size while names are drawn at `labelSizePx`.
-  const liveKnobs = useMemo<LayoutKnobs>(
-    () => ({
+  const liveKnobsOf = (effLive: ReturnType<typeof effLiveOf>): LayoutKnobs => ({
       packingDensity: effLive.packingDensity,
       collidePadding: effLive.collidePadding,
       sizeSpacing: effLive.sizeSpacing ?? 0,
@@ -4169,7 +4657,10 @@ export default function MediaMap() {
       zoomTypeGrowth: LABEL_GROW_RATE,
       zoomTypeMax: LABEL_GROW_MAX,
       designWidth: layoutMobile ? PHONE_FRAME.w : 1100,
-    }),
+  });
+  const liveKnobs = useMemo<LayoutKnobs>(
+    () => liveKnobsOf(effLive),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [effLive.packingDensity, effLive.collidePadding, effLive.sizeSpacing, effLive.sectorPull, effLive.repulsion, effLive.connectionPull, effLive.entityRadius, effLive.labelSizePx, labelSizePx, layoutMobile, activeSettings.nameThreshold],
   );
   // K = the knobs the map lays out with (debounced); null when the lab is off,
@@ -4183,18 +4674,20 @@ export default function MediaMap() {
   useEffect(() => {
     if (llab.enabled) labNoteLive(labMode, liveKnobs);
   }, [llab.enabled, labNoteLive, labMode, liveKnobs]);
-  const eff = K
-    ? {
-        ...effLive,
-        packingDensity: K.packingDensity,
-        collidePadding: K.collidePadding,
-        sizeSpacing: K.sizeSpacing,
-        sectorPull: K.sectorPull,
-        repulsion: K.repulsion,
-        connectionPull: K.connectionPull,
-        entityRadius: K.entityRadius,
-      }
-    : effLive;
+  const effOf = (effLive: ReturnType<typeof effLiveOf>, K: LayoutKnobs | null) =>
+    K
+      ? {
+          ...effLive,
+          packingDensity: K.packingDensity,
+          collidePadding: K.collidePadding,
+          sizeSpacing: K.sizeSpacing,
+          sectorPull: K.sectorPull,
+          repulsion: K.repulsion,
+          connectionPull: K.connectionPull,
+          entityRadius: K.entityRadius,
+        }
+      : effLive;
+  const eff = effOf(effLive, K);
   // Tablet = the desktop layout with its own type. In the editor the Device
   // switch decides; for visitors it is the window width (above the phone
   // breakpoint, up to tabletMaxWidth). KT = the knobs names are DRAWN with;
@@ -4260,14 +4753,16 @@ export default function MediaMap() {
     };
   }, [llab.active]);
 
+  const anchorDiamOf = (displayed: SheetCompany[], density: number) =>
+    computeAnchorDiam(
+      displayed.map((c) => c.valuation_b),
+      canvas.w * canvas.h,
+      density,
+      // Mobile view: per-type global planet-size multiplier.
+    ) * (mobileView ? activeSettings.scale : 1);
   const anchorDiam = useMemo(
-    () =>
-      computeAnchorDiam(
-        displayedCompanies.map((c) => c.valuation_b),
-        canvas.w * canvas.h,
-        eff.packingDensity,
-        // Mobile view: per-type global planet-size multiplier.
-      ) * (mobileView ? activeSettings.scale : 1),
+    () => anchorDiamOf(displayedCompanies, eff.packingDensity),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [displayedCompanies, canvas, eff.packingDensity, mobileView, activeSettings.scale],
   );
 
@@ -4293,12 +4788,27 @@ export default function MediaMap() {
   // diagonal so the spacing matches what the eye perceives as "the label
   // reaches this far from center" without overshooting at the corners.
   const lockedMeasure = labLocked && layoutMode !== "linear";
-  const labelRadii = useMemo(() => {
-    const linear = layoutMode === "linear";
+  const labelRadiiOf = (a: {
+    displayed: SheetCompany[];
+    entities: LayoutInput[] | undefined;
+    K: LayoutKnobs | null;
+    /** The live label size spacing is measured at when the lab is off. */
+    labelSizePx: number;
+    anchorDiam: number;
+    linear: boolean;
+  }) => {
+    const { linear, K } = a;
     // Lab "lock layout": measure at the DESIGN width, not the window's, so the
     // spacing — and therefore the whole layout — doesn't depend on window size.
-    const locked = lockedMeasure && !!K;
-    if (!locked && naturalSlideUnitsPerPx === 1 && containerW === 0) return {};
+    const locked = !linear && !!K && llab.applied.lockLayout;
+    // Slide units per pixel at zoom 1 (see `naturalSlideUnitsPerPx`).
+    const natural =
+      containerW === 0 || containerH === 0
+        ? 1
+        : linear
+          ? canvas.h / containerH
+          : Math.max(canvas.w / containerW, canvas.h / containerH);
+    if (!locked && natural === 1 && containerW === 0) return {};
     const result: Record<string, number> = {};
     // LINEAR mode is one horizontal strip, so a label's WIDTH is what decides
     // whether neighbours collide — and it has to be the width actually DRAWN:
@@ -4310,9 +4820,13 @@ export default function MediaMap() {
     //  • including the 2% name tracking, plus a few px of breathing room.
     // Map mode keeps its existing measurement so the authored layout is unchanged.
     const fontPxFor = (valuation_b: number, isEntity?: boolean) =>
-      linear ? typePxOf(valuation_b, isEntity) * labelScaleForZoom(zoom, KT?.zoomTypeGrowth, KT?.zoomTypeMax) : K ? labelPxOf(valuation_b, isEntity) : eff.labelSizePx;
+      linear
+        ? typePxOf(valuation_b, isEntity) * labelScaleForZoom(zoom, KT?.zoomTypeGrowth, KT?.zoomTypeMax)
+        : K
+          ? !isEntity && valuation_b >= K.labelThresholdB ? K.labelLargePx : K.labelSmallPx
+          : a.labelSizePx;
     const suPerPx =
-      linear && containerH > 0 ? canvas.h / zoom / containerH : locked ? canvas.w / K.designWidth : naturalSlideUnitsPerPx;
+      linear && containerH > 0 ? canvas.h / zoom / containerH : locked ? canvas.w / K.designWidth : natural;
     const footprint = K && !linear ? K.labelFootprint : 1;
     // Layout lab: a name that never shows at rest (planet under the "hide names
     // under" size) reserves no room. On a phone a hidden name's box is wider
@@ -4320,7 +4834,7 @@ export default function MediaMap() {
     // space than the canvas has — the solve jams, planets overlap and get
     // shoved off the map.
     const nameCanShow = (valuation_b: number) =>
-      !K || linear || K.nameThreshold <= 0 || diameterFor(valuation_b, anchorDiam) / suPerPx >= K.nameThreshold;
+      !K || linear || K.nameThreshold <= 0 || diameterFor(valuation_b, a.anchorDiam) / suPerPx >= K.nameThreshold;
     const LINEAR_LABEL_PAD_PX = 4;
     const halfExtent = (label: string, extraLines: number, fontPx: number) => {
       const words = label.trim().split(/\s+/);
@@ -4334,7 +4848,7 @@ export default function MediaMap() {
       const heightPx = (words.length + extraLines) * fontPx;
       return (Math.max(maxWordPx, heightPx) / 2) * suPerPx * footprint;
     };
-    for (const c of displayedCompanies) {
+    for (const c of a.displayed) {
       // Linear measures the text that's drawn (the "convert to USD" authoring
       // marker is stripped from the label); map mode keeps measuring the full name.
       const label = linear ? usdFlag(c.name).display : c.name;
@@ -4347,13 +4861,25 @@ export default function MediaMap() {
     // one fixed `entityRadius` constant for every entity regardless of its actual
     // name length. Measure them the same way (entities never show a valuation line).
     // (Lab, mobile: entity names are hidden until zoomed in, so they reserve none either.)
-    for (const e of sanity?.entities ?? []) {
+    for (const e of a.entities ?? []) {
       result[e.name] = K && layoutMobile && !linear ? 0 : halfExtent(e.name, 0, fontPxFor(0, true));
     }
     return result;
+  };
+  const labelRadii = useMemo(
+    () =>
+      labelRadiiOf({
+        displayed: displayedCompanies,
+        entities: sanity?.entities,
+        K,
+        labelSizePx: eff.labelSizePx,
+        anchorDiam,
+        linear: layoutMode === "linear",
+      }),
     // When locked, the window size is deliberately NOT a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayedCompanies, sanity?.entities, eff.labelSizePx, lockedMeasure ? 0 : naturalSlideUnitsPerPx, lockedMeasure ? 0 : containerW, lockedMeasure ? 0 : containerH, layoutMode, zoom, labelSizePx, canvas, K, KT, labelPxOf, typePxOf, lockedMeasure, fontEpoch, anchorDiam, layoutMobile]);
+    [displayedCompanies, sanity?.entities, eff.labelSizePx, lockedMeasure ? 0 : naturalSlideUnitsPerPx, lockedMeasure ? 0 : containerW, lockedMeasure ? 0 : containerH, layoutMode, zoom, labelSizePx, canvas, K, KT, labelPxOf, typePxOf, lockedMeasure, fontEpoch, anchorDiam, layoutMobile],
+  );
 
   // Adapter: resolve the sheet's companies into map-core's data-source-agnostic
   // LayoutInput (visible-only, with each planet's default center, hue, and style
@@ -4361,12 +4887,19 @@ export default function MediaMap() {
   // centers on phones too (temporary mobile plan). Sector overrides win over the
   // default center; a per-company position override (passed via `positions`)
   // then wins over that inside the hook.
-  const inputs = useMemo<LayoutInput[]>(() => {
-    const allSectors = Array.from(new Set(displayedCompanies.map((c) => c.sector))).sort();
+  const inputsOf = (a: {
+    displayed: SheetCompany[];
+    sn: ResolvedSanityMap | null;
+    labSectors: Record<string, { x: number; y: number }>;
+    desktopCenter: (sector: string) => { x: number; y: number };
+    mobileCenters: Record<string, { x: number; y: number }>;
+  }): LayoutInput[] => {
+    const { sn, labSectors } = a;
+    const allSectors = Array.from(new Set(a.displayed.map((c) => c.sector))).sort();
     const unknownSectors = allSectors.filter((s) => !isKnownSector(s));
     // TEMP: only used by the disabled not-live red flag.
     // const activeYearKey = String(activeDate.year);
-    const companyInputs = displayedCompanies
+    const companyInputs = a.displayed
       .filter((c) => enabled.has(c.sector))
       .map((c) => {
         const unknownIdx = unknownSectors.indexOf(c.sector);
@@ -4374,10 +4907,10 @@ export default function MediaMap() {
         // scaled into the smaller 4:5 canvas (they'll be dragged into place in
         // the editor; hand-placed ones are pinned via `positions`). Otherwise
         // Sanity wins, then local defaults.
-        const desktopCenter = () => desktopCenterForSector(c.sector);
+        const desktopCenter = () => a.desktopCenter(c.sector);
         let center: { x: number; y: number };
         if (layoutMobile) {
-          const well = mobileSectorCenters[c.sector];
+          const well = a.mobileCenters[c.sector];
           if (well) center = well;
           else if (activeType === "full" || inheritsFullLayout(activeType)) center = desktopCenter();
           else {
@@ -4399,8 +4932,8 @@ export default function MediaMap() {
           sector: c.sector,
           valuation_b: c.valuation_b,
           center,
-          hue: sanity?.hueBySector[c.sector] ?? hueForSector(c.sector),
-          style: sanity ? (sanity.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector),
+          hue: sn?.hueBySector[c.sector] ?? hueForSector(c.sector),
+          style: sn ? (sn.styleByName[c.name] ?? null) : planetStyleFor(c.name, c.sector),
           // TEMP: all labels white — USD-flag blue + not-live red disabled for now.
           // Restore with: usd.flag ? USD_FLAG_COLOR : live ? undefined : "#ff6b6b"
           labelColor: undefined,
@@ -4408,11 +4941,16 @@ export default function MediaMap() {
         };
       });
     // Text-only entity nodes (Sanity only), filtered to enabled sectors.
-    const entityInputs = (sanity?.entities ?? [])
+    const entityInputs = (sn?.entities ?? [])
       .filter((e) => enabled.has(e.sector))
       .map((e) => (labSectors[e.sector] ? { ...e, center: labSectors[e.sector] } : e));
     return [...companyInputs, ...entityInputs];
-  }, [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, layoutMobile, activeType, canvas, mobileSectorCenters, desktopCenterForSector, labSectors]);
+  };
+  const inputs = useMemo<LayoutInput[]>(
+    () => inputsOf({ displayed: displayedCompanies, sn: sanity, labSectors, desktopCenter: desktopCenterForSector, mobileCenters: mobileSectorCenters }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayedCompanies, enabled, sectorPositions, sanity, valData, activeDate, mobileView, layoutMobile, activeType, canvas, mobileSectorCenters, desktopCenterForSector, labSectors],
+  );
 
   // Connections used for both physics and rendering: Sanity (windowed at T) when
   // configured, else the local edit-state. The edit-mode connection authoring
@@ -4423,35 +4961,47 @@ export default function MediaMap() {
   // live drags override via `dragState` in the renderer. Un-authored planets fall
   // back to their sector well + physics — except the FULL view, which falls back
   // to the desktop layout so it starts as the desktop map.
-  const mobilePinnedPositions = useMemo(() => {
+  const mobilePinnedOf = (sn: ResolvedSanityMap | null, mobilePos: Record<string, MobilePosition>) => {
     const out: Record<string, PlanetPosition> = {};
     // Full + the inheriting types (horizontal/square) start from the desktop
     // layout so every planet is placed; horizontal/square then layer full's
     // authored positions on top, and finally this view's own overrides win.
     if (activeType === "full" || inheritsFullLayout(activeType)) {
-      const base = sanity ? sanity.positions : positions;
+      const base = sn ? sn.positions : positions;
       for (const [name, p] of Object.entries(base)) out[name] = { ...p };
       if (inheritsFullLayout(activeType)) {
         for (const [name, p] of Object.entries(mobileLayouts.full.positions))
           out[name] = { x: p.x, y: p.y, pin: true };
       }
     }
-    for (const [name, p] of Object.entries(mobilePositions)) out[name] = { x: p.x, y: p.y, pin: true };
+    for (const [name, p] of Object.entries(mobilePos)) out[name] = { x: p.x, y: p.y, pin: true };
     return out;
-  }, [mobilePositions, activeType, sanity, positions, mobileLayouts.full.positions]);
+  };
+  const mobilePinnedPositions = useMemo(
+    () => mobilePinnedOf(sanity, mobilePositions),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mobilePositions, activeType, sanity, positions, mobileLayouts.full.positions],
+  );
 
   // Mobile view uses the per-type pins; desktop uses Sanity/local. The layout
   // lab's placement edits layer on top (null = freed back to pure physics).
   const basePositions = layoutMobile ? mobilePinnedPositions : sanity ? sanity.positions : positions;
-  const physicsPositions = useMemo<Record<string, PlanetPosition>>(() => {
-    if (!labPositions || Object.keys(labPositions).length === 0) return basePositions;
-    const out: Record<string, PlanetPosition> = { ...basePositions };
-    for (const [name, p] of Object.entries(labPositions)) {
+  const withLabPositions = (
+    base: Record<string, PlanetPosition>,
+    lab: ReturnType<typeof positionsAt> | null,
+  ): Record<string, PlanetPosition> => {
+    if (!lab || Object.keys(lab).length === 0) return base;
+    const out: Record<string, PlanetPosition> = { ...base };
+    for (const [name, p] of Object.entries(lab)) {
       if (p) out[name] = { x: p.x, y: p.y, pin: p.pin, hold: p.hold };
       else delete out[name];
     }
     return out;
-  }, [basePositions, labPositions]);
+  };
+  const physicsPositions = useMemo<Record<string, PlanetPosition>>(
+    () => withLabPositions(basePositions, labPositions),
+    [basePositions, labPositions],
+  );
 
   const nodes = usePhysicsLayout({
     inputs,
@@ -4481,6 +5031,72 @@ export default function MediaMap() {
     gapFill: K?.gapFill,
     gapMin: K?.gapMin,
   });
+  // ---- Time Machine: each year's real layout ------------------------------
+  // The solve options for ANY year, built by the same helpers the live map
+  // uses for the year on screen (so for that year they are identical).
+  const layoutSeed = K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null;
+  const yearSpecAt = (date: MapDate): SolveLayoutOptions | null => {
+    if (baseCompanies.length === 0) return null;
+    const sn = sanityDocs ? resolveSanityMapAt(sanityDocs, makeMoment(date.year, date.month)) : null;
+    const base = baseCompaniesOf(sn);
+    const displayed = displayedOf(base, sn, date);
+    const effLiveY = effLiveOf(sn);
+    const Ky = llab.active ? resolveKnobs(labKnobOverrides, liveKnobsOf(effLiveY)) : null;
+    const effY = effOf(effLiveY, Ky);
+    const anchorY = anchorDiamOf(displayed, effY.packingDensity);
+    const unknown = Array.from(new Set(base.map((c) => c.sector))).filter((x) => !isKnownSector(x)).sort();
+    const basePos = layoutMobile ? mobilePinnedOf(sn, mobilePositionsOf(sn)) : sn ? sn.positions : positions;
+    return {
+      inputs: inputsOf({
+        displayed,
+        sn,
+        labSectors: llab.active ? sectorsAt(llab.applied, labMode, date.year) : {},
+        desktopCenter: desktopCenterOf(sn, unknown),
+        mobileCenters: mobileSectorCentersOf(sn),
+      }),
+      bounds: physicsBounds,
+      positions: withLabPositions(basePos, llab.active ? positionsAt(llab.applied, labMode, date.year) : null),
+      anchorDiam: anchorY,
+      collidePadding: effY.collidePadding,
+      entityRadius: effY.entityRadius,
+      sizeSpacing: effY.sizeSpacing,
+      sectorPull: effY.sectorPull,
+      repulsion: effY.repulsion,
+      labelRadii: labelRadiiOf({ displayed, entities: sn?.entities, K: Ky, labelSizePx: effY.labelSizePx, anchorDiam: anchorY, linear: false }),
+      connections: sn ? sn.connections : connections,
+      connectionStrength: effY.connectionPull,
+      seed: layoutSeed,
+      centerPull: Ky?.centerPull,
+      gapFill: Ky?.gapFill,
+      gapMin: Ky?.gapMin,
+    };
+  };
+  // A new object whenever something `yearSpecAt` reads has changed. The solver
+  // then re-checks every year; a year whose inputs turn out the same comes
+  // straight from its cache.
+  const yearSpecStamp = useMemo(
+    () => ({}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      sanityDocs, companies, sheetValByName, valData, hiddenByYear, currentDate, baseCompanies.length > 0, enabled,
+      sectorPositions, positions, connections, canvas, physicsBounds, llab.active, llab.applied, labMode, layoutSeed,
+      layoutMobile, mobileView, activeType, activeLayout, mobileLayouts, packingDensity, collidePadding, labelSizePx,
+      connectionPull, fontEpoch, labLocked ? 0 : containerW, labLocked ? 0 : containerH,
+    ],
+  );
+  useYearLayoutSolver({
+    dates: dateRange,
+    specAt: yearSpecAt,
+    stamp: yearSpecStamp,
+    // Ahead of time on desktop, so the Time Machine opens with its maps ready;
+    // on a phone only once it is opened (the solve is heavier there). Never
+    // while authoring, where the layout is being dragged around live.
+    prefetch: !isMobile && !isEditMode && !mobileEdit && !gameActive,
+    urgent: timelineOpen,
+    // Closed, the Time Machine will open on last year — solve outward from there.
+    focusYear: timelineOpen ? timelineFocus.year : currentDate.year - 1,
+  });
+
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
   // and a horizontal scrollbar appears.
@@ -5564,7 +6180,7 @@ export default function MediaMap() {
   useEffect(() => {
     if (!llab.enabled) return;
     (window as unknown as { __mmLayout?: unknown }).__mmLayout = {
-      nodes, bounds: physicsBounds, canvas, mode: labMode, knobs: K, typeKnobs: KT, tabletType,
+      nodes, get yearLayouts() { return getSolvedYears(); }, bounds: physicsBounds, canvas, mode: labMode, knobs: K, typeKnobs: KT, tabletType,
       pinSources: {
         sanityDesktop: Object.keys(sanity?.positions ?? {}),
         sanityMobile: Object.keys(sanity?.mobilePositions ?? {}),
@@ -6489,26 +7105,35 @@ export default function MediaMap() {
               display: "flex",
               flexDirection: "column",
               zIndex: 5,
+              // The year strip starts below the bottom edge when it slides in.
+              // `clip`, not `hidden`: nothing in here should be able to scroll it.
+              overflow: "clip",
             }}
           >
             <Carousel
+              key={tmIntroToken}
               dates={dateRange}
               position={scrollIdx}
               animate={timelineAnimate}
-              baseCompanies={baseCompanies}
-              valData={valData}
-              nodes={nodes}
               canvas={canvas}
               onSelect={focusOn}
               onExplore={onExploreMap}
+              tuning={tm.tuning}
+              // The same big / small split the map's type uses.
+              bigThresholdB={KT?.labelThresholdB ?? 100}
             />
             <TimelineStrip
+              key={`strip-${tmIntroToken}`}
               dates={dateRange}
               activeDate={timelineFocus}
               hoveredDate={hoveredDate}
               onSelect={(d) => { setHoveredDate(null); focusOn(d); }}
               onHover={setHoveredDate}
+              tuning={tm.tuning}
             />
+            {tm.enabled && (
+              <TmTuningPanel tuning={tm.tuning} setTuning={tm.setTuning} onReplay={() => setTmIntroToken((n) => n + 1)} />
+            )}
           </div>
         )}
 
@@ -6557,7 +7182,8 @@ export default function MediaMap() {
             position: "absolute",
             left: 16,
             // Clear the mobile browser's home indicator / toolbar safe area.
-            bottom: `calc(${timelineOpen ? 72 : 16}px + env(safe-area-inset-bottom))`,
+            // In the Time Machine the pills straddle the top edge of the year strip.
+            bottom: `calc(${timelineOpen ? tmStripH - 26 : 16}px + env(safe-area-inset-bottom))`,
             zIndex: 11,
             // Hidden while the game runs — the paddle sweeps through this corner —
             // and in Aggregate, which shows every year at once (so neither the
@@ -6566,7 +7192,10 @@ export default function MediaMap() {
             flexDirection: "column",
             alignItems: "flex-start",
             gap: 6,
-            transition: "bottom 240ms ease",
+            // Opening the Time Machine, the pills ride up with the year strip.
+            transition: timelineOpen
+              ? `bottom ${tm.tuning.introUiMs}ms ${tmIntroEasing(tm.tuning.introEase)}`
+              : "bottom 240ms ease",
           }}
         >
           {displayedViewDates.map(d => {
@@ -6599,7 +7228,10 @@ export default function MediaMap() {
                       ? "1px solid rgba(255,255,255,0.30)"
                       : "1px solid rgba(255,255,255,0.10)",
                   borderRadius: 10,
-                  padding: "8px 14px",
+                  // Same box as the map's other controls: 34px tall, 12px at the sides.
+                  height: 34,
+                  boxSizing: "border-box",
+                  padding: "0 12px",
                   backdropFilter: "blur(6px)",
                   color: isActive ? "white" : isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.7)",
                   fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -6615,7 +7247,8 @@ export default function MediaMap() {
                 }}
               >
                 <span style={{ opacity: 0.5, fontSize: 11 }}>{isActive ? "●" : "◎"}</span>
-                {formatDate(d)}
+                {/* In a span so the Time Machine hover veil sits under it (see .tm-btn). */}
+                <span>{formatDate(d)}</span>
                 {!isCurrentYear && (
                   <span
                     role="button"
@@ -6660,7 +7293,9 @@ export default function MediaMap() {
                   ? "1px solid rgba(255,255,255,0.28)"
                   : "1px solid rgba(255,255,255,0.15)",
               borderRadius: 10,
-              padding: "8px 14px",
+              height: 34,
+              boxSizing: "border-box",
+              padding: "0 12px",
               backdropFilter: "blur(6px)",
               color: "white",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -6696,7 +7331,9 @@ export default function MediaMap() {
               background: "rgba(120,160,255,0.18)",
               border: "1px solid rgba(150,180,255,0.5)",
               borderRadius: 10,
-              padding: "8px 14px",
+              height: 34,
+              boxSizing: "border-box",
+              padding: "0 12px",
               backdropFilter: "blur(6px)",
               color: "white",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -6710,51 +7347,6 @@ export default function MediaMap() {
             <span className="cap-center">CLOSE TIMELINE</span>
           </button>
         )}
-
-        {/* Incremental step arrows — centered horizontally above the timeline strip.
-            Step the picker FOCUS (not the live map — that commits via Explore map). */}
-        {timelineOpen && (() => {
-          const idx = focusIdx;
-          const canPrev = idx > 0;
-          const canNext = idx >= 0 && idx < dateRange.length - 1;
-          const step = (delta: number) => {
-            setHoveredDate(null);
-            focusOn(dateRange[idx + delta]);
-          };
-          return (
-            <div
-              style={{
-                position: "absolute",
-                left: "50%",
-                bottom: 72,
-                transform: "translateX(-50%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                zIndex: 11,
-              }}
-            >
-              <button
-                aria-label="Previous month"
-                className="tm-btn"
-                onClick={() => canPrev && step(-1)}
-                disabled={!canPrev}
-                style={arrowBtnStyle(canPrev)}
-              >
-                <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 22, lineHeight: 1 }}>chevron_left</span>
-              </button>
-              <button
-                aria-label="Next month"
-                className="tm-btn"
-                onClick={() => canNext && step(1)}
-                disabled={!canNext}
-                style={arrowBtnStyle(canNext)}
-              >
-                <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 22, lineHeight: 1 }}>chevron_right</span>
-              </button>
-            </div>
-          );
-        })()}
 
         {/* Zoom + download UI — hidden in timeline mode (no map). Download stays
             in every view; the zoom group folds away in List (nothing to zoom). */}

@@ -27,7 +27,9 @@ export {
 
 export {formatValuation, hashHue, hexToRgba, mergeStyle, mixHex, ombreStripeColors} from "./style.js"
 
-export {CONNECTION_PULL, usePhysicsLayout, type PhysicsOptions} from "./usePhysicsLayout.js"
+export {usePhysicsLayout, type PhysicsOptions} from "./usePhysicsLayout.js"
+
+export {CONNECTION_PULL, solveLayout, solveLayoutSteps, type SolveLayoutOptions} from "./solveLayout.js"
 
 export {Planet, type PlanetProps} from "./Planet.js"
 
