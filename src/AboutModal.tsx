@@ -772,14 +772,18 @@ function ModalButton({
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
-  // Hover: black fill + white text + white stroke for every primary CTA (no
-  // movement/scale). The border is always present (transparent off-hover) so the
-  // box size never changes.
-  const colors = hover
-    ? { background: "#000", color: "white", border: "1px solid #fff" }
-    : variant === "blue"
-      ? { background: "#3657FD", color: "white", border: "1px solid transparent" }
-      : { background: "#c8ccd4", color: "#1a1a1a", border: "1px solid transparent" };
+  // Hover (no movement/scale): the royal blue button turns white with blue
+  // text, like every other royal blue button on the site; the grey one goes
+  // black with a white stroke. The border is always present (transparent
+  // off-hover) so the box size never changes.
+  const colors =
+    variant === "blue"
+      ? hover
+        ? { background: "#fff", color: "#3657FD", border: "1px solid #fff" }
+        : { background: "#3657FD", color: "white", border: "1px solid transparent" }
+      : hover
+        ? { background: "#000", color: "white", border: "1px solid #fff" }
+        : { background: "#c8ccd4", color: "#1a1a1a", border: "1px solid transparent" };
   const style: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",

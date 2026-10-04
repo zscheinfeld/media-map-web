@@ -861,7 +861,8 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           href="https://eshap.substack.com/"
           target="_blank"
           rel="noreferrer"
-          className="mm-hover"
+          // Royal blue → white with blue text on hover (colours in App.css).
+          className="mm-blue-btn"
           style={{
             display: "flex",
             alignItems: "center",
@@ -869,18 +870,16 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
             gap: 8,
             width: "100%",
             boxSizing: "border-box",
-            padding: "11px 12px",
+            padding: "10px 11px",
             borderRadius: 8,
-            background: "#3657FD",
-            border: "none",
-            color: "#fff",
             textDecoration: "none",
             fontSize: 15,
             fontWeight: 500,
             whiteSpace: "nowrap",
           }}
         >
-          <img src="/substack-flag.svg" alt="" aria-hidden draggable={false} style={{ width: 15, height: "auto", display: "block" }} />
+          {/* Drawn as a mask so the flag takes the button's text colour on hover. */}
+          <span className="mm-flag" aria-hidden style={{ width: 15, height: 17.65, flex: "0 0 auto" }} />
           <span>Full Map Analysis</span>
         </a>
       </div>
