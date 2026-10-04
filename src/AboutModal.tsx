@@ -772,14 +772,14 @@ function ModalButton({
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
-  // Hover (no movement/scale): the royal blue button turns white with blue
+  // Hover (no movement/scale): the royal blue button turns white with navy
   // text, like every other royal blue button on the site; the grey one goes
   // black with a white stroke. The border is always present (transparent
   // off-hover) so the box size never changes.
   const colors =
     variant === "blue"
       ? hover
-        ? { background: "#fff", color: "#3657FD", border: "1px solid #fff" }
+        ? { background: "#fff", color: "#18266E", border: "1px solid #fff" }
         : { background: "#3657FD", color: "white", border: "1px solid transparent" }
       : hover
         ? { background: "#000", color: "white", border: "1px solid #fff" }

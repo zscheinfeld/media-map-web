@@ -1938,6 +1938,13 @@ const CAROUSEL_VISIBLE_HALFWIDTH = 8; // how many slots to render on each side
  */
 /** Royal blue shared by the Substack CTA and the Time Machine's Explore button. */
 const EXPLORE_BLUE = "#3657FD";
+// The focused map's border + glow while it (or the Explore button) is hovered.
+const EXPLORE_HOVER_GLOW = "#FFFFFF";
+// One timing for the whole hover: the Explore button turning white and the
+// focused map's border + glow turning white start and finish together.
+const EXPLORE_HOVER_TRANSITION = "180ms ease";
+// The slower glow used when the focus moves from one year's map to another.
+const FOCUS_GLOW_MS = 600;
 
 function MapThumbnail({
   date,
@@ -1976,13 +1983,26 @@ function MapThumbnail({
   // a non-selected thumbnail no longer slides the strip.
   const [isHovered, setIsHovered] = useState(false);
 
+  // True once this map has been the focused one for a moment. Until then its
+  // glow eases in slowly (a change of focus); after that, hover changes use the
+  // Explore button's quicker timing so the two finish together.
+  const [hoverTimed, setHoverTimed] = useState(false);
+  useEffect(() => {
+    if (!isSelected) {
+      const id = window.setTimeout(() => setHoverTimed(false), 0);
+      return () => window.clearTimeout(id);
+    }
+    const id = window.setTimeout(() => setHoverTimed(true), FOCUS_GLOW_MS + 50);
+    return () => window.clearTimeout(id);
+  }, [isSelected]);
+
   // Selected thumbnail is visibly larger than non-selected ones.
   const contentWidth = isSelected ? CAROUSEL_SELECTED_W : CAROUSEL_NEIGHBOR_W;
 
   // Border priority: selected (strongest) > hovered (signals clickability) >
   // active > default. Hover only kicks in when the thumb isn't already selected.
   const border = isSelected
-    ? `2px solid ${exploreHover ? EXPLORE_BLUE : "rgba(180, 200, 255, 0.9)"}`
+    ? `2px solid ${exploreHover ? EXPLORE_HOVER_GLOW : "rgba(180, 200, 255, 0.9)"}`
     : isHovered
       ? "2px solid rgba(255,255,255,0.7)"
       : isActive
@@ -2019,18 +2039,22 @@ function MapThumbnail({
             "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)",
           borderRadius: 10,
           border,
-          // The focused map keeps its pale-blue glow; it turns royal blue (the
-          // Explore button's colour) while it or the button is hovered.
+          // The focused map keeps its pale-blue glow; it turns white while it
+          // or the Explore button is hovered.
           boxShadow: isSelected
             ? exploreHover
-              ? `0 0 40px ${hexToRgba(EXPLORE_BLUE, 0.85)}`
+              ? `0 0 40px ${hexToRgba(EXPLORE_HOVER_GLOW, 0.85)}`
               : "0 0 32px rgba(120, 160, 255, 0.45)"
             : isActive
               ? "0 0 16px rgba(80, 120, 200, 0.25)"
               : "none",
           overflow: "hidden",
-          transition:
-            "border-color 200ms ease, box-shadow 600ms cubic-bezier(0.65, 0, 0.35, 1)",
+          // Hover (only once this map has settled as the focused one) uses the
+          // same timing as the Explore button; a change of focus keeps the
+          // slower glow.
+          transition: hoverTimed
+            ? `border-color ${EXPLORE_HOVER_TRANSITION}, box-shadow ${EXPLORE_HOVER_TRANSITION}`
+            : `border-color 200ms ease, box-shadow ${FOCUS_GLOW_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
         }}
       >
         <svg
@@ -2244,16 +2268,17 @@ function Carousel({
           borderRadius: 8,
           // Royal blue (the Substack CTA's colour); hovering it OR the highlighted
           // map flips it to white with blue text. Colour only — the transform stays put.
-          background: exploreHover ? "#ffffff" : EXPLORE_BLUE,
-          border: `1px solid ${exploreHover ? "#ffffff" : EXPLORE_BLUE}`,
-          color: exploreHover ? EXPLORE_BLUE : "#ffffff",
+          // Hover: white, like the focused map's glow, with navy text.
+          background: exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE,
+          border: `1px solid ${exploreHover ? EXPLORE_HOVER_GLOW : EXPLORE_BLUE}`,
+          color: exploreHover ? "#18266E" : "#ffffff",
           fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: 1,
           cursor: "pointer",
           zIndex: 3,
-          transition: "background 160ms, color 160ms, border-color 160ms",
+          transition: `background ${EXPLORE_HOVER_TRANSITION}, color ${EXPLORE_HOVER_TRANSITION}, border-color ${EXPLORE_HOVER_TRANSITION}`,
         }}
       >
         EXPLORE THIS MAP
@@ -2664,16 +2689,21 @@ const VIEW_ICONS: Record<AppViewMode, string> = {
 // collapse to their single most-saturated swatch. The +/- buttons zoom the time axis.
 
 type AppViewMode = ViewMode | "aggregate";
-type AggBand = { name: string; sector: string; color: string; /** Outline, for near-black bands. */ stroke?: string; values: number[] };
+type AggBand = { name: string; sector: string; color: string; /** Near-black band: keeps all four edges at any height. */ dark?: boolean; values: number[] };
 type AggregateData = { dates: MapDate[]; bands: AggBand[]; maxTotal: number };
 
 // Same blue gradient the maps use, so the aggregate view feels of a piece.
 const AGG_GRADIENT = LIST_BG_GRADIENT;
 const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
-// Near-black bands (Apple's charcoal, the AI companies' black) would vanish into
-// the dark background and each other, so they get a thin light outline.
-const AGG_DARK_OUTLINE = "#ACACAC";
-const AGG_DARK_OUTLINE_PX = 0.5;
+// Every bar carries a thin light edge, set INSIDE the bar: left and right
+// always, top and bottom only when the bar is taller than AGG_EDGE_MIN_H (so
+// the thin bands at the bottom of a column don't turn into a block of lines).
+// Near-black bands (Apple's charcoal, the AI companies' black) keep all four
+// edges at any height — without them they vanish into the background and each
+// other.
+const AGG_EDGE_COLOR = "#ACACAC";
+const AGG_EDGE_PX = 0.5;
+const AGG_EDGE_MIN_H = 8;
 /** True for a hex colour that is black or a very dark neutral (not a dark blue/red). */
 function isNearBlack(c: string): boolean {
   const m = c.trim().match(/^#([0-9a-f]{6})$/i);
@@ -2733,6 +2763,41 @@ function barsPath(xLeft: (i: number) => number, barW: number, upper: number[], l
   return d;
 }
 
+/** Space under the Aggregate plot for the year labels. The map's bottom controls
+ *  rise by this much in Aggregate so they end at the plot's bottom edge instead
+ *  of sitting on the years. */
+const AGG_PAD_BOTTOM = 26;
+/** Distance from the view's right edge to the right edge of the last bar (the
+ *  plot's right padding plus half the gap between columns). */
+const AGG_LAST_BAR_RIGHT = 15;
+/** How far the map controls sit inside the last bar's right and bottom edges. */
+const AGG_CONTROLS_INSET = 8;
+
+/** The inside edge lines for one band's bars (see AGG_EDGE_*). */
+function barEdgesPath(
+  xLeft: (i: number) => number,
+  barW: number,
+  upper: number[],
+  lower: number[],
+  values: number[],
+  M: number,
+  allFour: boolean,
+): string {
+  const inset = AGG_EDGE_PX / 2;
+  const f = (n: number) => n.toFixed(2);
+  let d = "";
+  for (let i = 0; i < M; i++) {
+    if (values[i] <= 0) continue;
+    const x0 = xLeft(i), x1 = x0 + barW, u = upper[i], l = lower[i];
+    if (l - u <= 0) continue;
+    d += `M${f(x0 + inset)},${f(u)} L${f(x0 + inset)},${f(l)} M${f(x1 - inset)},${f(u)} L${f(x1 - inset)},${f(l)}`;
+    if (allFour || l - u > AGG_EDGE_MIN_H) {
+      d += `M${f(x0)},${f(u + inset)} L${f(x1)},${f(u + inset)} M${f(x0)},${f(l - inset)} L${f(x1)},${f(l - inset)}`;
+    }
+  }
+  return d;
+}
+
 // Intro-animation timing/offsets — tuned via the dev overlay, then baked in.
 // posOffset: px the bar slides up from · hFrac: fraction of height that grows ·
 // stagM/stagC: month/company stagger spans · duration: ms · easing: out-cubic.
@@ -2767,7 +2832,7 @@ function AggregateView({
   // Mobile drops the caption below the view-tab pill (top 16 + ~40 tall) and lets
   // it wrap to two lines, so the chart starts lower to clear it.
   const captionTop = isMobile ? 66 : 12;
-  const padL = 12, padR = 14, padT = isMobile ? 108 : 34, padB = 26;
+  const padL = 12, padR = 14, padT = isMobile ? 108 : 34, padB = AGG_PAD_BOTTOM;
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -2881,7 +2946,7 @@ function AggregateView({
   // One single-color path per company (discrete yearly bars). A dark stroke +
   // the 2px year gap separate bars horizontally and companies vertically.
   const shapes = useMemo(() => {
-    if (!plotW || !plotH || !scale) return [] as { fill: string; stroke?: string; sector: string; name: string; d: string }[];
+    if (!plotW || !plotH || !scale) return [] as { fill: string; edges: string; sector: string; name: string; d: string }[];
     // Intro transform (driven by the tuning controls): each bar slides up from
     // `posOffset` px low and grows in height (top eased down by `heightPct`% of its
     // final height), staggered left→right by month and slightly per company.
@@ -2911,7 +2976,13 @@ function AggregateView({
         up = nu;
         lo = nl;
       }
-      return { fill: b.color, stroke: b.stroke, sector: b.sector, name: b.name, d: barsPath(xLeft, barW, up, lo, b.values, M) };
+      return {
+        fill: b.color,
+        sector: b.sector,
+        name: b.name,
+        d: barsPath(xLeft, barW, up, lo, b.values, M),
+        edges: barEdgesPath(xLeft, barW, up, lo, b.values, M, !!b.dark),
+      };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bands, stacks, plotW, plotH, scale, barW, slotW, M, intro]);
@@ -2968,7 +3039,10 @@ function AggregateView({
     >
       {/* Scroll layer — the chart scrolls horizontally when zoomed; the caption
           and tuning panel below stay fixed. */}
-      <div ref={scrollRef} style={{ width: "100%", height: "100%", overflowX: "auto", overflowY: "hidden" }}>
+      {/* position: relative so the hover tooltip (absolute, in chart coordinates)
+          scrolls with the chart — without it the tooltip was placed as if the
+          chart weren't scrolled, i.e. off-screen whenever it was zoomed in. */}
+      <div ref={scrollRef} style={{ position: "relative", width: "100%", height: "100%", overflowX: "auto", overflowY: "hidden" }}>
         <svg
           width={svgW}
           height={dims.h}
@@ -2999,16 +3073,16 @@ function AggregateView({
               }}
             />
           ))}
-          {/* Outlines for the near-black bands, drawn over every fill so the
-              neighbouring bands' dark gap lines don't swallow them. */}
+          {/* Light inside edges, drawn over every fill so the neighbouring bands'
+              gap lines don't swallow them. */}
           {shapes.map((s, idx) =>
-            s.stroke ? (
+            s.edges ? (
               <path
-                key={`o${idx}`}
-                d={s.d}
+                key={`e${idx}`}
+                d={s.edges}
                 fill="none"
-                stroke={s.stroke}
-                strokeWidth={AGG_DARK_OUTLINE_PX}
+                stroke={AGG_EDGE_COLOR}
+                strokeWidth={AGG_EDGE_PX}
                 pointerEvents="none"
                 style={{
                   opacity:
@@ -3020,8 +3094,8 @@ function AggregateView({
               />
             ) : null,
           )}
-          {pinnedOutline && <path d={pinnedOutline} fill="none" stroke="#fff" strokeWidth={1.4} />}
-          {hoverOutline && <path d={hoverOutline} fill="none" stroke="#fff" strokeWidth={1.2} />}
+          {pinnedOutline && <path d={pinnedOutline} fill="none" stroke="#fff" strokeWidth={2} />}
+          {hoverOutline && <path d={hoverOutline} fill="none" stroke="#fff" strokeWidth={2} />}
         </svg>
         {hover && hoverBand && (
           <div
@@ -3854,7 +3928,7 @@ export default function MediaMap() {
           ? Math.max(0, valAt(c, d))
           : 0,
       );
-      return { name: c.name, sector: c.sector, color, stroke: isNearBlack(color) ? AGG_DARK_OUTLINE : undefined, values };
+      return { name: c.name, sector: c.sector, color, dark: isNearBlack(color), values };
     });
     // Stacking order is decided PER MONTH in AggregateView (largest on top for
     // that month), so no global ordering is applied here.
@@ -6485,8 +6559,10 @@ export default function MediaMap() {
             // Clear the mobile browser's home indicator / toolbar safe area.
             bottom: `calc(${timelineOpen ? 72 : 16}px + env(safe-area-inset-bottom))`,
             zIndex: 11,
-            // Hidden while the game runs — the paddle sweeps through this corner.
-            display: game.active ? "none" : "flex",
+            // Hidden while the game runs — the paddle sweeps through this corner —
+            // and in Aggregate, which shows every year at once (so neither the
+            // year pills nor the Time Machine apply).
+            display: game.active || viewMode === "aggregate" ? "none" : "flex",
             flexDirection: "column",
             alignItems: "flex-start",
             gap: 6,
@@ -6672,20 +6748,29 @@ export default function MediaMap() {
           );
         })()}
 
-        {/* Zoom + download UI — hidden in timeline mode (no map) and list mode */}
-        {!timelineOpen && viewMode !== "list" && !game.active && (
+        {/* Zoom + download UI — hidden in timeline mode (no map). Download stays
+            in every view; the zoom group folds away in List (nothing to zoom). */}
+        {!timelineOpen && !game.active && (
           <div
             style={{
               position: "absolute",
-              right: 16,
-              bottom: "calc(16px + env(safe-area-inset-bottom))",
+              // In Aggregate the controls tuck into the bottom-right corner of
+              // the last (right-most) bar, AGG_CONTROLS_INSET in from its right
+              // and bottom edges, clear of the year labels below the plot.
+              right: viewMode === "aggregate" ? AGG_LAST_BAR_RIGHT + AGG_CONTROLS_INSET : 16,
+              bottom: `calc(${viewMode === "aggregate" ? AGG_PAD_BOTTOM + AGG_CONTROLS_INSET : 16}px + env(safe-area-inset-bottom))`,
               display: "flex",
               flexDirection: "row",
               gap: 8,
               zIndex: 10,
+              transition: "bottom 240ms ease, right 240ms ease",
             }}
           >
+            {/* − / + / refresh. In List (nothing to zoom) it fades out and back in;
+                it keeps its place, so Download — to its right — never moves. Hidden
+                from keyboard and screen readers once faded. */}
             <div
+              aria-hidden={viewMode === "list"}
               style={{
                 display: "flex",
                 flexDirection: "row",
@@ -6695,6 +6780,10 @@ export default function MediaMap() {
                 borderRadius: 10,
                 backdropFilter: "blur(6px)",
                 border: "1px solid rgba(255,255,255,0.15)",
+                opacity: viewMode === "list" ? 0 : 1,
+                visibility: viewMode === "list" ? "hidden" : "visible",
+                pointerEvents: viewMode === "list" ? "none" : "auto",
+                transition: viewMode === "list" ? "opacity 220ms ease, visibility 0s linear 220ms" : "opacity 220ms ease",
               }}
             >
               <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>−</button>
@@ -6737,46 +6826,45 @@ export default function MediaMap() {
                 </span>
               </button>
             </div>
-            {viewMode === "map" && (
-              <div
+            {/* Download — in every view. */}
+            <div
+              style={{
+                display: "flex",
+                background: "rgba(255,255,255,0.08)",
+                padding: 6,
+                borderRadius: 10,
+                backdropFilter: "blur(6px)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            >
+              <button
+                aria-label="Download the map and more about the Media Universe"
+                title="Download"
+                className="mm-hover"
+                onClick={() => setAboutOpen(true)}
                 style={{
-                  display: "flex",
-                  background: "rgba(255,255,255,0.08)",
-                  padding: 6,
-                  borderRadius: 10,
-                  backdropFilter: "blur(6px)",
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  ...zoomBtnStyle,
+                  // Label stays white (zoomBtnStyle color); only the icon is grey.
+                  // Mobile: icon-only square; desktop: auto-width pill with the DOWNLOAD label.
+                  ...(isMobile
+                    ? {}
+                    : {
+                        width: "auto",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "0 12px",
+                        fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        letterSpacing: 1,
+                      }),
                 }}
               >
-                <button
-                  aria-label="Download the map and more about the Media Universe"
-                  title="Download"
-                  className="mm-hover"
-                  onClick={() => setAboutOpen(true)}
-                  style={{
-                    ...zoomBtnStyle,
-                    // Label stays white (zoomBtnStyle color); only the icon is grey.
-                    // Mobile: icon-only square; desktop: auto-width pill with the DOWNLOAD label.
-                    ...(isMobile
-                      ? {}
-                      : {
-                          width: "auto",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          padding: "0 12px",
-                          fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
-                          fontSize: 13,
-                          fontWeight: 500,
-                          letterSpacing: 1,
-                        }),
-                  }}
-                >
-                  {!isMobile && <span className="cap-center">DOWNLOAD</span>}
-                  <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 18, display: "block", lineHeight: 1, color: ICON_GREY }}>download</span>
-                </button>
-              </div>
-            )}
+                {!isMobile && <span className="cap-center">DOWNLOAD</span>}
+                <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 18, display: "block", lineHeight: 1, color: ICON_GREY }}>download</span>
+              </button>
+            </div>
           </div>
         )}
 

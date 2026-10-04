@@ -125,7 +125,7 @@ export function GameOverlay({
                   // Royal blue; on hover it flips to white with blue text
                   // and the illustration's planets glow brighter.
                   background: startHover ? "#ffffff" : "#3657FD",
-                  color: startHover ? "#3657FD" : "#ffffff",
+                  color: startHover ? "#18266E" : "#ffffff",
                   transition: "background 160ms ease, color 160ms ease",
                 }}
                 autoFocus
