@@ -71,7 +71,7 @@ html, body, #root {
   box-shadow: inset 0 0 0 200px rgba(255, 255, 255, 0.08);
 }
 
-/* Royal blue buttons (Substack CTA, the game's Play Again): white with blue
+/* Royal blue buttons (Substack CTA, the game's Play Again): white with navy
    text on hover. The About modal's blue buttons and the Time Machine / game
    start buttons do the same from their own hover state. */
 .mm-blue-btn {
@@ -83,7 +83,7 @@ html, body, #root {
 .mm-blue-btn:hover,
 .mm-blue-btn:focus-visible {
   background: #ffffff;
-  color: #3657fd;
+  color: #18266e; /* navy — the hover text colour of every royal blue button */
   border-color: #ffffff;
 }
 /* The Substack flag, drawn as a mask so it follows the button's text colour. */
