@@ -119,6 +119,35 @@ html, body, #root {
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* Time Machine opening animation: each map (and the Explore row) rises into
+   place as it fades in. Duration, delay and easing are set inline per map. */
+@keyframes tm-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--tm-rise, 28px)) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* The year strip slides up from just below the bottom edge. */
+@keyframes tm-strip-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tm-enter {
+    animation: none !important;
+  }
+}
+
 /* About-modal tab bar: horizontally scrollable on mobile with no visible bar. */
 .about-tabs {
   scrollbar-width: none; /* Firefox */
