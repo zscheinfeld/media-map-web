@@ -2678,6 +2678,7 @@ const AGG_COLOR_OVERRIDES: Record<string, string> = {
   alphabet: "#EF1A1A",
   apple: "#B8B8B8",
   microsoft: "#FFC000",
+  amazon: "#18266E",
 };
 
 /** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
