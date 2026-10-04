@@ -2676,7 +2676,7 @@ const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
 // most saturated colour of their planet's palette.
 const AGG_COLOR_OVERRIDES: Record<string, string> = {
   alphabet: "#EF1A1A",
-  apple: "#B8B8B8",
+  apple: "#8196FE",
   microsoft: "#FFC000",
   amazon: "#18266E",
   walmart: "#EF6262",
