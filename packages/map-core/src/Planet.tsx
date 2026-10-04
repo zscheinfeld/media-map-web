@@ -1,4 +1,4 @@
-import type {MouseEvent as ReactMouseEvent} from "react"
+import type {CSSProperties, MouseEvent as ReactMouseEvent} from "react"
 import type {PlanetNode} from "./types.js"
 import {formatValuation, hexToRgba, ombreStripeColors} from "./style.js"
 
@@ -17,13 +17,6 @@ export type PlanetProps = {
   onPlanetMouseDown?: (node: PlanetNode, e: ReactMouseEvent) => void
   /** Render the valuation line under the name. Caller owns the rule (zoom threshold, Large Cap, etc.). */
   showValuation?: boolean
-  /**
-   * Keep the name centred on the planet whether or not the valuation shows; the
-   * valuation then hangs under it. For planets whose valuation comes and goes
-   * (with zoom), so the name never moves. Off (default): name + valuation are
-   * centred as a pair.
-   */
-  nameStaysPut?: boolean
   /** Hide the name label unless hovered. Caller owns the rule (e.g. mobile shows only Large Cap). */
   labelSuppressed?: boolean
   /** Below this on-screen diameter the label is hidden (unless hovered). 0 = always show. */
@@ -55,9 +48,25 @@ export type PlanetProps = {
 }
 
 // How text appears and disappears (a name revealed by zooming in, the valuation
-// line): a short fade. Position is never eased — text that eased toward a
-// zoom-dependent place lagged behind the zoom and bobbed.
+// line): a short fade — and, when the valuation comes on, the name slides up
+// half a line so the pair stays centred on the planet.
+//
+// That slide eases a unitless FRACTION (0 → 1, the `--mm-label-lift` property),
+// never the distance itself. The distance is in slide units, so it changes on
+// every frame of a zoom; easing it directly (a `transform` transition) left the
+// name trailing 200ms behind the zoom, bobbing up and down as you pinched.
 const LABEL_FADE = "opacity 200ms ease"
+const LABEL_LIFT = "--mm-label-lift"
+const LABEL_LIFT_EASE = `${LABEL_LIFT} 200ms ease`
+// A custom property only eases once it is registered as a number. Where that
+// isn't supported the name simply steps up instead of sliding.
+if (typeof CSS !== "undefined" && typeof CSS.registerProperty === "function") {
+  try {
+    CSS.registerProperty({name: LABEL_LIFT, syntax: "<number>", inherits: false, initialValue: "0"})
+  } catch {
+    // Already registered (hot reload, or a second copy of this module).
+  }
+}
 
 // Presentational planet: fill OR stripes (stripes win when 2+), optional glow,
 // stroke, and a foreignObject label. Edit-mode cues (red pinned ring, yellow
@@ -74,7 +83,6 @@ export function Planet({
   isSelected = false,
   onPlanetMouseDown,
   showValuation = false,
-  nameStaysPut = false,
   labelSuppressed = false,
   labelMinScreenDiameter = 0,
   entityLabelSuppressed = false,
@@ -117,11 +125,11 @@ export function Planet({
     const lineH = labelFontPx
     const gap = labelFontPx * 0.15
     const nameH = words.length * lineH
-    // The name is laid out centred on the planet. With a valuation under it the
-    // pair is centred instead, which lifts the name by half the extra height —
-    // unless the name stays put, and the valuation just hangs below it.
-    const lift = withValuation && !nameStaysPut ? (gap + lineH) / 2 : 0
-    const top = node.y - nameH / 2 - lift
+    // The name is laid out centred on the planet; with a valuation under it the
+    // pair is centred instead, which lifts the name by half the extra height.
+    // (See LABEL_LIFT: the distance tracks the zoom, only the fraction is eased.)
+    const top = node.y - nameH / 2
+    const liftBy = (gap + lineH) / 2
     // Company name = ITC Franklin Gothic Medium (500) + 2% tracking; the valuation
     // number is Book (400) with normal tracking, in its own <text> so it can fade
     // on its own. Tracking is 2% of the font size, in slide units, so it scales
@@ -149,7 +157,10 @@ export function Planet({
             // no circle); otherwise — and whenever it is hidden — it's click-through.
             pointerEvents: isEditMode && shown ? "auto" : "none",
             cursor: isEditMode ? "grab" : undefined,
-          }}
+            [LABEL_LIFT]: withValuation ? 1 : 0,
+            transform: `translateY(calc(var(${LABEL_LIFT}) * ${-liftBy}px))`,
+            transition: LABEL_LIFT_EASE,
+          } as CSSProperties}
         >
           {words.map((w, i) => (
             <tspan key={i} x={node.x} y={top + lineH / 2 + i * lineH}>
@@ -161,7 +172,7 @@ export function Planet({
         {!node.isEntity && (
           <text
             {...face}
-            y={node.y + nameH / 2 + (nameStaysPut ? gap + lineH / 2 : gap / 2)}
+            y={node.y + nameH / 2 + gap / 2}
             fontWeight={400}
             style={{pointerEvents: "none", opacity: withValuation ? 0.85 : 0, transition: LABEL_FADE}}
           >
