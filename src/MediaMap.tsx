@@ -2677,6 +2677,7 @@ const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
 const AGG_COLOR_OVERRIDES: Record<string, string> = {
   alphabet: "#EF1A1A",
   apple: "#B8B8B8",
+  microsoft: "#FFC000",
 };
 
 /** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
