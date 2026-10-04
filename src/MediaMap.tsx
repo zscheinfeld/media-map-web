@@ -314,8 +314,11 @@ function MobileViewSwitcher({
           width: 38,
           height: 38,
           borderRadius: 10,
-          background: open ? "rgba(120,160,255,0.22)" : "rgba(0,0,0,0.5)",
-          border: open ? "1px solid rgba(150,180,255,0.6)" : "1px solid rgba(255,255,255,0.2)",
+          // At rest: the control pills' fill and 0.5px hairline (it sits beside
+          // the view tabs' pill). Open: the blue "active" look.
+          background: open ? "rgba(120,160,255,0.22)" : PILL_BG,
+          border: open ? "1px solid rgba(150,180,255,0.6)" : "none",
+          boxShadow: open ? undefined : PILL_HAIRLINE,
           color: "white",
           display: "grid",
           placeItems: "center",
@@ -454,13 +457,20 @@ type SectorPanelProps = {
   panelBackground?: string | null;
 };
 
+/** Fill of the control pills over the map (view tabs; zoom / refresh; download). */
+const PILL_BG = "rgba(10, 15, 41, 0.5)";
+/** 0.5px inside hairline for the control pills (white at 15%). */
+const PILL_HAIRLINE = "inset 0 0 0 0.5px rgba(255,255,255,0.15)";
+
 const pillBtn: React.CSSProperties = {
   flex: 1,
   background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.18)",
+  // The 0.5px hairline comes from the `mm-hairline` class (App.css), so it can
+  // combine with the hover highlight. Padding is 5px + the 1px a border used to take.
+  border: "none",
   color: "#fff",
   borderRadius: 6,
-  padding: "5px 0",
+  padding: "6px 0",
   fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
   fontSize: 16,
   cursor: "pointer",
@@ -552,8 +562,8 @@ function SectorPanelContent({
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-        <button onClick={() => onAll(true)} className="mm-hover" style={pillBtn}>All</button>
-        <button onClick={() => onAll(false)} className="mm-hover" style={pillBtn}>None</button>
+        <button onClick={() => onAll(true)} className="mm-hover mm-hairline" style={pillBtn}>All</button>
+        <button onClick={() => onAll(false)} className="mm-hover mm-hairline" style={pillBtn}>None</button>
       </div>
       </div>
       {/* Sector list — the ONLY scrolling region (header above stays fixed).
@@ -2018,12 +2028,42 @@ const TM_VISIBLE_STEPS = 3.5;
 const TM_SLIDE_MS = 640;
 // "Explore this map": how quickly everything except the focused map clears away.
 const TM_EXPLORE_FADE_MS = 220;
-// Phones get their own copy of every setting. It starts out identical to the
-// desktop set; tune it with ?tm=1 on a phone (or a phone-width window / the
-// layout lab's phone preview) and paste the result here.
-const TM_DEFAULTS_MOBILE: TmTuning = { ...TM_DEFAULTS };
-const TM_TUNING_KEY = "mm-time-machine-tuning-v1";
-const TM_TUNING_KEY_MOBILE = "mm-time-machine-tuning-mobile-v1";
+// Phones get their own copy of every setting — one per phone view, since the
+// two views have differently shaped maps (1:1 is square, 16:9 is the wide
+// desktop map). Tune them with ?tm=1 on a phone (or a phone-width window / the
+// layout lab's phone preview) and paste the result here. Two values mean
+// something different on a phone:
+//  - the focused map's size is `maxScreenShare` of the screen's width
+//    (`focusW` isn't used), so one slider sizes it on every phone;
+//  - `spread` is in px on a TM_PHONE_REF_W-wide screen and scales with the
+//    screen, so the carousel keeps its proportions from phone to phone.
+const TM_PHONE_REF_W = 390;
+// Phone 1:1 (the default phone view). Tuned by eye in the ?tm=1 panel, 2026-10-05.
+const TM_DEFAULTS_PHONE_SQUARE: TmTuning = {
+  focusW: 425, maxScreenShare: 0.68, mapHeight: 0.96, jumpExtraMs: 110, depth: 0.08, spread: 115,
+  opacityStep: 0.11, dimStep: 0.47, labelOpacityStep: 0.51,
+  introMs: 900, introUiMs: 500, introStagger: 110, introEase: 0.9, introRise: 90,
+  exploreMs: 750,
+  exploreH: 47, exploreRadius: 12,
+  tickSpread: 63, tickH: 28, tickActiveH: 41, stripBottom: 16,
+  planetMode: TM_REALISTIC, strokeBigPx: 0.85, strokeSmallPx: 0.85,
+};
+// Phone 16:9: the same, with a slightly larger and taller map (the wide map is
+// short at phone width). Tuned by eye, 2026-10-05.
+const TM_DEFAULTS_PHONE_FULL: TmTuning = { ...TM_DEFAULTS_PHONE_SQUARE, maxScreenShare: 0.75, mapHeight: 1.08 };
+/** Which set of Time Machine values is in use. */
+type TmDevice = "desktop" | "square" | "full";
+const TM_DEVICE_DEFAULTS: Record<TmDevice, TmTuning> = {
+  desktop: TM_DEFAULTS,
+  square: TM_DEFAULTS_PHONE_SQUARE,
+  full: TM_DEFAULTS_PHONE_FULL,
+};
+const TM_DEVICE_KEYS: Record<TmDevice, string> = {
+  desktop: "mm-time-machine-tuning-v1",
+  square: "mm-time-machine-tuning-phone-square-v1",
+  full: "mm-time-machine-tuning-phone-full-v1",
+};
+const TM_DEVICES = Object.keys(TM_DEVICE_DEFAULTS) as TmDevice[];
 
 /** Opening-animation easing: blends from linear (0) to a strong ease-out (1). */
 function tmIntroEasing(intensity: number): string {
@@ -2059,35 +2099,34 @@ function loadTmTuning(key: string, defaults: TmTuning): TmTuning {
 }
 
 /**
- * Time Machine tuning for this device (phones have their own set): the
- * defaults, or — with ?tm=1 — live-editable values kept in this browser.
+ * Time Machine tuning for this device (desktop, or one of the two phone
+ * views): the defaults, or — with ?tm=1 — live-editable values kept in this
+ * browser.
  */
-function useTmTuning(mobile: boolean) {
+function useTmTuning(device: TmDevice) {
   const enabled = useMemo(() => {
     if (typeof window === "undefined") return false;
     const v = new URLSearchParams(window.location.search).get("tm");
     return v === "1" || v === "true";
   }, []);
-  const [sets, setSets] = useState<{ desktop: TmTuning; mobile: TmTuning }>(() =>
+  const [sets, setSets] = useState<Record<TmDevice, TmTuning>>(() =>
     enabled
-      ? { desktop: loadTmTuning(TM_TUNING_KEY, TM_DEFAULTS), mobile: loadTmTuning(TM_TUNING_KEY_MOBILE, TM_DEFAULTS_MOBILE) }
-      : { desktop: TM_DEFAULTS, mobile: TM_DEFAULTS_MOBILE },
+      ? (Object.fromEntries(TM_DEVICES.map((d) => [d, loadTmTuning(TM_DEVICE_KEYS[d], TM_DEVICE_DEFAULTS[d])])) as Record<TmDevice, TmTuning>)
+      : TM_DEVICE_DEFAULTS,
   );
   useEffect(() => {
     if (!enabled) return;
     try {
-      localStorage.setItem(TM_TUNING_KEY, JSON.stringify(sets.desktop));
-      localStorage.setItem(TM_TUNING_KEY_MOBILE, JSON.stringify(sets.mobile));
+      for (const d of TM_DEVICES) localStorage.setItem(TM_DEVICE_KEYS[d], JSON.stringify(sets[d]));
     } catch {
       /* ignore */
     }
   }, [enabled, sets]);
-  const device = mobile ? "mobile" : "desktop";
   const setTuning = useCallback(
     (fn: (t: TmTuning) => TmTuning) => setSets((all) => ({ ...all, [device]: fn(all[device]) })),
     [device],
   );
-  return { enabled, tuning: sets[device], setTuning, defaults: mobile ? TM_DEFAULTS_MOBILE : TM_DEFAULTS };
+  return { enabled, tuning: sets[device], setTuning, defaults: TM_DEVICE_DEFAULTS[device] };
 }
 
 // Whether the ?tm=1 panel is tucked away, and which tab it is on — kept for the
@@ -2101,6 +2140,7 @@ function TmTuningPanel({
   setTuning,
   defaults,
   device,
+  setName,
   onReplay,
 }: {
   tuning: TmTuning;
@@ -2113,6 +2153,8 @@ function TmTuningPanel({
    * "phone-preview" (the layout lab's phone frame, with room beside it).
    */
   device: "desktop" | "phone" | "phone-preview";
+  /** Name of the set being edited, shown in the header (e.g. "Phone 1:1"). */
+  setName: string;
   /** Play the opening animation again. */
   onReplay: () => void;
 }) {
@@ -2138,8 +2180,14 @@ function TmTuningPanel({
     { value: TM_HYBRID, label: "Hybrid", hint: "Realistic on the focused or hovered map; outlines on the others." },
   ];
   const layoutRows: Row[] = [
-    { key: "focusW", label: "Focused map size", min: 120, max: 900, step: 5, suffix: "px" },
-    { key: "maxScreenShare", label: "Max share of screen width", min: 0.4, max: 1, step: 0.01, digits: 2 },
+    // Desktop sizes the focused map in px (capped in a narrow window); a phone
+    // sizes it as a share of the screen's width — one slider there.
+    ...(device === "desktop"
+      ? ([
+          { key: "focusW", label: "Focused map size", min: 120, max: 900, step: 5, suffix: "px" },
+          { key: "maxScreenShare", label: "Max share of window width", min: 0.4, max: 1, step: 0.01, digits: 2 },
+        ] as Row[])
+      : ([{ key: "maxScreenShare", label: "Focused map size (share of screen)", min: 0.3, max: 1, step: 0.01, digits: 2 }] as Row[])),
     { key: "mapHeight", label: "Map height (1 = whole map)", min: 0.4, max: 2.4, step: 0.01, digits: 2, suffix: "×" },
     { key: "depth", label: "Depth (smallest map)", min: 0.05, max: 1, step: 0.01, digits: 2 },
     { key: "spread", label: "Spread", min: 40, max: 600, step: 5, suffix: "px" },
@@ -2195,7 +2243,7 @@ function TmTuningPanel({
     >
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
         <span style={{ flex: 1, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#8f98a6", fontWeight: 600 }}>
-          Time Machine · <span style={{ color: "#a7f3d0" }}>{device === "desktop" ? "Desktop" : "Phone"}</span>
+          Time Machine · <span style={{ color: "#a7f3d0" }}>{setName}</span>
         </span>
         <button style={{ ...btn, padding: "3px 9px", fontSize: 11 }} onClick={() => hide(true)} title="Hide the sliders">Hide</button>
       </div>
@@ -2546,6 +2594,7 @@ function Carousel({
   tuning,
   bigThresholdB,
   exploring,
+  phone,
 }: {
   dates: MapDate[];
   /** Fractional index into `dates` — where the carousel is headed. */
@@ -2560,6 +2609,8 @@ function Carousel({
   bigThresholdB: number;
   /** "Explore this map" is playing: everything but the focused map clears away. */
   exploring: boolean;
+  /** Phone layout: the map is sized from the screen's width (see TM_PHONE_REF_W). */
+  phone: boolean;
 }) {
   // Nearest whole year — the focused map + the centre of the render window.
   const selectedIdx = Math.max(0, Math.min(dates.length - 1, Math.round(position)));
@@ -2671,10 +2722,13 @@ function Carousel({
   const slots: number[] = [];
   for (let i = renderRange.minIdx; i <= renderRange.maxIdx; i++) slots.push(i);
 
-  // On a narrow screen the focused map shrinks to fit, and the spread with it.
+  // Desktop: the focused map is `focusW` wide; in a narrow window it shrinks to
+  // fit, and the spread with it. Phone: its width is a share of the screen and
+  // the spread scales with the screen (see TM_PHONE_REF_W).
   const fit = containerW > 0 ? Math.min(1, (containerW * tuning.maxScreenShare) / tuning.focusW) : 1;
-  const focusW = tuning.focusW * fit;
-  const spread = tuning.spread * fit;
+  const screenW = containerW || TM_PHONE_REF_W;
+  const focusW = phone ? screenW * tuning.maxScreenShare : tuning.focusW * fit;
+  const spread = phone ? tuning.spread * (screenW / TM_PHONE_REF_W) : tuning.spread * fit;
   const focusH = (focusW / (canvas.w / canvas.h)) * tuning.mapHeight;
   // The map, its label and the Explore row are centred as one group.
   const LABEL_SPACE = 30; // label + its gap under the map
@@ -4424,8 +4478,8 @@ export default function MediaMap() {
 
   const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
   // Time Machine layout numbers (tunable with ?tm=1).
-  const tm = useTmTuning(isMobile);
-  const tmStripH = tmStripHeight(tm.tuning);
+  // Desktop, or the phone view in use (the editor-only phone views share 1:1's).
+  const tm = useTmTuning(!isMobile ? "desktop" : activeType === "full" ? "full" : "square");
   // Bumped by the tuning panel's "Replay intro": remounts the carousel so its
   // opening animation plays again.
   const [tmIntroToken, setTmIntroToken] = useState(0);
@@ -7248,10 +7302,12 @@ export default function MediaMap() {
               ...(isMobile ? { left: 16 } : { right: 16 }),
               zIndex: 12,
               display: "flex",
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.15)",
+              background: PILL_BG,
+              // 0.5px hairline (see PILL_HAIRLINE); padding is 4px + the 1px a
+              // border used to take.
+              boxShadow: PILL_HAIRLINE,
               borderRadius: 10,
-              padding: 4,
+              padding: 5,
               backdropFilter: "blur(6px)",
               gap: 2,
               alignItems: "center",
@@ -7378,6 +7434,7 @@ export default function MediaMap() {
               // The same big / small split the map's type uses.
               bigThresholdB={KT?.labelThresholdB ?? 100}
               exploring={!!exploring}
+              phone={isMobile}
             />
             <TimelineStrip
               key={`strip-${tmIntroToken}`}
@@ -7395,6 +7452,7 @@ export default function MediaMap() {
                 setTuning={tm.setTuning}
                 defaults={tm.defaults}
                 device={!isMobile ? "desktop" : realIsMobile ? "phone" : "phone-preview"}
+                setName={!isMobile ? "Desktop" : activeType === "full" ? "Phone 16:9" : "Phone 1:1"}
                 onReplay={() => setTmIntroToken((n) => n + 1)}
               />
             )}
@@ -7446,8 +7504,7 @@ export default function MediaMap() {
             position: "absolute",
             left: 16,
             // Clear the mobile browser's home indicator / toolbar safe area.
-            // In the Time Machine the pills straddle the top edge of the year strip.
-            bottom: `calc(${timelineOpen ? tmStripH - 26 : 16}px + env(safe-area-inset-bottom))`,
+            bottom: "calc(16px + env(safe-area-inset-bottom))",
             zIndex: 11,
             // Hidden while the game runs — the paddle sweeps through this corner —
             // and in Aggregate, which shows every year at once (so neither the
@@ -7456,10 +7513,12 @@ export default function MediaMap() {
             flexDirection: "column",
             alignItems: "flex-start",
             gap: 6,
-            // Opening the Time Machine, the pills ride up with the year strip.
-            transition: timelineOpen
-              ? `bottom ${tm.tuning.introUiMs}ms ${tmIntroEasing(tm.tuning.introEase)}`
-              : "bottom 240ms ease",
+            // The whole stack steps aside while the Time Machine is open: the year
+            // pills pick the MAP's year, and once you're in, the Time Machine
+            // button has done its job (Close Timeline is the way out).
+            opacity: timelineOpen ? 0 : 1,
+            pointerEvents: timelineOpen ? "none" : undefined,
+            transition: "opacity 200ms ease",
           }}
         >
           {displayedViewDates.map(d => {
@@ -7546,20 +7605,18 @@ export default function MediaMap() {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              background: timelineOpen
-                ? "rgba(120,160,255,0.18)"
-                : timelineButtonHovered
-                  ? "rgba(255,255,255,0.14)"
-                  : "rgba(255,255,255,0.08)",
-              border: timelineOpen
-                ? "1px solid rgba(150,180,255,0.5)"
-                : timelineButtonHovered
-                  ? "1px solid rgba(255,255,255,0.28)"
-                  : "1px solid rgba(255,255,255,0.15)",
+              // The control pills' 0.5px hairline, but a lighter fill than theirs so
+              // the button isn't missed. Hover adds the light wash the other
+              // controls get (.mm-hover's, done here because the hairline already
+              // uses the box-shadow).
+              background: "rgba(255,255,255,0.08)",
+              border: "none",
+              boxShadow: timelineButtonHovered ? `${PILL_HAIRLINE}, inset 0 0 0 200px rgba(255,255,255,0.08)` : PILL_HAIRLINE,
               borderRadius: 10,
               height: 34,
               boxSizing: "border-box",
-              padding: "0 12px",
+              // 12px + the 1px a border used to take.
+              padding: "0 13px",
               backdropFilter: "blur(6px)",
               color: "white",
               fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
@@ -7568,7 +7625,7 @@ export default function MediaMap() {
               letterSpacing: 1,
               cursor: "pointer",
               textAlign: "left",
-              transition: "background 160ms, border-color 160ms",
+              transition: "box-shadow 160ms",
               whiteSpace: "nowrap",
             }}
           >
@@ -7642,11 +7699,15 @@ export default function MediaMap() {
                 display: "flex",
                 flexDirection: "row",
                 gap: 8,
-                background: "rgba(255,255,255,0.08)",
-                padding: 6,
+                background: PILL_BG,
+                // 6px + the 1px a border used to take, so the pill keeps its size.
+                padding: 7,
                 borderRadius: 10,
                 backdropFilter: "blur(6px)",
-                border: "1px solid rgba(255,255,255,0.15)",
+                // A 0.5px hairline around the pill (the buttons inside have no
+                // stroke). Drawn as an inset shadow: browsers round a 0.5px
+                // `border` up to a full pixel.
+                boxShadow: PILL_HAIRLINE,
                 opacity: viewMode === "list" ? 0 : 1,
                 visibility: viewMode === "list" ? "hidden" : "visible",
                 pointerEvents: viewMode === "list" ? "none" : "auto",
@@ -7671,7 +7732,7 @@ export default function MediaMap() {
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
-                        padding: "0 12px",
+                        padding: "0 13px", // 12px + the 1px the removed border used to take
                         fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                         fontSize: 13,
                         fontWeight: 500,
@@ -7697,11 +7758,15 @@ export default function MediaMap() {
             <div
               style={{
                 display: "flex",
-                background: "rgba(255,255,255,0.08)",
-                padding: 6,
+                background: PILL_BG,
+                // 6px + the 1px a border used to take, so the pill keeps its size.
+                padding: 7,
                 borderRadius: 10,
                 backdropFilter: "blur(6px)",
-                border: "1px solid rgba(255,255,255,0.15)",
+                // A 0.5px hairline around the pill (the buttons inside have no
+                // stroke). Drawn as an inset shadow: browsers round a 0.5px
+                // `border` up to a full pixel.
+                boxShadow: PILL_HAIRLINE,
               }}
             >
               <button
@@ -7720,7 +7785,7 @@ export default function MediaMap() {
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
-                        padding: "0 12px",
+                        padding: "0 13px", // 12px + the 1px the removed border used to take
                         fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
                         fontSize: 13,
                         fontWeight: 500,
@@ -7837,9 +7902,14 @@ const arrowBtnStyle = (enabled: boolean): React.CSSProperties => ({
   height: 38,
   display: "grid",
   placeItems: "center",
+  // The Time Machine button's look: light fill + the pills' 0.5px hairline
+  // (an inset shadow — a 0.5px border would be rounded up to 1px).
   background: enabled ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
   color: enabled ? "white" : "rgba(255,255,255,0.25)",
-  border: `1px solid ${enabled ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)"}`,
+  border: "none",
+  boxShadow: enabled ? PILL_HAIRLINE : "inset 0 0 0 0.5px rgba(255,255,255,0.06)",
+  // No border, so the Time Machine hover veil (.tm-btn) needn't reach past the edge.
+  ["--tm-veil-inset" as string]: "0px",
   borderRadius: 8,
   cursor: enabled ? "pointer" : "default",
   fontSize: 22,
@@ -7858,9 +7928,12 @@ const zoomBtnStyle: React.CSSProperties = {
   height: 34,
   display: "grid",
   placeItems: "center",
-  background: "rgba(0,0,0,0.45)",
+  background: "rgba(255,255,255,0.1)",
   color: "white",
-  border: "1px solid rgba(255,255,255,0.18)",
+  // No stroke at all — not even a transparent one: the hover highlight
+  // (.mm-hover, an inset shadow) stops at the border, so any border shows up
+  // as a ring on hover.
+  border: "none",
   borderRadius: 6,
   cursor: "pointer",
   fontSize: 18,
