@@ -25,8 +25,27 @@ import {
 } from "./exportScene";
 
 // Label font shrink (screen-px semantics) for the export only — smaller text
-// boxes fit dense clusters of small planets more easily. 0 = same as the site.
+// boxes fit dense clusters of small planets more easily. Applies only when the
+// export is NOT given the site's type rules (`ExportInput.type`); with them the
+// names are drawn at exactly the site's sizes.
 export const EXPORT_LABEL_SIZE_DELTA = 1.5;
+
+/**
+ * The site's type rules (layout lab → Type), so the downloaded image sets its
+ * names the way the map does: two sizes split at a valuation, and the outline
+ * weight. Sizes are in the site's screen px (the export draws at a fixed
+ * reference scale, see EXPORT_SLIDE_UNITS_PER_PX).
+ */
+export type ExportTypeRules = {
+  /** Name size for planets valued at or above `thresholdB`. */
+  largePx: number;
+  /** Name size for the rest, and for text-only entities. */
+  smallPx: number;
+  /** Valuation ($B) where the large size starts. */
+  thresholdB: number;
+  /** Black outline around the names in the image. */
+  strokePx: number;
+};
 
 // Minimum clearance the de-overlap pass enforces, in slide units. LABEL_GAP is
 // the total gap between two label boxes (or a label box and a planet edge);
@@ -64,6 +83,27 @@ export function measureLabelTextWidth(text: string, fontPx: number, weight: numb
   return w;
 }
 
+// Companies worth this much ($B) or more get their market cap printed under
+// their name in the downloaded image. The lower it is, the more the de-overlap
+// pass has to move planets to make room, and how much depends on the
+// arrangement that page load got (measured 2026-10-05 over five loads: $10B
+// never moved anything far; $1B was gentle on three loads and threw 9–17
+// planets over 150 units on the other two; every company moved ~half the map).
+// On trial at $3B.
+export const EXPORT_VALUATION_MIN_B = 3;
+
+// The names' black outline when the export isn't given the type rules (with
+// them, `type.strokePx` is the image's own weight, set in the layout lab).
+const DEFAULT_LABEL_STROKE_PX = 1.5;
+
+/**
+ * Whether a node's name carries its market cap in the export: Large Cap always
+ * (as on the map); with `minB` set, also every company valued at or above it
+ * (0 = every company that has a value).
+ */
+export const exportShowsValuation = (n: PlanetNode, minB: number | null | undefined): boolean =>
+  !n.isEntity && (n.sector === "Large Cap" || (minB != null && n.valuation_b > 0 && n.valuation_b >= minB));
+
 /**
  * Half-extents (slide units) of a node's rendered label box, mirroring Planet's
  * `renderNameLabel`: one word per line at `labelPx`, the name at weight 500 with
@@ -73,13 +113,15 @@ export function exportLabelHalfExtents(
   n: PlanetNode,
   labelPx: number,
   su: number,
+  /** Whether this node's label carries a valuation line (default: Large Cap only). */
+  withValuation: boolean = exportShowsValuation(n, null),
 ): { hw: number; hh: number } {
   const words = (n.labelText ?? n.name).trim().split(/\s+/);
   let maxW = 0;
   for (const w of words) {
     maxW = Math.max(maxW, measureLabelTextWidth(w, labelPx, 500) + 0.02 * labelPx * w.length);
   }
-  const withVal = !n.isEntity && n.sector === "Large Cap";
+  const withVal = withValuation;
   if (withVal) maxW = Math.max(maxW, measureLabelTextWidth(formatValuation(n.valuation_b), labelPx, 400));
   const totalH = words.length * labelPx + (withVal ? labelPx * 0.15 + labelPx : 0);
   return { hw: (maxW / 2) * su, hh: (totalH / 2) * su };
@@ -110,15 +152,27 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  */
 export function computeExportLayout(
   nodes: PlanetNode[],
-  labelPx: number,
+  /** Name size: one for every node, or per node (large / small type). */
+  labelPx: number | ((n: PlanetNode) => number),
   su: number,
   bounds: Bounds,
-  opts: { sweeps?: number; relax?: number } = {},
-): { pos: Map<string, { x: number; y: number }>; unresolved: Array<[string, string]>; sweeps: number } {
+  opts: { sweeps?: number; relax?: number; valuationMinB?: number | null; fitValuations?: boolean } = {},
+): {
+  pos: Map<string, { x: number; y: number }>;
+  unresolved: Array<[string, string]>;
+  sweeps: number;
+  /** Names whose label carries a market cap (the cut-off's, plus any fitted in). */
+  withValuation: Set<string>;
+} {
   const maxSweeps = opts.sweeps ?? EXPORT_MAX_SWEEPS;
   const relax = opts.relax ?? EXPORT_RELAX;
   const shapes: ExportShape[] = nodes.map((n) => {
-    const { hw, hh } = exportLabelHalfExtents(n, labelPx, su);
+    const { hw, hh } = exportLabelHalfExtents(
+      n,
+      typeof labelPx === "function" ? labelPx(n) : labelPx,
+      su,
+      exportShowsValuation(n, opts.valuationMinB),
+    );
     const r = n.isEntity ? 0 : n.targetR;
     const massR = Math.max(r, 25) + 25;
     const mass = massR * massR * (n.pinned ? 10 : 1);
@@ -324,7 +378,30 @@ export function computeExportLayout(
       if (hit) unresolved.push([a.name, b.name]);
     }
 
-  return { pos: new Map(shapes.map((s) => [s.name, { x: s.x, y: s.y }])), unresolved, sweeps: sweepsRun };
+  // Market caps below the cut-off, where there is room. With everything in its
+  // final place, offer each remaining company (largest first) the extra line and
+  // keep it only if the taller, maybe wider, label still clears every other
+  // shape and the bounds — so no planet moves for it.
+  const withValuation = new Set(nodes.filter((n) => exportShowsValuation(n, opts.valuationMinB)).map((n) => n.name));
+  if (opts.fitValuations) {
+    const order = nodes
+      .map((n, i) => ({ n, s: shapes[i] }))
+      .filter(({ n }) => !n.isEntity && n.valuation_b > 0 && !withValuation.has(n.name))
+      .sort((a, b) => b.n.valuation_b - a.n.valuation_b);
+    for (const { n, s } of order) {
+      const { hw, hh } = exportLabelHalfExtents(n, typeof labelPx === "function" ? labelPx(n) : labelPx, su, true);
+      const before = { hw: s.hw, hh: s.hh };
+      s.hw = hw + EXPORT_LABEL_GAP / 2;
+      s.hh = hh + EXPORT_LABEL_GAP / 2;
+      if (fits(s, s.x, s.y)) withValuation.add(n.name);
+      else {
+        s.hw = before.hw;
+        s.hh = before.hh;
+      }
+    }
+  }
+
+  return { pos: new Map(shapes.map((s) => [s.name, { x: s.x, y: s.y }])), unresolved, sweeps: sweepsRun, withValuation };
 }
 
 /** Synchronously render a React element to SVG markup via a detached root. */
@@ -388,12 +465,50 @@ async function fetchDataUri(url: string): Promise<string | null> {
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Left info panel (matches the site side panel's type styles) + the QR. */
+// The side panel's navy. The QR codes' backgrounds use it too, so the one on the
+// panel has no visible square and the one over the map matches it.
+const EXPORT_PANEL_BG = "#05060f";
+
+/**
+ * A QR code SVG as a data URI, recoloured for the dark image: white modules on
+ * the side panel's navy. The generator's files colour two full-size rects
+ * (clipped to "background" and "dot" shapes), and ship either way round — the
+ * Substack one pre-inverted, the map one black-on-white — so both are forced.
+ */
+async function fetchQrDataUri(url: string): Promise<string | null> {
+  const key = `qr:${url}`;
+  if (dataUriCache.has(key)) return dataUriCache.get(key) ?? null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(String(res.status));
+    const svg = (await res.text())
+      .replace(/(clip-path="url\('#clip-path-background-color'\)"\s+fill=")[^"]*(")/, `$1${EXPORT_PANEL_BG}$2`)
+      .replace(/(clip-path="url\('#clip-path-dot-color'\)"\s+fill=")[^"]*(")/, "$1#ffffff$2");
+    const uri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    dataUriCache.set(key, uri);
+    return uri;
+  } catch {
+    dataUriCache.set(key, null);
+    return null;
+  }
+}
+
+// Month abbreviations for the headline ("OCT. 2026"); May is not abbreviated.
+const HEADLINE_MONTHS = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
+// The note under the map (bottom-left of the map area).
+const EXPORT_SCALE_NOTE = ["Objects are to scale based on market cap", "except PSM: based on 2024/2025 revenue"];
+const EXPORT_MAP_URL_LABEL = "Map.Eshap.TV";
+
 function buildPanelMarkup(
   year: number,
+  month: number | null,
   sectors: string[],
   counts: Record<string, number>,
   logoUri: string | null,
+  /** Substack QR (bottom-left, beside the logo). */
   qrUri: string | null,
+  /** QR to the map itself (bottom-right, over the map). */
+  mapQrUri: string | null,
   sectorColorOverride?: (sector: string) => string | null,
 ): string {
   const W = EXPORT_W, H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
@@ -402,12 +517,14 @@ function buildPanelMarkup(
   const sectorTotal = sectors.length;
   const companyTotal = Object.values(counts).reduce((a, b) => a + b, 0);
   const parts: string[] = [];
-  parts.push(`<rect x="0" y="0" width="${PANEL_W}" height="${H}" fill="#05060f"/>`);
+  parts.push(`<rect x="0" y="0" width="${PANEL_W}" height="${H}" fill="${EXPORT_PANEL_BG}"/>`);
 
-  // Headline: MEDIA / UNIVERSE / {year} (uppercase, Demi 600, -1% tracking, 90% lh).
+  // Headline: MEDIA / UNIVERSE / {MON. year} (uppercase, Demi 600, -1% tracking,
+  // 90% lh). The month is the map's current one, so it rolls over on its own.
   const hlSize = 58;
   const hlLH = hlSize * 0.9;
-  const hlLines = ["MEDIA", "UNIVERSE", String(year)];
+  const monthLabel = month && month >= 1 && month <= 12 ? `${HEADLINE_MONTHS[month - 1]} ` : "";
+  const hlLines = ["MEDIA", "UNIVERSE", `${monthLabel}${year}`];
   let cy = PAD + hlSize;
   parts.push(
     `<text font-family='${FONT}' font-weight="600" font-size="${hlSize}" fill="#fff" letter-spacing="${(-0.01 * hlSize).toFixed(2)}" style="text-transform:uppercase">` +
@@ -448,20 +565,43 @@ function buildPanelMarkup(
     rowTop += containerH + rowGap;
   }
 
-  // Eshap logo — bottom-left.
+  // Bottom-left of the panel: the Substack QR, then the Eshap logo, one height.
+  // (QR files are recoloured white-on-dark by fetchQrDataUri.)
+  const markH = 92;
+  const markTop = H - PAD - markH;
+  let markX = PAD;
+  if (qrUri) {
+    parts.push(`<image x="${markX}" y="${markTop}" width="${markH}" height="${markH}" href="${qrUri}" xlink:href="${qrUri}"/>`);
+    markX += markH + 28;
+  }
   if (logoUri) {
-    const logoH = 70;
-    parts.push(`<image x="${PAD}" y="${H - PAD - logoH}" width="200" height="${logoH}" preserveAspectRatio="xMinYMid meet" href="${logoUri}" xlink:href="${logoUri}"/>`);
+    const logoW = Math.round(markH * (2625 / 933)); // the logo file's proportions
+    parts.push(`<image x="${markX}" y="${markTop}" width="${logoW}" height="${markH}" preserveAspectRatio="xMinYMid meet" href="${logoUri}" xlink:href="${logoUri}"/>`);
   }
 
-  // Substack QR — bottom-right over the map (the SVG is pre-inverted: white
-  // modules on #070111 so it sits quietly on the dark background).
-  const qrSize = 188;
+  // Over the map, in the "182 Companies" style (26px, Book, 60% white):
+  const noteStyle = `font-family='${FONT}' font-weight="400" font-size="${cSize}" fill="rgba(255,255,255,0.6)"`;
+  const over: string[] = [];
+  //  - bottom-left of the map area: the scale note, centred on the logo's height;
+  const noteLH = 34;
+  const noteMid = markTop + markH / 2;
+  const noteTop = noteMid - ((EXPORT_SCALE_NOTE.length - 1) * noteLH) / 2 + cSize * 0.34;
+  over.push(
+    `<text ${noteStyle}>` +
+      EXPORT_SCALE_NOTE.map((l, i) => `<tspan x="${PANEL_W + PAD}" y="${(noteTop + i * noteLH).toFixed(1)}">${esc(l)}</tspan>`).join("") +
+      `</text>`,
+  );
+  //  - bottom-right: the QR to the map, with its address underneath.
+  const qrSize = 172;
   const qrMargin = 72;
-  const qr = qrUri
-    ? `<image x="${W - qrSize - qrMargin}" y="${H - qrSize - qrMargin}" width="${qrSize}" height="${qrSize}" href="${qrUri}" xlink:href="${qrUri}"/>`
-    : "";
-  return `<g>${parts.join("")}</g>${qr}`;
+  if (mapQrUri) {
+    const qrX = W - qrSize - qrMargin;
+    const captionY = H - PAD;
+    const qrY = captionY - cSize - 10 - qrSize;
+    over.push(`<image x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" href="${mapQrUri}" xlink:href="${mapQrUri}"/>`);
+    over.push(`<text ${noteStyle} x="${qrX + qrSize / 2}" y="${captionY}" text-anchor="middle">${esc(EXPORT_MAP_URL_LABEL)}</text>`);
+  }
+  return `<g>${parts.join("")}</g>${over.join("")}`;
 }
 
 /** Rasterize the composite SVG over the site's background gradient → PNG blob. */
@@ -505,14 +645,70 @@ export type ExportInput = {
   connections: Array<{ from: string; to: string; style: "solid" | "dotted" }>;
   /** The site's rendered label size (screen px); the export shrinks it by EXPORT_LABEL_SIZE_DELTA. */
   labelSizePx: number;
+  /** The site's type rules. When given they replace `labelSizePx` (and its shrink). */
+  type?: ExportTypeRules | null;
+  /**
+   * Also print the market cap under the name of every company valued at or
+   * above this ($B; 0 = all of them). Unset = Large Cap only, as on the map.
+   */
+  valuationMinB?: number | null;
   bounds: Bounds;
   year: number;
+  /** Month of the map's current data (1–12), for the headline ("OCT. 2026"). */
+  month?: number;
   sectors: string[];
   counts: Record<string, number>;
   /** Style-lab overrides (branch experiment): background stops + sector colours. */
   bgStops?: [string, string, string];
   sectorColorOverride?: (sector: string) => string | null;
 };
+
+/** Name size per node: the map's large / small split, or one shrunk size without the type rules. */
+function exportLabelPxOf(input: Pick<ExportInput, "type" | "labelSizePx">): (n: PlanetNode) => number {
+  const type = input.type ?? null;
+  const flatPx = Math.max(1, input.labelSizePx - EXPORT_LABEL_SIZE_DELTA);
+  return (n) => (type ? (!n.isEntity && n.valuation_b >= type.thresholdB ? type.largePx : type.smallPx) : flatPx);
+}
+
+/** What making room for the names does to a layout — how the lab judges an arrangement. */
+export type ExportLayoutStats = {
+  /** Companies on the map (entities excluded). */
+  companies: number;
+  /** Names that carry a market cap. */
+  withValuation: number;
+  /** Planets the pass had to move more than 50 / 150 slide units. */
+  moved50: number;
+  moved150: number;
+  /** The single largest move, and whose. */
+  worst: { name: string; distance: number } | null;
+  /** Pairs it could not separate. */
+  unresolved: Array<[string, string]>;
+};
+
+/** Run the export's de-overlap pass on these nodes and report how far it moved things. */
+export function measureExportLayout(
+  input: Pick<ExportInput, "nodes" | "type" | "labelSizePx" | "bounds" | "valuationMinB">,
+): ExportLayoutStats {
+  const minB = input.valuationMinB ?? null;
+  const r = computeExportLayout(input.nodes, exportLabelPxOf(input), EXPORT_SLIDE_UNITS_PER_PX, input.bounds, { valuationMinB: minB });
+  let moved50 = 0, moved150 = 0;
+  let worst: ExportLayoutStats["worst"] = null;
+  for (const n of input.nodes) {
+    const q = r.pos.get(n.name);
+    const d = q ? Math.hypot(q.x - n.x, q.y - n.y) : 0;
+    if (d > 50) moved50++;
+    if (d > 150) moved150++;
+    if (!worst || d > worst.distance) worst = { name: n.name, distance: d };
+  }
+  return {
+    companies: input.nodes.filter((n) => !n.isEntity && n.valuation_b > 0).length,
+    withValuation: r.withValuation.size,
+    moved50,
+    moved150,
+    worst,
+    unresolved: r.unresolved,
+  };
+}
 
 /**
  * Build the export PNG: de-overlap the live layout, render the scene + panel,
@@ -522,8 +718,16 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
   // Yield once so the detached-root render below never runs inside a React
   // event dispatch / commit (flushSync must be called outside of those).
   await new Promise<void>((r) => setTimeout(r, 0));
-  const labelPx = Math.max(1, input.labelSizePx - EXPORT_LABEL_SIZE_DELTA);
-  const { pos, unresolved } = computeExportLayout(input.nodes, labelPx, EXPORT_SLIDE_UNITS_PER_PX, input.bounds);
+  const type = input.type ?? null;
+  const labelPx = exportLabelPxOf(input);
+  const valuationMinB = input.valuationMinB ?? null;
+  const { pos, unresolved } = computeExportLayout(input.nodes, labelPx, EXPORT_SLIDE_UNITS_PER_PX, input.bounds, { valuationMinB });
+  if (import.meta.env.DEV) {
+    // Dev-only handles for tuning: window.__exportProbe(minB) / __exportStats.
+    const w = window as unknown as { __exportStats?: unknown; __exportProbe?: unknown };
+    w.__exportProbe = (minB: number | null) => measureExportLayout({ ...input, valuationMinB: minB });
+    w.__exportStats = measureExportLayout(input);
+  }
   if (unresolved.length) {
     console.info(
       `[media-map] export: ${unresolved.length} overlap(s) could not be resolved — two pinned planets whose circles intersect, or a planet with no free space within 800 units. Adjust these in Sanity:`,
@@ -536,14 +740,21 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
   });
 
   const mapMarkup = renderSvgMarkup(
-    <ExportMapScene nodes={exportNodes} connections={input.connections} labelPx={labelPx} />,
+    <ExportMapScene
+      nodes={exportNodes}
+      connections={input.connections}
+      labelPx={labelPx}
+      labelStrokePx={type?.strokePx ?? DEFAULT_LABEL_STROKE_PX}
+      showValuation={(n) => exportShowsValuation(n, valuationMinB)}
+    />,
   );
-  const [fontCss, logoUri, qrUri] = await Promise.all([
+  const [fontCss, logoUri, qrUri, mapQrUri] = await Promise.all([
     buildMapFontCss(),
     fetchDataUri("/Evan-logo-new.png"),
-    fetchDataUri("/Eshap_QR.svg"),
+    fetchQrDataUri("/Eshap_QR.svg"),
+    fetchQrDataUri("/Map_Eshap_TV_QR.svg"),
   ]);
-  const panel = buildPanelMarkup(input.year, input.sectors, input.counts, logoUri, qrUri, input.sectorColorOverride);
+  const panel = buildPanelMarkup(input.year, input.month ?? null, input.sectors, input.counts, logoUri, qrUri, mapQrUri, input.sectorColorOverride);
   const root =
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${EXPORT_W}" height="${EXPORT_H}" viewBox="0 0 ${EXPORT_W} ${EXPORT_H}">` +
     `<style>${fontCss}</style>${mapMarkup}${panel}</svg>`;

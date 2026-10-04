@@ -19,10 +19,10 @@ import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type CompanyDetail, type ResolvedSanityMap, type ValuationType } from "./sanityMap";
-import { buildExportPng, clearTextWidthCache, downloadBlob, measureLabelTextWidth } from "./exportMap";
+import { buildExportPng, clearTextWidthCache, downloadBlob, measureExportLayout, measureLabelTextWidth, EXPORT_VALUATION_MIN_B, type ExportLayoutStats } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
-import { getSolvedYears, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
+import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
 import { GameOverlay } from "./game/GameOverlay";
 import { ghostColorFor, ghostStyleFor } from "./game/ghostStyle";
@@ -119,6 +119,11 @@ function useMediaQuery(query: string): boolean {
   }, [query]);
   return m;
 }
+
+// A fresh number each time it is asked — turns "this object changed" into
+// something that can sit in a cache key.
+let stampCounter = 0;
+const nextStampId = () => ++stampCounter;
 
 function useIsMobile(): boolean {
   const [m, setM] = useState<boolean>(() =>
@@ -2590,6 +2595,7 @@ function Carousel({
   animate,
   canvas,
   onSelect,
+  onSettle,
   onExplore,
   tuning,
   bigThresholdB,
@@ -2603,6 +2609,8 @@ function Carousel({
   animate: boolean;
   canvas: { x: number; y: number; w: number; h: number };
   onSelect: (d: MapDate) => void;
+  /** A drag / swipe ended: settle on this year (index into `dates`). */
+  onSettle: (index: number) => void;
   onExplore: () => void;
   tuning: TmTuning;
   /** Valuation ($B) from which a planet counts as "bigger" (its own stroke slider). */
@@ -2624,7 +2632,11 @@ function Carousel({
   // Keep the glide value on the wheel's position while scrubbing, so a jump or
   // the snap that follows starts from what is on screen.
   if (!animate && glide !== position) setGlide(position);
-  const shown = animate ? glide : position;
+  // Dragging / swiping sideways turns the carousel by hand: `drag` is how far
+  // (in years) the finger has pulled it from where it was, 1:1.
+  const [drag, setDrag] = useState<number | null>(null);
+  const [settleKick, setSettleKick] = useState(0);
+  const shown = Math.max(0, Math.min(dates.length - 1, (animate ? glide : position) + (drag ?? 0)));
   const shownRef = useRef(position);
   const jumpExtraMs = tuning.jumpExtraMs;
   useEffect(() => {
@@ -2649,9 +2661,10 @@ function Carousel({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-    // The jump's length is fixed when it starts.
+    // The jump's length is fixed when it starts. (`settleKick`: a drag that
+    // ends on the year it started from still has to glide back to it.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [position, animate]);
+  }, [position, animate, settleKick]);
   const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
@@ -2748,6 +2761,58 @@ function Carousel({
     };
   };
 
+  // ---- Drag / swipe sideways (mouse or touch) ----
+  // One year per `spread` px of travel, the distance between the focused map
+  // and its neighbour. A press that doesn't travel is still a click.
+  const dragRef = useRef<{ id: number; x0: number; moved: boolean; lastX: number; lastT: number; v: number } | null>(null);
+  const draggedRef = useRef(false); // true through the click that ends a drag, to swallow it
+  const stepPx = Math.max(40, spread);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (exploring || (e.pointerType === "mouse" && e.button !== 0)) return;
+    dragRef.current = { id: e.pointerId, x0: e.clientX, moved: false, lastX: e.clientX, lastT: e.timeStamp, v: 0 };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.x0;
+    if (!d.moved) {
+      if (Math.abs(dx) < 6) return;
+      d.moved = true;
+      draggedRef.current = true;
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+    // Finger speed (px/ms), lightly smoothed, for the flick at the end.
+    const dt = Math.max(1, e.timeStamp - d.lastT);
+    d.v = d.v * 0.6 + ((e.clientX - d.lastX) / dt) * 0.4;
+    d.lastX = e.clientX;
+    d.lastT = e.timeStamp;
+    setDrag(-dx / stepPx); // pull left → later years
+  };
+  const onPointerEnd = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.id) return;
+    dragRef.current = null;
+    if (!d.moved) return;
+    // Let go: carry on a little with the flick, then settle on the nearest year.
+    const now = shown;
+    const stale = e.timeStamp - d.lastT > 120; // paused before lifting → no flick
+    const fling = stale ? 0 : Math.max(-2, Math.min(2, (-d.v * 180) / stepPx));
+    const target = Math.max(0, Math.min(dates.length - 1, Math.round(now + fling)));
+    shownRef.current = now;
+    setGlide(now);
+    setDrag(null);
+    setSettleKick((k) => k + 1);
+    onSettle(target);
+    // The click that follows this pointerup belongs to the drag, not to a map.
+    window.setTimeout(() => {
+      draggedRef.current = false;
+    }, 0);
+  };
+  /** A click handler that ignores the click a drag ends with. */
+  const unlessDragged = (fn: () => void) => () => {
+    if (!draggedRef.current) fn();
+  };
+
   const canPrev = selectedIdx > 0;
   const canNext = selectedIdx < dates.length - 1;
   const stepBtn = (enabled: boolean): React.CSSProperties => ({
@@ -2760,9 +2825,18 @@ function Carousel({
   return (
     <div
       ref={containerRef}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
       style={{
         flex: 1,
         position: "relative",
+        // Sideways drags turn the carousel, so the browser must not claim them.
+        touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        cursor: drag !== null ? "grabbing" : undefined,
         // Clipped to the carousel — except while the focused map grows into the
         // real map, which reaches past it (the Time Machine's own edge clips then).
         overflow: exploring ? "visible" : "hidden",
@@ -2826,7 +2900,7 @@ function Carousel({
               isSelected={isSelected}
               // The focused map opens it (same as Explore); a neighbour only
               // comes into focus.
-              onClick={isSelected ? onExplore : () => onSelect(d)}
+              onClick={unlessDragged(isSelected ? onExplore : () => onSelect(d))}
               exploreHover={isSelected && exploreHover}
               onExploreHoverChange={setExploreHover}
               width={focusW}
@@ -4930,7 +5004,11 @@ export default function MediaMap() {
     [K, labelSizePx],
   );
   // Dragging planets / sector wells in the lab's Arrange tab.
-  const arrange = llab.arrange && layoutMode === "map" && !gameActive;
+  const arrange = llab.arrange && !llab.downloadView && layoutMode === "map" && !gameActive;
+  // Layout lab → Download, with a fixed arrangement: planets can be dragged to
+  // place them IN THE IMAGE ONLY (the online map's layout is not touched).
+  const downloadMoves = llab.applied.download.moves;
+  const dlArrange = llab.downloadView && llab.applied.download.seed != null && layoutMode === "map" && !gameActive && !mobileView;
   // The year Sanity's own data last set each planet's position / each sector's
   // well, as of the year `sn` is resolved at — for the positions and wells the
   // layout lab layers its edits over (see `mobilePinnedOf`, `inputsOf`). A lab
@@ -5238,7 +5316,17 @@ export default function MediaMap() {
 
   // Layout lab: deterministic solve. A fresh arrangement per page load (held
   // for the whole visit), or the published seed when that is switched off.
-  const layoutSeed = K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null;
+  // The downloaded image can use one fixed arrangement of its own (layout lab →
+  // Download). While the editor is on that tab, the desktop map shows it.
+  const downloadSeed = llab.active ? llab.applied.download.seed : null;
+  const previewDownloadSeed = llab.downloadView && downloadSeed != null && !layoutMobile;
+  const layoutSeed = K
+    ? previewDownloadSeed
+      ? downloadSeed
+      : llab.applied.shuffleEachLoad
+        ? llab.sessionSeed
+        : seedFor(llab.applied, labMode)
+    : null;
   // Everything that decides the layout on screen (the same shape `yearSpecAt`
   // builds for any other year).
   const liveSolveOpts: SolveLayoutOptions = {
@@ -5572,7 +5660,9 @@ export default function MediaMap() {
       const name = planetDragRef.current.name;
       const x = Math.round(dragState.x);
       const y = Math.round(dragState.y);
-      if (arrange) {
+      if (dlArrange) {
+        llab.setDownloadMove(name, { x, y });
+      } else if (arrange) {
         // Seat the node at the drop point first, so the re-solve tweens the
         // neighbours around it instead of flying this planet back in.
         const dropped = nodes.find((n) => n.name === name);
@@ -5670,7 +5760,7 @@ export default function MediaMap() {
 
   // Begin a planet drag in edit mode. Called from Planet's onMouseDown.
   const onPlanetDragStart = (node: PlanetNode, e: React.MouseEvent) => {
-    if (!isEditMode && !mobileEdit && !arrange) return;
+    if (!isEditMode && !mobileEdit && !arrange && !dlArrange) return;
     e.stopPropagation();
     cancelZoomAnim();
     planetDragRef.current = {
@@ -5983,7 +6073,77 @@ export default function MediaMap() {
       e.preventDefault();
     };
     el.addEventListener("wheel", onWheelNative, {passive: false});
-    return () => el.removeEventListener("wheel", onWheelNative);
+
+    // Touch: the strip's own sideways swipe is native (`touch-action: pan-x`).
+    // A mostly VERTICAL swipe — the natural "scroll on" gesture on a phone —
+    // would do nothing, so it drives the strip too: up moves on, down goes
+    // back, with a little momentum when the finger lifts.
+    let touch: { id: number; x0: number; y0: number; left0: number; axis: "x" | "y" | null; lastY: number; lastT: number; v: number } | null = null;
+    let coast = 0;
+    const stopCoast = () => {
+      if (coast) cancelAnimationFrame(coast);
+      coast = 0;
+    };
+    const onTouchStartNative = (e: TouchEvent) => {
+      stopCoast();
+      if (e.touches.length !== 1) {
+        touch = null;
+        return;
+      }
+      const p = e.touches[0];
+      touch = { id: p.identifier, x0: p.clientX, y0: p.clientY, left0: el.scrollLeft, axis: null, lastY: p.clientY, lastT: e.timeStamp, v: 0 };
+    };
+    const onTouchMoveNative = (e: TouchEvent) => {
+      if (!touch) return;
+      const p = Array.from(e.touches).find((q) => q.identifier === touch!.id);
+      if (!p) return;
+      const dx = p.clientX - touch.x0;
+      const dy = p.clientY - touch.y0;
+      if (touch.axis === null) {
+        if (Math.hypot(dx, dy) < 8) return;
+        touch.axis = Math.abs(dy) > Math.abs(dx) ? "y" : "x";
+        // Start from where the strip is NOW (it may have moved under a sideways start).
+        touch.left0 = el.scrollLeft;
+        touch.y0 = p.clientY;
+        touch.lastY = p.clientY;
+        touch.lastT = e.timeStamp;
+        return;
+      }
+      if (touch.axis !== "y") return; // sideways → native scrolling
+      if (e.cancelable) e.preventDefault();
+      el.scrollLeft = touch.left0 - (p.clientY - touch.y0);
+      const dt = Math.max(1, e.timeStamp - touch.lastT);
+      touch.v = touch.v * 0.6 + ((p.clientY - touch.lastY) / dt) * 0.4; // px/ms, smoothed
+      touch.lastY = p.clientY;
+      touch.lastT = e.timeStamp;
+    };
+    const onTouchEndNative = (e: TouchEvent) => {
+      const t = touch;
+      touch = null;
+      if (!t || t.axis !== "y" || e.timeStamp - t.lastT > 120) return; // paused before lifting → no momentum
+      let v = t.v;
+      let last = performance.now();
+      const step = (now: number) => {
+        const dt = Math.min(40, now - last);
+        last = now;
+        el.scrollLeft -= v * dt;
+        v *= Math.pow(0.95, dt / 16.7);
+        coast = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : 0;
+      };
+      if (Math.abs(v) > 0.05) coast = requestAnimationFrame(step);
+    };
+    el.addEventListener("touchstart", onTouchStartNative, {passive: true});
+    el.addEventListener("touchmove", onTouchMoveNative, {passive: false});
+    el.addEventListener("touchend", onTouchEndNative, {passive: true});
+    el.addEventListener("touchcancel", onTouchEndNative, {passive: true});
+    return () => {
+      stopCoast();
+      el.removeEventListener("wheel", onWheelNative);
+      el.removeEventListener("touchstart", onTouchStartNative);
+      el.removeEventListener("touchmove", onTouchMoveNative);
+      el.removeEventListener("touchend", onTouchEndNative);
+      el.removeEventListener("touchcancel", onTouchEndNative);
+    };
   }, [layoutMode]);
 
   const onWheel = (e: React.WheelEvent) => {
@@ -6171,53 +6331,141 @@ export default function MediaMap() {
   const isPresentYear = activeDate.year === currentDate.year;
   const exportCacheRef = useRef<{ key: string; blob: Blob } | null>(null);
   const exportInFlightRef = useRef<Promise<Blob | null> | null>(null);
+  // The map's type rules for the downloaded image. Always the DESKTOP set (the
+  // image is the desktop map), whatever window or device it is made on — so the
+  // tablet / phone type overrides never leak into the file.
+  const desktopKnobs = llab.applied.knobs.desktop;
+  const downloadCfg = llab.applied.download;
+  const exportType = useMemo(
+    () =>
+      llab.active
+        ? {
+            // The map's desktop sizes, times the image's own scales (layout lab → Download).
+            largePx: (desktopKnobs.labelLargePx ?? labelSizePx) * downloadCfg.largeScale,
+            smallPx: (desktopKnobs.labelSmallPx ?? labelSizePx) * downloadCfg.smallScale,
+            thresholdB: desktopKnobs.labelThresholdB ?? 100,
+            // The image has its own outline weight too.
+            strokePx: downloadCfg.outlinePx,
+          }
+        : null,
+    [llab.active, desktopKnobs, labelSizePx, downloadCfg],
+  );
+  // The downloaded image prints the market cap under the name of every company
+  // worth this much or more (the map itself shows it for Large Cap only). Set in
+  // the layout lab's Download tab.
+  const exportValuationMinB = llab.active ? llab.applied.download.valuationMinB : EXPORT_VALUATION_MIN_B;
+  // Where the image's planets come from. With a fixed download arrangement
+  // (desktop only — the image is the desktop map): the PRESENT year, solved in
+  // the background with that seed, whatever is on screen. Otherwise: the
+  // arrangement on screen.
+  const exportFixedSeed = K && downloadSeed != null && !layoutMobile && !isEditMode && !mobileEdit ? downloadSeed : null;
+  const yearSpecStampId = useMemo(() => nextStampId(), [yearSpecStamp]);
+  const exportMoves = llab.active ? llab.applied.download.moves : null;
+  const getExportNodes = useCallback(async (): Promise<PlanetNode[]> => {
+    if (exportFixedSeed == null) return nodes;
+    const spec = yearSpecAt(currentDate);
+    if (!spec) return nodes;
+    const fixed = { ...spec, seed: exportFixedSeed };
+    const planets = await solveLayoutInBackground(fixed);
+    const at = new Map(planets.map((q) => [q.name, q]));
+    return fixed.inputs.flatMap((inp) => {
+      const q = at.get(inp.name);
+      if (!q) return [];
+      const pos = fixed.positions?.[inp.name];
+      // Placed by hand for the image (layout lab → Download): sits exactly
+      // there, and counts as pinned so the name pass moves others around it.
+      const moved = exportMoves?.[inp.name];
+      const x = moved ? moved.x : q.x;
+      const y = moved ? moved.y : q.y;
+      return [{
+        name: inp.name, sector: inp.sector, valuation_b: inp.valuation_b, isEntity: inp.isEntity,
+        r: q.r, targetR: q.r, hue: inp.hue, style: inp.style, x, y, targetX: x, targetY: y,
+        pinned: !!pos?.pin || !!moved, labelColor: inp.labelColor, labelText: inp.labelText,
+      }];
+    });
+    // `yearSpecStampId` stands for everything `yearSpecAt` reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportFixedSeed, nodes, currentDate, yearSpecStampId, exportMoves]);
   const exportKey = useMemo(
     () =>
-      nodes
-        .map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`)
-        .join("|") +
-      `#${currentDate.year}|${labelSizePx}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
+      (exportFixedSeed != null
+        ? `fixed:${exportFixedSeed}:${yearSpecStampId}:${JSON.stringify(exportMoves ?? {})}`
+        : nodes.map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`).join("|")) +
+      `#${currentDate.year}-${currentDate.month}|${labelSizePx}|${exportType ? Object.values(exportType).join("/") : ""}|${exportValuationMinB}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
       // Style lab: any override change invalidates the cached PNG.
       `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}|${bgStops.join(",")}`,
-    [nodes, currentDate.year, labelSizePx, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state, bgStops],
+    [exportFixedSeed, yearSpecStampId, exportMoves, nodes, currentDate.year, currentDate.month, labelSizePx, exportType, exportValuationMinB, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state, bgStops],
   );
   const generateExportPng = useCallback(async (): Promise<Blob | null> => {
     // Let an in-flight render finish first, then re-check: it may have produced
     // exactly this key (or a stale one, in which case we build the fresh one).
     if (exportInFlightRef.current) await exportInFlightRef.current;
     if (exportCacheRef.current?.key === exportKey) return exportCacheRef.current.blob;
-    const run = buildExportPng({
-      nodes: lab.hasOverrides ? nodes.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : nodes,
-      bgStops,
-      sectorColorOverride: sectorColorResolved,
-      connections: effectiveConnections,
-      labelSizePx,
-      bounds: physicsBounds,
-      year: currentDate.year,
-      sectors: allSectors,
-      counts,
-    })
+    const run = getExportNodes()
+      .then((source) =>
+        buildExportPng({
+          nodes: lab.hasOverrides ? source.map((n) => ({ ...n, style: labStyleFor(n.name, n.sector, n.style) })) : source,
+          bgStops,
+          sectorColorOverride: sectorColorResolved,
+          connections: effectiveConnections,
+          labelSizePx,
+          type: exportType,
+          valuationMinB: exportValuationMinB,
+          bounds: physicsBounds,
+          year: currentDate.year,
+          month: currentDate.month,
+          sectors: allSectors,
+          counts,
+        }),
+      )
       .then((blob) => {
         if (blob) exportCacheRef.current = { key: exportKey, blob };
         return blob;
+      })
+      .catch((err) => {
+        console.warn("[media-map] export failed:", err);
+        return null;
       })
       .finally(() => {
         exportInFlightRef.current = null;
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, nodes, effectiveConnections, labelSizePx, physicsBounds, currentDate.year, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, sectorColorResolved]);
+  }, [exportKey, getExportNodes, effectiveConnections, labelSizePx, exportType, exportValuationMinB, physicsBounds, currentDate.year, currentDate.month, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, sectorColorResolved]);
+
+  // Layout lab → Download: how well the names fit this arrangement at this
+  // cut-off — measured on the very nodes the image would be drawn from.
+  const [exportFit, setExportFit] = useState<ExportLayoutStats | null>(null);
+  useEffect(() => {
+    if (!llab.downloadView) return;
+    let stale = false;
+    const t = window.setTimeout(() => {
+      void getExportNodes()
+        .then((source) => {
+          if (!stale && source.length) setExportFit(measureExportLayout({ nodes: source, type: exportType, labelSizePx, bounds: physicsBounds, valuationMinB: exportValuationMinB }));
+        })
+        .catch(() => {});
+    }, 450); // after the on-screen layout has stopped moving
+    return () => {
+      stale = true;
+      window.clearTimeout(t);
+    };
+  }, [llab.downloadView, getExportNodes, exportType, labelSizePx, physicsBounds, exportValuationMinB]);
 
   // Background pre-render: desktop, present year, map mode, not authoring.
   // Debounced so the settle's per-tick node updates don't each kick off a 4K
   // rasterization — it runs ~2.5s after the layout stops moving.
+  // (With a fixed download arrangement the image doesn't depend on the view or
+  // year on screen, so only the device / authoring conditions apply.)
+  const exportFromScreen = exportFixedSeed == null;
   useEffect(() => {
-    if (isMobile || isEditMode || mobileEdit || layoutMode !== "map" || !isPresentYear || nodes.length === 0) return;
+    if (isMobile || isEditMode || mobileEdit || nodes.length === 0) return;
+    if (exportFromScreen && (layoutMode !== "map" || !isPresentYear)) return;
     const t = window.setTimeout(() => {
       void generateExportPng();
     }, 2500);
     return () => window.clearTimeout(t);
-  }, [generateExportPng, isMobile, isEditMode, mobileEdit, layoutMode, isPresentYear, nodes.length]);
+  }, [generateExportPng, isMobile, isEditMode, mobileEdit, layoutMode, isPresentYear, nodes.length, exportFromScreen]);
 
   // Download the PRESENT map as a 3840×2160 (16:9) PNG. On the present year this
   // is the cached render (instant) or a fresh one if the layout changed since; on
@@ -6225,7 +6473,7 @@ export default function MediaMap() {
   // present-only), building from the current layout only as a last resort.
   const downloadMapImage = async () => {
     let blob =
-      isPresentYear && layoutMode === "map"
+      !exportFromScreen || (isPresentYear && layoutMode === "map")
         ? await generateExportPng()
         : (exportCacheRef.current?.blob ?? null);
     if (!blob) {
@@ -6347,7 +6595,7 @@ export default function MediaMap() {
   // Names draw in a separate pass above all planets — except in the edit modes
   // (there a name is a grab target on its own planet) and the game (its planets
   // are stacked cross-fading pairs).
-  const namesOnTop = !(isEditMode || mobileEdit || arrange) && !game.active;
+  const namesOnTop = !(isEditMode || mobileEdit || arrange || dlArrange) && !game.active;
 
   const visibleNodes = useMemo(() => {
     if (game.active) return nodes.filter(n => !game.hud.lost.has(n.name));
@@ -6574,6 +6822,13 @@ export default function MediaMap() {
       years={dateRange.map((d) => d.year)}
       year={activeDate.year}
       onYear={labGoToYear}
+      downloadFit={exportFit}
+      onDownloadPreview={downloadMapImage}
+      downloadSelected={dlArrange ? selectedPlanet : null}
+      downloadBasePx={{
+        large: llab.state.knobs.desktop.labelLargePx ?? labelSizePx,
+        small: llab.state.knobs.desktop.labelSmallPx ?? labelSizePx,
+      }}
       onRefresh={labReload}
       mapWidth={containerW}
       stats={{
@@ -6924,10 +7179,13 @@ export default function MediaMap() {
             ].map(n => {
               // While dragging in edit mode, render the dragged planet at its
               // live cursor position (override node.x/y just for this frame).
+              const placed = dlArrange ? downloadMoves[n.name] : undefined;
               const dragNode =
                 dragState && dragState.name === n.name
                   ? { ...n, x: dragState.x, y: dragState.y }
-                  : n;
+                  : placed
+                    ? { ...n, x: placed.x, y: placed.y }
+                    : n;
               const renderNode = lab.hasOverrides
                 ? { ...dragNode, style: labStyleFor(n.name, n.sector, n.style) }
                 : dragNode;
@@ -6983,7 +7241,7 @@ export default function MediaMap() {
                   onClick={(node) => {
                     if (didDragRef.current || game.active) return;
                     bgClickSuppressRef.current = true; // a planet click, not a background click
-                    if (isEditMode || mobileEdit || arrange) {
+                    if (isEditMode || mobileEdit || arrange || dlArrange) {
                       if (connectMode) {
                         handleConnectClick(node.name);
                       } else {
@@ -7005,13 +7263,13 @@ export default function MediaMap() {
                   highlighted={searchMatches !== null && searchMatches.has(n.name)}
                   labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
-                  isEditMode={isEditMode || mobileEdit || arrange}
+                  isEditMode={isEditMode || mobileEdit || arrange || dlArrange}
                   isSelected={
-                    (isEditMode || mobileEdit || arrange) &&
+                    (isEditMode || mobileEdit || arrange || dlArrange) &&
                     (selectedPlanet === n.name ||
                       (connectMode && connectFrom === n.name))
                   }
-                  onPlanetMouseDown={(isEditMode || mobileEdit || arrange) && !connectMode ? onPlanetDragStart : undefined}
+                  onPlanetMouseDown={(isEditMode || mobileEdit || arrange || dlArrange) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
                   // Mobile view: show names by on-screen size (tunable threshold).
                   // Desktop: only Large Cap until zoomed in.
@@ -7459,6 +7717,10 @@ export default function MediaMap() {
               animate={timelineAnimate}
               canvas={canvas}
               onSelect={focusOn}
+              onSettle={(index) => {
+                setTimelineAnimate(true);
+                setScrollIdx(clampIdx(index));
+              }}
               onExplore={onExploreMap}
               tuning={tm.tuning}
               // The same big / small split the map's type uses.
@@ -7744,8 +8006,15 @@ export default function MediaMap() {
                 transition: viewMode === "list" ? "opacity 220ms ease, visibility 0s linear 220ms" : "opacity 220ms ease",
               }}
             >
-              <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>−</button>
-              <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>+</button>
+              {/* On a phone's Map view you pinch to zoom, so − / + are left out
+                  there. They stay in Linear and Aggregate, where a pinch does
+                  nothing and these are the only way to zoom. */}
+              {!(isMobile && viewMode === "map") && (
+                <>
+                  <button aria-label="Zoom out" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(1 / AGG_ZOOM_STEP) : zoomBy(1 / ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>−</button>
+                  <button aria-label="Zoom in" className="mm-hover" onClick={() => (viewMode === "aggregate" ? aggZoomBy(AGG_ZOOM_STEP) : zoomBy(ZOOM_STEP))} style={{ ...zoomBtnStyle, color: ICON_GREY }}>+</button>
+                </>
+              )}
               <button
                 aria-label="Refresh view"
                 className="mm-hover"

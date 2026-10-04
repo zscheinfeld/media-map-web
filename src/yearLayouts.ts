@@ -200,6 +200,36 @@ export function solvedLayoutFor(year: number, opts: SolveLayoutOptions): YearPla
 const solved = new Map<string, YearPlanet[]>();
 const SOLVED_MAX = 60;
 
+/** Turn a solver's raw output into planets and remember them under `sig`. */
+function keepSolved(sig: string, spec: SolveLayoutOptions, out: Float64Array): YearPlanet[] {
+  const planets: YearPlanet[] = spec.inputs.map((inp, i) => ({
+    name: inp.name, sector: inp.sector, valuation_b: inp.valuation_b, x: out[i * 3], y: out[i * 3 + 1], r: out[i * 3 + 2], isEntity: inp.isEntity, hue: inp.hue, style: inp.style,
+  }));
+  solved.set(sig, planets);
+  while (solved.size > SOLVED_MAX) solved.delete(solved.keys().next().value as string);
+  return planets;
+}
+
+/**
+ * Solve one layout in the background, ahead of anything queued for the Time
+ * Machine (the downloaded image uses this for its own fixed arrangement).
+ * Answers from the cache when this exact layout has been solved before.
+ */
+export function solveLayoutInBackground(spec: SolveLayoutOptions): Promise<YearPlanet[]> {
+  const sig = layoutSpecSig(spec);
+  const hit = solved.get(sig);
+  if (hit) return Promise.resolve(hit);
+  return new Promise((resolve, reject) => {
+    queue.push({
+      spec,
+      rank: () => -1,
+      dropped: () => false,
+      done: (out) => (out ? resolve(keepSolved(sig, spec, out)) : reject(new Error("layout solve was dropped"))),
+    });
+    pumpSolvers();
+  });
+}
+
 // Building a year's solve options takes a few milliseconds on the main thread,
 // so the years are prepared one per task rather than all in one go.
 const PREPARE_GAP_MS = 0;
@@ -263,12 +293,7 @@ export function useYearLayoutSolver(opts: {
         dropped: () => cancelled,
         done: (out) => {
           if (!out) return;
-          const planets: YearPlanet[] = spec.inputs.map((inp, i) => ({
-            name: inp.name, sector: inp.sector, valuation_b: inp.valuation_b, x: out[i * 3], y: out[i * 3 + 1], r: out[i * 3 + 2], isEntity: inp.isEntity, hue: inp.hue, style: inp.style,
-          }));
-          solved.set(sig, planets);
-          while (solved.size > SOLVED_MAX) solved.delete(solved.keys().next().value as string);
-          publish(date.year, planets, sig);
+          publish(date.year, keepSolved(sig, spec, out), sig);
         },
       });
       pumpSolvers();

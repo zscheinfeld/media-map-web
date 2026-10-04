@@ -44,10 +44,17 @@ export function ExportMapScene({
   nodes,
   connections,
   labelPx,
+  labelStrokePx,
+  showValuation = (n) => n.sector === "Large Cap",
 }: {
   nodes: PlanetNode[];
   connections: Array<{ from: string; to: string; style: "solid" | "dotted" }>;
-  labelPx: number;
+  /** Name size per node (the site's large / small type). */
+  labelPx: (n: PlanetNode) => number;
+  /** Black outline around the names (default: Planet's own). */
+  labelStrokePx?: number;
+  /** Which names carry their market cap (default: Large Cap, as on the map). */
+  showValuation?: (n: PlanetNode) => boolean;
 }) {
   const su = EXPORT_SLIDE_UNITS_PER_PX;
   const byName = new Map(nodes.map((n) => [n.name, n]));
@@ -80,19 +87,26 @@ export function ExportMapScene({
           />
         );
       })}
-      {nodes.map((n) => (
-        <Planet
-          key={n.name}
-          node={n}
-          slideUnitsPerPx={su}
-          isHovered={false}
-          onHoverChange={noop}
-          onClick={noop}
-          dimmed={false}
-          labelSizePx={labelPx}
-          showValuation={n.sector === "Large Cap"}
-        />
-      ))}
+      {/* As on the map: every planet first, then every name on top, so a planet
+          drawn later can never cover a neighbour's name. (Entities are all name;
+          they draw in the first pass.) */}
+      {(["body", "label"] as const).map((part) =>
+        nodes.map((n) => (
+          <Planet
+            key={`${part}-${n.name}`}
+            part={part}
+            node={n}
+            slideUnitsPerPx={su}
+            isHovered={false}
+            onHoverChange={noop}
+            onClick={noop}
+            dimmed={false}
+            labelSizePx={labelPx(n)}
+            labelStrokePx={labelStrokePx}
+            showValuation={showValuation(n)}
+          />
+        )),
+      )}
     </svg>
   );
 }

@@ -126,6 +126,46 @@ export type LayoutLabState = {
   tabletMaxWidth: number;
   positions: Record<DeviceMode, Record<string, PosEdit[]>>;
   sectors: Record<DeviceMode, Record<string, SectorEdit[]>>;
+  /** The downloaded image (always the desktop map of the present year). */
+  download: DownloadSettings;
+};
+
+export type DownloadSettings = {
+  /**
+   * The arrangement the image is drawn from. A number = always that one
+   * (chosen because its names fit well), whatever arrangement the visitor's
+   * screen happens to show; null = the one on the visitor's screen.
+   */
+  seed: number | null;
+  /** Companies worth this much ($B) or more get their market cap under their name. */
+  valuationMinB: number;
+  /** Black outline around the names in the image, px (the map's own is the Type tab's). */
+  outlinePx: number;
+  /**
+   * Name sizes in the image, as multiples of the map's desktop type (Type tab):
+   * the large size (big companies) and the small size (everyone else).
+   */
+  largeScale: number;
+  smallScale: number;
+  /**
+   * Planets placed by hand IN THE IMAGE ONLY (slide units) — the online map is
+   * not touched. They belong to the fixed arrangement above: picking another
+   * arrangement clears them.
+   */
+  moves: Record<string, { x: number; y: number }>;
+};
+// What the image uses until a layout with its own `download` is published.
+// Chosen by eye in the lab on 2026-10-05: arrangement #153934, a market cap
+// under EVERY company, and the small names at 78% of the map's size so they
+// all fit with very little moved.
+export const DEFAULT_DOWNLOAD: DownloadSettings = {
+  seed: 153934,
+  valuationMinB: 0,
+  outlinePx: 2,
+  largeScale: 1,
+  smallScale: 0.78,
+  // Asmodee is drawn in toward Sony (the arrangement leaves it out on its own).
+  moves: { Asmodee: { x: 1313, y: -575 } },
 };
 
 const perMode = <T,>(make: () => T): Record<DeviceMode, T> => ({ desktop: make(), square: make(), full: make() });
@@ -143,6 +183,7 @@ export const EMPTY_LAYOUT: LayoutLabState = {
   tabletMaxWidth: 1024,
   positions: perMode(() => ({})),
   sectors: perMode(() => ({})),
+  download: { ...DEFAULT_DOWNLOAD },
 };
 
 const STORAGE_KEY = "mm-layout-lab-v1";
@@ -166,6 +207,23 @@ export function normalizeLayout(x: unknown): LayoutLabState {
     tabletMaxWidth: fin(o.tabletMaxWidth) ? Math.max(769, Math.round(o.tabletMaxWidth)) : EMPTY_LAYOUT.tabletMaxWidth,
     positions: perMode(() => ({})),
     sectors: perMode(() => ({})),
+    download: {
+      // No `download` at all (a layout saved before it existed) → the defaults;
+      // present but without a seed → "use the arrangement on screen".
+      seed: !o.download ? DEFAULT_DOWNLOAD.seed : fin(o.download.seed) ? Math.max(0, Math.round(o.download.seed)) : null,
+      valuationMinB: fin(o.download?.valuationMinB) ? Math.max(0, o.download.valuationMinB) : DEFAULT_DOWNLOAD.valuationMinB,
+      outlinePx: fin(o.download?.outlinePx) ? Math.max(0, o.download.outlinePx) : DEFAULT_DOWNLOAD.outlinePx,
+      largeScale: fin(o.download?.largeScale) && o.download.largeScale > 0 ? o.download.largeScale : DEFAULT_DOWNLOAD.largeScale,
+      smallScale: fin(o.download?.smallScale) && o.download.smallScale > 0 ? o.download.smallScale : DEFAULT_DOWNLOAD.smallScale,
+      // No `download` at all → the default moves; otherwise only what it lists.
+      moves: !o.download
+        ? { ...DEFAULT_DOWNLOAD.moves }
+        : Object.fromEntries(
+            Object.entries(o.download.moves ?? {})
+              .filter(([, q]) => q && fin(q.x) && fin(q.y))
+              .map(([name, q]) => [name, { x: Math.round(q.x), y: Math.round(q.y) }]),
+          ),
+    },
   };
   const tabletIn = (o.tablet ?? {}) as Record<string, unknown>;
   for (const key of TYPE_KEYS) if (fin(tabletIn[key])) out.tablet[key] = tabletIn[key] as number;
@@ -291,6 +349,8 @@ export function useLayoutLab() {
 
   const [ui, setUi] = useState<UiState>(() => (enabled ? loadUi() : { device: "desktop", arrange: false, showWells: true }));
   const [open, setOpen] = useState(true);
+  // The panel's Download tab is open: the map shows the download's arrangement.
+  const [downloadView, setDownloadView] = useState(false);
 
   /** The map hands over the JSON published in Sanity (Map Settings → Layout). */
   const setRemote = useCallback(
@@ -490,6 +550,24 @@ export function useLayoutLab() {
     unpublished,
     sessionSeed,
     reshuffle,
+    /** The editor is on its Download tab (the map then previews that arrangement). */
+    downloadView: enabled && downloadView,
+    setDownloadView,
+    setDownload: (patch: Partial<DownloadSettings>) =>
+      setState((s) => {
+        const next = { ...s.download, ...patch };
+        // Hand placements were made for one arrangement; another one starts clean.
+        if ("seed" in patch && patch.seed !== s.download.seed && !("moves" in patch)) next.moves = {};
+        return { ...s, download: next };
+      }),
+    /** Place (or, with null, un-place) one planet in the downloaded image only. Applied at once. */
+    setDownloadMove: (name: string, pos: { x: number; y: number } | null) =>
+      setBoth((s) => {
+        const moves = { ...s.download.moves };
+        if (pos) moves[name] = { x: Math.round(pos.x), y: Math.round(pos.y) };
+        else delete moves[name];
+        return { ...s, download: { ...s.download, moves } };
+      }),
     /** Back to the published layout (Sanity, else the built-in preset). */
     resetToPreset: () => setState(published),
     clearAll: () => setState(normalizeLayout(EMPTY_LAYOUT)),

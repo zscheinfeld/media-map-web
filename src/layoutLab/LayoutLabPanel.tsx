@@ -21,7 +21,17 @@ export const LAYOUT_PANEL_W = 340;
 const ACCENT = "#a7f3d0";
 const ACCENT_INK = "#06281c";
 
-type Tab = "physics" | "type" | "arrange";
+type Tab = "physics" | "type" | "arrange" | "download";
+
+/** How well the names fit the download's arrangement (from the map's export pass). */
+export type DownloadFit = {
+  companies: number;
+  withValuation: number;
+  moved50: number;
+  moved150: number;
+  worst: { name: string; distance: number } | null;
+  unresolved: Array<[string, string]>;
+};
 
 const field: React.CSSProperties = {
   background: "#0e1116",
@@ -171,7 +181,7 @@ export type LabSelection = {
 };
 
 export function LayoutLabPanel({
-  lab, mode, live, knobs, typeBase, years, year, onYear, onRefresh, mapWidth, stats, selection, onSelectionKind, onSelectionMove, onSelectionRevert, movedSectors, onRevertSector,
+  lab, mode, live, knobs, typeBase, years, year, onYear, onRefresh, mapWidth, stats, selection, onSelectionKind, onSelectionMove, onSelectionRevert, movedSectors, onRevertSector, downloadFit, onDownloadPreview, downloadBasePx, downloadSelected,
 }: {
   lab: LayoutLab;
   /** The device mode the map is in now (follows the Device switch). */
@@ -197,8 +207,28 @@ export function LayoutLabPanel({
   onSelectionRevert: () => void;
   movedSectors: string[];
   onRevertSector: (name: string) => void;
+  /** Download tab: how the names fit the arrangement + cut-off chosen (null while measuring). */
+  downloadFit: DownloadFit | null;
+  /** Download tab: build the image as set up here and save it. */
+  onDownloadPreview: () => Promise<void>;
+  /** Download tab: the map's desktop name sizes (px) that the image's scales multiply. */
+  downloadBasePx: { large: number; small: number };
+  /** Download tab: the planet last clicked / dragged on the map, if any. */
+  downloadSelected: string | null;
 }) {
-  const [tab, setTab] = useState<Tab>("physics");
+  const [tab, setTabState] = useState<Tab>("physics");
+  const [downloading, setDownloading] = useState(false);
+  // The download is always the desktop map of the latest year, so its tab shows
+  // exactly that; while it is open the map previews the download's arrangement.
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    lab.setDownloadView(t === "download");
+    if (t === "download") {
+      if (lab.device !== "desktop") lab.setDevice("desktop");
+      const latest = Math.max(...years);
+      if (year !== latest) onYear(latest);
+    }
+  };
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [flash, setFlash] = useState<string | null>(null);
@@ -296,7 +326,7 @@ export function LayoutLabPanel({
           {LAB_DEVICES.map((d) => (
             <button
               key={d}
-              onClick={() => { lab.setDevice(d); if (d === "tablet") setTab("type"); }}
+              onClick={() => { lab.setDevice(d); if (d === "tablet") setTab("type"); else if (d !== "desktop" && tab === "download") setTab("physics"); }}
               style={{ ...(lab.device === d ? primary : plain), flex: 1, padding: "5px 2px", fontSize: 11.5 }}
             >
               {LAB_DEVICE_LABELS[d]}
@@ -336,9 +366,9 @@ export function LayoutLabPanel({
         </div>
 
         <div style={{ display: "flex", gap: 4, marginTop: 10 }}>
-          {(["physics", "type", "arrange"] as Tab[]).map((t) => (
-            <button key={t} onClick={() => setTab(t)} style={{ ...(tab === t ? primary : plain), flex: 1 }}>
-              {t === "physics" ? "Physics" : t === "type" ? "Type" : "Arrange"}
+          {(["physics", "type", "arrange", "download"] as Tab[]).map((t) => (
+            <button key={t} onClick={() => setTab(t)} style={{ ...(tab === t ? primary : plain), flex: 1, padding: "5px 4px" }}>
+              {t === "physics" ? "Physics" : t === "type" ? "Type" : t === "arrange" ? "Arrange" : "Download"}
             </button>
           ))}
         </div>
@@ -516,6 +546,212 @@ export function LayoutLabPanel({
             </p>
           </>
         )}
+
+
+        {tab === "download" && (() => {
+          const dl = state.download;
+          const fixed = dl.seed != null;
+          const fit = downloadFit;
+          // A plain verdict on this arrangement at this cut-off.
+          const verdict = !fit
+            ? null
+            : fit.unresolved.length > 0
+              ? { text: "Some names still overlap", color: "#f87171" }
+              : fit.moved150 > 0
+                ? { text: "Planets pushed far out of place", color: "#fbbf24" }
+                : fit.moved50 > 3
+                  ? { text: "A few planets nudged", color: "#fde68a" }
+                  : { text: "Fits well", color: ACCENT };
+          return (
+            <>
+              <fieldset style={fs}>
+                <legend style={lg}>Arrangement</legend>
+                <p style={hint}>
+                  The downloaded image is the desktop map of the latest year. Some arrangements leave more room for names
+                  than others, so it can always use one you have picked — whatever arrangement a visitor has on screen.
+                </p>
+                <Toggle
+                  on={fixed}
+                  onChange={(v) => lab.setDownload({ seed: v ? Math.floor(Math.random() * 1_000_000) : null })}
+                >
+                  Always use one arrangement
+                </Toggle>
+                {fixed ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ flex: 1, color: "#8f98a6", fontSize: 12 }}>Arrangement #</span>
+                      <input
+                        key={`dl-${dl.seed}`}
+                        defaultValue={dl.seed ?? ""}
+                        inputMode="numeric"
+                        aria-label="Download arrangement number"
+                        onBlur={(e) => {
+                          const v = Math.round(Number(e.target.value));
+                          if (e.target.value.trim() !== "" && Number.isFinite(v) && v >= 0 && v !== dl.seed) lab.setDownload({ seed: v });
+                          else e.target.value = String(dl.seed ?? "");
+                        }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ ...field, width: 110, textAlign: "right", fontFamily: "ui-monospace, Menlo, monospace" }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => lab.setDownload({ seed: Math.floor(Math.random() * 1_000_000) })}
+                      style={{ ...btn, width: "100%", marginBottom: 8 }}
+                    >
+                      Shuffle — try another arrangement
+                    </button>
+                    <p style={hint}>The map behind this panel shows this arrangement while this tab is open.</p>
+                  </>
+                ) : (
+                  <p style={hint}>Off: the image is drawn from whatever arrangement the visitor is looking at.</p>
+                )}
+              </fieldset>
+
+              {fixed && (
+                <fieldset style={fs}>
+                  <legend style={lg}>Placement in the image</legend>
+                  <p style={hint}>
+                    Drag a planet on the map to place it in the downloaded image only — the online map is not touched, and
+                    no other planet is re-arranged. Picking another arrangement clears these.
+                  </p>
+                  {Object.keys(dl.moves).length === 0 ? (
+                    <p style={hint}>Nothing placed by hand yet.</p>
+                  ) : (
+                    Object.entries(dl.moves)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([name, q]) => (
+                        <div key={name} style={{ marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: name === downloadSelected ? ACCENT : "#e6e9ef" }}>{name}</span>
+                            <button onClick={() => lab.setDownloadMove(name, null)} style={{ ...btn, padding: "2px 8px", fontSize: 11 }} title="Back to where the arrangement puts it">
+                              Reset
+                            </button>
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <CoordField label="X" value={q.x} onCommit={(v) => lab.setDownloadMove(name, { x: v, y: q.y })} />
+                            <CoordField label="Y" value={q.y} onCommit={(v) => lab.setDownloadMove(name, { x: q.x, y: v })} />
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </fieldset>
+              )}
+
+              <fieldset style={fs}>
+                <legend style={lg}>Market caps</legend>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ flex: 1, fontSize: 12 }}>Show from</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={Math.min(50, dl.valuationMinB)}
+                    aria-label="Market cap cut-off"
+                    onChange={(e) => lab.setDownload({ valuationMinB: +e.target.value })}
+                    style={{ flex: "0 0 128px", accentColor: ACCENT }}
+                  />
+                  <span style={{ width: 58, textAlign: "right", fontSize: 12, fontVariantNumeric: "tabular-nums", color: ACCENT }}>
+                    {dl.valuationMinB === 0 ? "all" : `$${dl.valuationMinB}B`}
+                  </span>
+                </div>
+                <p style={hint}>
+                  Companies worth this much or more get their market cap under their name in the image (Large Cap always does).
+                  Lower = more market caps, and more planets pushed around to make room.
+                </p>
+              </fieldset>
+
+              <fieldset style={fs}>
+                <legend style={lg}>Type</legend>
+                {([
+                  ["largeScale", "Large names", downloadBasePx.large],
+                  ["smallScale", "Small names", downloadBasePx.small],
+                ] as const).map(([key, label, basePx]) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ flex: 1, fontSize: 12 }}>{label}</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.01}
+                      value={Math.min(2, Math.max(0.5, dl[key]))}
+                      aria-label={`Download ${label.toLowerCase()} scale`}
+                      onChange={(e) => lab.setDownload({ [key]: +e.target.value })}
+                      style={{ flex: "0 0 112px", accentColor: ACCENT }}
+                    />
+                    <button
+                      onClick={() => lab.setDownload({ [key]: 1 })}
+                      disabled={dl[key] === 1}
+                      title={dl[key] === 1 ? "The map's size" : "Back to the map's size (×1)"}
+                      style={{
+                        width: 82, textAlign: "right", fontSize: 12, fontVariantNumeric: "tabular-nums",
+                        background: "none", border: "none", padding: 0, font: "inherit",
+                        color: dl[key] === 1 ? "#8f98a6" : ACCENT, cursor: dl[key] === 1 ? "default" : "pointer",
+                      }}
+                    >
+                      ×{dl[key].toFixed(2)} · {(basePx * dl[key]).toFixed(1)}px
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ flex: 1, fontSize: 12 }}>Black outline</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={4}
+                    step={0.05}
+                    value={Math.min(4, dl.outlinePx)}
+                    aria-label="Download outline thickness"
+                    onChange={(e) => lab.setDownload({ outlinePx: +e.target.value })}
+                    style={{ flex: "0 0 128px", accentColor: ACCENT }}
+                  />
+                  <span style={{ width: 58, textAlign: "right", fontSize: 12, fontVariantNumeric: "tabular-nums", color: ACCENT }}>
+                    {dl.outlinePx.toFixed(2)}px
+                  </span>
+                </div>
+                <p style={hint}>
+                  For the image only. The two sizes scale the map's desktop name sizes (Type tab): large for companies over
+                  the big / small split, small for the rest. Bigger names need more room, so watch "How the names fit".
+                </p>
+              </fieldset>
+
+              <fieldset style={fs}>
+                <legend style={lg}>How the names fit</legend>
+                {fit && verdict ? (
+                  <div style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>
+                    <div style={{ color: verdict.color, fontWeight: 600, marginBottom: 4 }}>{verdict.text}</div>
+                    <div>{fit.withValuation} of {fit.companies} companies show a market cap</div>
+                    <div>
+                      {fit.moved50} planet{fit.moved50 === 1 ? "" : "s"} moved to make room
+                      {fit.moved150 > 0 ? ` (${fit.moved150} a long way)` : ""}
+                    </div>
+                    {fit.worst && fit.worst.distance > 50 && (
+                      <div style={{ color: "#8f98a6" }}>Furthest: {fit.worst.name}, {Math.round(fit.worst.distance)} units</div>
+                    )}
+                    <div style={{ color: fit.unresolved.length ? "#f87171" : "#8f98a6" }}>
+                      {fit.unresolved.length
+                        ? `Still overlapping: ${fit.unresolved.slice(0, 3).map((q) => q.join(" / ")).join("; ")}${fit.unresolved.length > 3 ? "…" : ""}`
+                        : "No names overlap"}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={hint}>Measuring…</p>
+                )}
+                <button
+                  onClick={() => {
+                    setDownloading(true);
+                    void onDownloadPreview().finally(() => setDownloading(false));
+                  }}
+                  disabled={downloading}
+                  style={{ ...primary, width: "100%", marginBottom: 8, opacity: downloading ? 0.6 : 1 }}
+                >
+                  {downloading ? "Building the image…" : "Download a preview"}
+                </button>
+                <p style={hint}>Visitors get this once the layout is published (Copy JSON → Studio → Publish).</p>
+              </fieldset>
+            </>
+          );
+        })()}
 
         {!typeOnly && tab === "arrange" && (
           <>
