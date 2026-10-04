@@ -2671,13 +2671,11 @@ type AggregateData = { dates: MapDate[]; bands: AggBand[]; maxTotal: number };
 const AGG_GRADIENT = LIST_BG_GRADIENT;
 const AGG_GAP_STROKE = "rgba(0,0,0,0.35)";
 
-// Per-company band color overrides (keyed by lowercased company name). Used when
-// a planet's own palette doesn't read well as a single stacked band.
+// Per-company band colour for the Aggregate view (keyed by lowercased company
+// name). A company listed here always uses this colour; everyone else takes the
+// most saturated colour of their planet's palette.
 const AGG_COLOR_OVERRIDES: Record<string, string> = {
-  apple: "#155E9D",
-  microsoft: "#A9812E",
-  alphabet: "#A73632",
-  meta: "#94959F",
+  alphabet: "#EF1A1A",
 };
 
 /** HSL saturation (0..1) of a hex / hsl / rgb color — used to pick the most
@@ -3808,9 +3806,7 @@ export default function MediaMap() {
         : style?.stripes && style.stripes.length
           ? style.stripes
           : [style?.fill ?? `hsl(${hue}, 65%, 55%)`];
-      // The hand-picked band colours were tuned for the old brand stripes; a
-      // company with a new recipe takes its band colour from the recipe instead.
-      const color = (style?.ombre ? null : AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()]) ?? mostSaturatedColor(palette);
+      const color = AGG_COLOR_OVERRIDES[c.name.trim().toLowerCase()] ?? mostSaturatedColor(palette);
       // A company contributes a bar only in years its appearance windows cover
       // (empty = all years); outside the window its value is 0 (no bar).
       const windows = windowsFor(c.name);
