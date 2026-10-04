@@ -6745,9 +6745,7 @@ export default function MediaMap() {
         w = Math.max(w, measureLabelTextWidth(formatValuation(n.valuation_b), 10, 400) * (px / 10));
       }
       const cx = n.x / su;
-      // A name that stays put (see `nameStaysPut`) has its market cap hanging
-      // below it; a Large Cap pair is centred.
-      const cy = n.y / su + (withValAll && n.sector !== "Large Cap" ? (px * 1.15) / 2 : 0);
+      const cy = n.y / su;
       const box = { l: cx - w / 2 - half, r: cx + w / 2 + half, t: cy - h / 2 - half, b: cy + h / 2 + half };
       if (placed.some((p) => p.l < box.r && p.r > box.l && p.t < box.b && p.b > box.t)) continue;
       placed.push(box);
@@ -7380,7 +7378,6 @@ export default function MediaMap() {
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                        nameStaysPut={n.sector !== "Large Cap"}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7396,7 +7393,6 @@ export default function MediaMap() {
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
                         showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                        nameStaysPut={n.sector !== "Large Cap"}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7445,7 +7441,6 @@ export default function MediaMap() {
                   }
                   onPlanetMouseDown={(isEditMode || mobileEdit || arrange || dlArrange) && !connectMode ? onPlanetDragStart : undefined}
                   showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                  nameStaysPut={n.sector !== "Large Cap"}
                   // Mobile view: show names by on-screen size (tunable threshold).
                   // Desktop: only Large Cap until zoomed in.
                   labelSuppressed={nameHidden(
@@ -7484,7 +7479,6 @@ export default function MediaMap() {
                     labelSizePx={renderLabelPx(n)}
                     labelStrokePx={labelStrokePxEff}
                     showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
-                    nameStaysPut={n.sector !== "Large Cap"}
                     labelSuppressed={nameHidden(
                       n,
                       mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap",
