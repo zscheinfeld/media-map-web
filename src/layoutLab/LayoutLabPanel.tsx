@@ -591,7 +591,7 @@ export function LayoutLabPanel({
         <div style={{ fontSize: 11, color: lab.unpublished && !flash ? "#fbbf24" : "#8f98a6", minHeight: 14, lineHeight: 1.35 }}>
           {flash ??
             (lab.unpublished
-              ? "Unpublished changes (saved in this browser only). To publish: Copy JSON → Studio → Map Settings → Layout → paste → Publish."
+              ? "Unpublished changes (saved in this browser only). To publish: Copy JSON, then paste it in Studio's Layout lab tab and press Publish."
               : "Matches the published layout · Shift+L hides")}
         </div>
       </div>

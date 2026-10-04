@@ -1,10 +1,9 @@
 import {defineConfig} from 'sanity'
 import {structureTool} from 'sanity/structure'
 import {colorInput} from '@sanity/color-input'
-import {ControlsIcon, EarthGlobeIcon} from '@sanity/icons'
+import {ControlsIcon} from '@sanity/icons'
 import {schemaTypes} from './schemas'
 import {deskStructure} from './structure/deskStructure'
-import {MapEditorTool} from './tools/mapEditor/MapEditorTool'
 import {LayoutLabTool} from './tools/layoutLab/LayoutLabTool'
 
 // Project ID / dataset come from env (SANITY_STUDIO_* are the Studio-side
@@ -32,17 +31,11 @@ export default defineConfig({
     types: schemaTypes,
   },
 
-  // Custom "Map Editor" tool — the visual map editor built on @media-map/map-core.
-  // Appended after the tools contributed by plugins (Structure, etc.).
+  // "Layout lab" — the way in to the site's own layout editor (opens in a new
+  // tab) and where the layout it exports is published. It replaced the former
+  // in-Studio Map Editor (code kept in tools/mapEditor, no longer registered).
   tools: (prev) => [
     ...prev,
-    {
-      name: 'map-editor',
-      title: 'Map Editor',
-      icon: EarthGlobeIcon,
-      component: MapEditorTool,
-    },
-    // "Layout lab" — the way in to the site's own layout editor (opens in a new tab).
     {
       name: 'layout-lab',
       title: 'Layout lab',
