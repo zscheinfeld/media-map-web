@@ -26,7 +26,7 @@ export type YearPlanet = {
 };
 
 /** Everything that shapes a solve, as a string: equal strings → equal layouts. */
-function layoutSpecSig(o: SolveLayoutOptions): string {
+export function layoutSpecSig(o: SolveLayoutOptions): string {
   const b = o.bounds;
   return [
     // Input order matters to the solve, so it is kept (not sorted).
@@ -166,8 +166,11 @@ function pumpSolvers() {
 // state: a year finishing in the background re-renders the carousel (if it is
 // open) and nothing else — not the whole map.
 let solvedYears: Record<number, YearPlanet[]> = {};
+// The inputs each year was solved from (see `layoutSpecSig`).
+const solvedSigs: Record<number, string> = {};
 const listeners = new Set<() => void>();
-const publishYear = (year: number, planets: YearPlanet[]) => {
+const publishYear = (year: number, planets: YearPlanet[], sig: string) => {
+  solvedSigs[year] = sig;
   if (solvedYears[year] === planets) return;
   solvedYears = { ...solvedYears, [year]: planets };
   for (const l of listeners) l();
@@ -184,6 +187,14 @@ export function useSolvedYears(): Record<number, YearPlanet[]> {
 }
 /** The same, read once (for debugging / tests). */
 export const getSolvedYears = () => solvedYears;
+/**
+ * A year's solved layout, but only if it was solved from exactly these options
+ * — so the live map can use it in place of solving the same thing again.
+ */
+export function solvedLayoutFor(year: number, opts: SolveLayoutOptions): YearPlanet[] | null {
+  const planets = solvedYears[year];
+  return planets && solvedSigs[year] === layoutSpecSig(opts) ? planets : null;
+}
 
 // Solved layouts by signature — shared by every caller, kept for the visit.
 const solved = new Map<string, YearPlanet[]>();
@@ -227,8 +238,8 @@ export function useYearLayoutSolver(opts: {
     if (!wanted) return;
     let cancelled = false;
     let timer: number | null = null;
-    const publish = (year: number, planets: YearPlanet[]) => {
-      if (!cancelled) publishYear(year, planets);
+    const publish = (year: number, planets: YearPlanet[], sig: string) => {
+      if (!cancelled) publishYear(year, planets, sig);
     };
     // Nearest the focused year first.
     const todo = [...dates].sort((a, b) => Math.abs(a.year - live.current.focusYear) - Math.abs(b.year - live.current.focusYear));
@@ -243,7 +254,7 @@ export function useYearLayoutSolver(opts: {
       const sig = layoutSpecSig(spec);
       const hit = solved.get(sig);
       if (hit) {
-        publish(date.year, hit);
+        publish(date.year, hit, sig);
         return;
       }
       queue.push({
@@ -257,7 +268,7 @@ export function useYearLayoutSolver(opts: {
           }));
           solved.set(sig, planets);
           while (solved.size > SOLVED_MAX) solved.delete(solved.keys().next().value as string);
-          publish(date.year, planets);
+          publish(date.year, planets, sig);
         },
       });
       pumpSolvers();

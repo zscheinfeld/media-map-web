@@ -103,6 +103,18 @@ export type PhysicsOptions = {
   /** Identifies the current layout (the viewed year) for the per-year layout cache
    *  the `resettleToken` tween reads/writes. */
   layoutKey?: string
+  /**
+   * A layout already solved elsewhere for EXACTLY the current options (the Time
+   * Machine solves every year in a worker). Asked for only when a year switch
+   * would otherwise have to solve on the spot; return null when there is none —
+   * the caller is responsible for it matching these options.
+   */
+  presolved?: () => ReadonlyArray<{name: string; x: number; y: number}> | null
+  /**
+   * Land a year switch at once instead of tweening to it — for when the map
+   * isn't on screen (under the Time Machine), so there is nothing to animate.
+   */
+  instant?: boolean
 }
 
 /**
@@ -137,6 +149,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     centerPull = 0,
     gapFill = 0,
     gapMin = 60,
+    presolved,
+    instant = false,
   } = opts
   const pure = seed != null
 
@@ -565,6 +579,34 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
 
       const cached = layoutKey ? layoutCacheRef.current.get(layoutKey) : undefined
       let target = cached && cached.sig === layoutSig ? cached.pos : undefined
+      if (!target) {
+        // Already solved elsewhere for these exact options? Then there is nothing
+        // to compute (a from-scratch settle blocks the page for most of a second).
+        const ready = presolved?.()
+        if (ready && ready.length === built.length) {
+          const pos = new Map(ready.map((q) => [q.name, {x: q.x, y: q.y}]))
+          if (built.every((n) => pos.has(n.name))) {
+            target = pos
+            if (layoutKey) layoutCacheRef.current.set(layoutKey, {sig: layoutSig, pos})
+          }
+        }
+      }
+      if (target && instant) {
+        // Off screen: no morph — put every planet straight at its place and size.
+        for (const n of built) {
+          const b = target.get(n.name)
+          if (b) {
+            n.x = b.x
+            n.y = b.y
+          }
+          n.r = n.targetR
+          n.vx = 0
+          n.vy = 0
+        }
+        simRef.current = null
+        setNodes(built.slice())
+        return
+      }
       if (!target) {
         // Cache miss (or stale): resolve this year's layout once and cache it. Use
         // the TARGET-year radii for the settle (existing nodes still carry the old
