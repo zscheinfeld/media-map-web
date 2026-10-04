@@ -15,6 +15,7 @@ export const LAYOUT_PRESET: Partial<LayoutLabState> | null = {
   "seeds": {
     "desktop": 211
   },
+  "shuffleEachLoad": true,
   "lockLayout": true,
   "scaleType": false,
   "minTypePx": 0,

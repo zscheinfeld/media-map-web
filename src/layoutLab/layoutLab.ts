@@ -107,6 +107,10 @@ export type LayoutLabState = {
   seed: number;
   seeds: Partial<Record<DeviceMode, number>>;
   /** Lay out at the design width so resizing the window never reshuffles. */
+  /** Every page load starts from its own random arrangement (the seeds below
+   *  are then unused). It stays put for the whole visit — a resize never
+   *  reshuffles. Off = the same arrangement for everyone, from `seed`/`seeds`. */
+  shuffleEachLoad: boolean;
   lockLayout: boolean;
   /** Type scales with the map (like an SVG) instead of staying a fixed px size. */
   scaleType: boolean;
@@ -129,6 +133,7 @@ const perMode = <T,>(make: () => T): Record<DeviceMode, T> => ({ desktop: make()
 export const EMPTY_LAYOUT: LayoutLabState = {
   seed: 1,
   seeds: {},
+  shuffleEachLoad: true,
   lockLayout: true,
   scaleType: false,
   minTypePx: 0,
@@ -151,6 +156,7 @@ export function normalizeLayout(x: unknown): LayoutLabState {
   const out: LayoutLabState = {
     seed: fin(o.seed) ? Math.round(o.seed) : EMPTY_LAYOUT.seed,
     seeds: {},
+    shuffleEachLoad: typeof o.shuffleEachLoad === "boolean" ? o.shuffleEachLoad : EMPTY_LAYOUT.shuffleEachLoad,
     lockLayout: typeof o.lockLayout === "boolean" ? o.lockLayout : EMPTY_LAYOUT.lockLayout,
     scaleType: typeof o.scaleType === "boolean" ? o.scaleType : EMPTY_LAYOUT.scaleType,
     minTypePx: fin(o.minTypePx) ? Math.max(0, o.minTypePx) : 0,
@@ -275,6 +281,13 @@ export function useLayoutLab() {
     const id = window.setTimeout(() => setApplied(state), 140);
     return () => window.clearTimeout(id);
   }, [state]);
+
+  // This visit's starting arrangement, used when "new arrangement on every
+  // visit" is on: drawn once per page load, so the layout holds through resizes,
+  // view changes and year changes, and differs on the next load. The lab's
+  // Reload button draws a fresh one (it stands in for a new page load).
+  const [sessionSeed, setSessionSeed] = useState(() => Math.floor(Math.random() * 1_000_000_000));
+  const reshuffle = useCallback(() => setSessionSeed(Math.floor(Math.random() * 1_000_000_000)), []);
 
   const [ui, setUi] = useState<UiState>(() => (enabled ? loadUi() : { device: "desktop", arrange: false, showWells: true }));
   const [open, setOpen] = useState(true);
@@ -475,6 +488,8 @@ export function useLayoutLab() {
     exportJson,
     setRemote,
     unpublished,
+    sessionSeed,
+    reshuffle,
     /** Back to the published layout (Sanity, else the built-in preset). */
     resetToPreset: () => setState(published),
     clearAll: () => setState(normalizeLayout(EMPTY_LAYOUT)),

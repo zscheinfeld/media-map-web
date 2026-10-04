@@ -321,10 +321,12 @@ export function LayoutLabPanel({
           </button>
           <button
             onClick={() => setState((s) => ({ ...s, seeds: { ...s.seeds, [mode]: seedFor(s, mode) + 1 } }))}
-            disabled={typeOnly}
-            style={{ ...btn, opacity: typeOnly ? 0.45 : 1 }}
+            disabled={typeOnly || state.shuffleEachLoad}
+            style={{ ...btn, opacity: typeOnly || state.shuffleEachLoad ? 0.45 : 1 }}
             title={
-              typeOnly
+              state.shuffleEachLoad
+                ? "Every page load already gets a new arrangement — press Reload map to see another"
+                : typeOnly
                 ? "This view uses the desktop layout — shuffle it from Desktop"
                 : `Try a different starting arrangement for ${DEVICE_LABELS[mode]} only (seed ${seedFor(state, mode)}). The same seed always gives the same map.`
             }
@@ -343,6 +345,19 @@ export function LayoutLabPanel({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        {tab === "physics" && (
+          <fieldset style={fs}>
+            <legend style={lg}>Arrangement</legend>
+            <Toggle on={state.shuffleEachLoad} onChange={(v) => setState((s) => ({ ...s, shuffleEachLoad: v }))}>
+              New arrangement on every visit
+            </Toggle>
+            <p style={hint}>
+              {state.shuffleEachLoad
+                ? "Each page load starts the planets from a different scatter, so small planets land in different spots each visit. It holds for the whole visit — resizing never reshuffles. Reload map shows another."
+                : "Everyone gets the same arrangement on every load. Shuffle tries a different one."}
+            </p>
+          </fieldset>
+        )}
         {tab === "physics" && followToggle}
         {typeOnly && tab !== "type" && tabletNote}
         {!typeOnly && tab === "physics" && (

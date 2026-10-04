@@ -4366,7 +4366,9 @@ export default function MediaMap() {
     layoutKey: String(activeDate.year),
     suspended: gameActive,
     // Layout lab: deterministic solve + the gap-filling forces.
-    seed: K ? seedFor(llab.applied, labMode) : null,
+    // A fresh arrangement per page load (held for the whole visit), or the
+    // published seed when that is switched off.
+    seed: K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null,
     centerPull: K?.centerPull,
     gapFill: K?.gapFill,
     gapMin: K?.gapMin,
@@ -5477,6 +5479,9 @@ export default function MediaMap() {
   const labReload = () => {
     setInspectedPlanet(null);
     resetView();
+    // Stands in for a new page load: with "new arrangement on every visit" on,
+    // that means a new starting arrangement too.
+    if (llab.state.shuffleEachLoad) llab.reshuffle();
     setFlyIntroToken((n) => n + 1);
   };
   const labSelectedNode = arrange && selectedPlanet ? nodes.find((n) => n.name === selectedPlanet) ?? null : null;
