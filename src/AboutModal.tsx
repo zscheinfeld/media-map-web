@@ -668,6 +668,44 @@ const pStyle: React.CSSProperties = {
   color: "rgba(255,255,255,0.85)",
 };
 
+// Inline links in body copy are written `[link text](https://example.com)`.
+// Only web, mail and same-site addresses become links; anything else (e.g. a
+// `javascript:` address) is left as plain text.
+const LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+const isSafeHref = (href: string) => /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(href);
+
+/** One paragraph's text with its `[text](url)` links turned into anchors. */
+function withLinks(text: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    const [whole, label, href] = m;
+    const at = m.index ?? 0;
+    if (!isSafeHref(href)) continue;
+    if (at > last) out.push(text.slice(last, at));
+    const external = /^https?:\/\//i.test(href);
+    // Spaces typed just inside the brackets ("[text ](url)") stay outside the
+    // link, so the underline doesn't run under them.
+    const lead = label.match(/^\s*/)?.[0] ?? "";
+    const trail = label.match(/\s*$/)?.[0] ?? "";
+    if (lead) out.push(lead);
+    out.push(
+      <a
+        key={`${at}-${href}`}
+        className="about-link"
+        href={href}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {label.trim()}
+      </a>,
+    );
+    if (trail && label.trim()) out.push(trail);
+    last = at + whole.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 /** Split a plain-text body on blank lines into <p> paragraphs. */
 function Paragraphs({ text }: { text: string }) {
   const paras = text
@@ -678,7 +716,7 @@ function Paragraphs({ text }: { text: string }) {
     <>
       {paras.map((p, i) => (
         <p key={i} style={pStyle}>
-          {p}
+          {withLinks(p)}
         </p>
       ))}
     </>

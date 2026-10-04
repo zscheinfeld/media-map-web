@@ -36,7 +36,9 @@ export const aboutBody = defineType({
       title: 'Text',
       type: 'text',
       rows: 6,
-      description: 'Leave a blank line between paragraphs.',
+      description:
+        'Leave a blank line between paragraphs. To add a link, write [link text](https://example.com) — ' +
+        'the words in square brackets become the link.',
     }),
   ],
   preview: {
