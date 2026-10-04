@@ -14,37 +14,30 @@ export const mapSettings = defineType({
   title: 'Map Settings',
   type: 'document',
   icon: ControlsIcon,
+  // The layout itself now comes from the layout lab (the hidden `layout_lab`
+  // field, published from the Layout lab tab). The time-scoped values saved by
+  // the former Map Editor stay, folded away at the bottom: they are the base
+  // the lab layers over — any slider the lab hasn't changed takes its value
+  // from here.
+  fieldsets: [
+    {
+      name: 'mapEditor',
+      title: 'Earlier slider values (base layer)',
+      description:
+        'Slider values saved by the former Map Editor, per stretch of the timeline. Still in use: any ' +
+        'slider not changed in the layout lab takes its value from here. Leave these as they are.',
+      options: {collapsible: true, collapsed: true},
+    },
+  ],
   fields: [
-    defineField({
-      name: 'overrides',
-      title: 'Time-scoped knob values (desktop)',
-      type: 'array',
-      of: [{type: 'mapSettingsOverride'}],
-      description:
-        'One entry per stretch of the timeline. Edited via the Map Editor — drag the knobs at a ' +
-        'given year/month and Save to stamp values effective from that moment forward.',
-    }),
-    defineField({
-      name: 'square_overrides',
-      title: 'Time-scoped knob values (square / mobile)',
-      type: 'array',
-      of: [{type: 'mapSettingsOverride'}],
-      description:
-        'The square (mobile) twin of `overrides`. The square map needs its own spacing/pull ' +
-        'because the canvas is a different shape. Authored in the Map Editor’s Square mode. ' +
-        'While this is empty the square map keeps its built-in mobile defaults, so adding the ' +
-        'first entry is what hands control of mobile physics to the CMS.',
-    }),
     defineField({
       name: 'layout_lab',
       title: 'Layout',
       type: 'text',
       rows: 6,
-      description:
-        'The map layout for every device, as exported by the layout lab. To change it: open the ' +
-        'layout lab (the "Layout lab" tab at the top of Studio), adjust, press Copy JSON, paste here ' +
-        'replacing everything, then Publish. Leave empty to use the layout built into the site. ' +
-        'Do not edit by hand.',
+      // Edited in the Layout lab tab (paste + Publish), never by hand here.
+      hidden: true,
+      description: 'The map layout for every device, as exported by the layout lab. Published from the Layout lab tab.',
       validation: (Rule) =>
         Rule.custom((value) => {
           if (!value || !String(value).trim()) return true
@@ -75,6 +68,28 @@ export const mapSettings = defineType({
       title: 'Side panel background',
       type: 'color',
       description: 'Solid colour for the left sector panel. Empty = the built-in translucent navy.',
+    }),
+    defineField({
+      name: 'overrides',
+      title: 'Time-scoped knob values (desktop)',
+      type: 'array',
+      fieldset: 'mapEditor',
+      of: [{type: 'mapSettingsOverride'}],
+      description:
+        'One entry per stretch of the timeline. Edited via the Map Editor — drag the knobs at a ' +
+        'given year/month and Save to stamp values effective from that moment forward.',
+    }),
+    defineField({
+      name: 'square_overrides',
+      title: 'Time-scoped knob values (square / mobile)',
+      type: 'array',
+      fieldset: 'mapEditor',
+      of: [{type: 'mapSettingsOverride'}],
+      description:
+        'The square (mobile) twin of `overrides`. The square map needs its own spacing/pull ' +
+        'because the canvas is a different shape. Authored in the Map Editor’s Square mode. ' +
+        'While this is empty the square map keeps its built-in mobile defaults, so adding the ' +
+        'first entry is what hands control of mobile physics to the CMS.',
     }),
   ],
   preview: {
