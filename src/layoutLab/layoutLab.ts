@@ -498,22 +498,43 @@ export function useLayoutLab() {
 
 export type LayoutLab = ReturnType<typeof useLayoutLab>;
 
-/** Placement edits in force at `year` for a mode: name → position, or null = freed. */
-export function positionsAt(state: LayoutLabState, mode: DeviceMode, year: number): Record<string, ResolvedPos> {
+/**
+ * Placement edits in force at `year` for a mode: name → position, or null = freed.
+ *
+ * `baseYears` (optional) is the year the layer UNDERNEATH (Sanity's own
+ * positions) last set each planet, as of `year`. An edit carries forward only
+ * until something later replaces it — in the lab OR underneath: if the layer
+ * underneath has a later-dated entry than the lab's, that one stands and the
+ * lab's edit is left out. (A tie goes to the lab.)
+ */
+export function positionsAt(
+  state: LayoutLabState,
+  mode: DeviceMode,
+  year: number,
+  baseYears?: Record<string, number>,
+): Record<string, ResolvedPos> {
   const out: Record<string, ResolvedPos> = {};
   for (const [name, list] of Object.entries(state.positions[mode])) {
     const e = editAt(list, year);
     if (!e) continue;
+    if (baseYears && baseYears[name] > e.from) continue;
     out[name] = "clear" in e ? null : { x: e.x, y: e.y, pin: e.pin, hold: e.hold };
   }
   return out;
 }
-/** Sector-well moves in force at `year` for a mode. */
-export function sectorsAt(state: LayoutLabState, mode: DeviceMode, year: number): Record<string, { x: number; y: number }> {
+/** Sector-well moves in force at `year` for a mode (`baseYears`: as in `positionsAt`). */
+export function sectorsAt(
+  state: LayoutLabState,
+  mode: DeviceMode,
+  year: number,
+  baseYears?: Record<string, number>,
+): Record<string, { x: number; y: number }> {
   const out: Record<string, { x: number; y: number }> = {};
   for (const [name, list] of Object.entries(state.sectors[mode])) {
     const e = editAt(list, year);
-    if (e) out[name] = { x: e.x, y: e.y };
+    if (!e) continue;
+    if (baseYears && baseYears[name] > e.from) continue;
+    out[name] = { x: e.x, y: e.y };
   }
   return out;
 }
