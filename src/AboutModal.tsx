@@ -22,6 +22,8 @@ const MODAL_EXIT_MS = 260;
 
 // Height reserved for the sticky tab bar so scroll-to lands sections just below it.
 const TABS_HEIGHT = 52;
+/** Padding inside the modal card on desktop (phone keeps 32px). */
+const DESKTOP_PAD = 64;
 const TAB_GAP = 28;
 
 // ── Content model ────────────────────────────────────────────────────────────
@@ -374,7 +376,7 @@ export function AboutModal({
           </h2>
         );
       case "body":
-        return <Paragraphs key={key} text={b.text} />;
+        return <Paragraphs key={key} text={b.text} fontSize={narrow ? 16 : 18} />;
       case "primary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
@@ -484,7 +486,7 @@ export function AboutModal({
         }}
       >
         {/* Fixed header — stays while the body scrolls beneath it. */}
-        <div style={{ position: "relative", flex: "0 0 auto", padding: "32px 32px 24px" }}>
+        <div style={{ position: "relative", flex: "0 0 auto", padding: narrow ? "32px 32px 24px" : `${DESKTOP_PAD}px ${DESKTOP_PAD}px 24px` }}>
           <div
             style={{
               textAlign: "center",
@@ -508,7 +510,7 @@ export function AboutModal({
         <div
           ref={scrollRef}
           className="about-scroll"
-          style={{ position: "relative", flex: "1 1 auto", overflowY: "auto", padding: "0 32px 32px" }}
+          style={{ position: "relative", flex: "1 1 auto", overflowY: "auto", padding: narrow ? "0 32px 32px" : `0 ${DESKTOP_PAD}px ${DESKTOP_PAD}px` }}
         >
           {/* Hero photo (scrolls away). */}
           <div
@@ -649,8 +651,9 @@ export function AboutModal({
                   scrollMarginTop: TABS_HEIGHT + 8,
                 }}
               >
-                {/* Centered ~500px reading column within the wider modal. */}
-                <div style={{ maxWidth: 500, margin: "0 auto" }}>{s.blocks.map(renderBlock)}</div>
+                {/* Desktop: copy runs the full width inside the modal's padding.
+                    Phone: unchanged (the column cap never bites at that width). */}
+                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map(renderBlock)}</div>
               </div>
             );
           })}
@@ -707,7 +710,7 @@ function withLinks(text: string): React.ReactNode[] {
 }
 
 /** Split a plain-text body on blank lines into <p> paragraphs. */
-function Paragraphs({ text }: { text: string }) {
+function Paragraphs({ text, fontSize }: { text: string; fontSize: number }) {
   const paras = text
     .split(/\n\s*\n/)
     .map((s) => s.trim())
@@ -715,7 +718,7 @@ function Paragraphs({ text }: { text: string }) {
   return (
     <>
       {paras.map((p, i) => (
-        <p key={i} style={pStyle}>
+        <p key={i} style={{ ...pStyle, fontSize }}>
           {withLinks(p)}
         </p>
       ))}
