@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadCompanies, type SheetCompany } from "./loadCompanies";
 import {
   usePhysicsLayout,
@@ -21,7 +22,7 @@ import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type Compan
 import { buildExportPng, clearTextWidthCache, downloadBlob, measureLabelTextWidth } from "./exportMap";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
-import { getSolvedYears, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
+import { getSolvedYears, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
 import { GameOverlay } from "./game/GameOverlay";
 import { ghostColorFor, ghostStyleFor } from "./game/ghostStyle";
@@ -1935,6 +1936,16 @@ const CAROUSEL_VISIBLE_HALFWIDTH = 8; // how many slots to render on each side
 type TmTuning = {
   /** Width of the focused map, px. */
   focusW: number;
+  /** On a narrow screen the focused map is at most this share of the screen's width. */
+  maxScreenShare: number;
+  /**
+   * Height of the maps relative to the map's own proportions: 1 = the whole
+   * map, uncropped; above 1 = taller (the sides are cropped to fill); below 1 =
+   * shorter (top and bottom cropped).
+   */
+  mapHeight: number;
+  /** A jump of several years: time added per extra year, ms (one year takes 640ms). */
+  jumpExtraMs: number;
   /** Size of the furthest-back maps, as a fraction of the focused one. */
   depth: number;
   /** Distance from the focused map's centre to its first neighbour's, px. */
@@ -1955,6 +1966,8 @@ type TmTuning = {
   introEase: number;
   /** Opening animation: how far below its place each map starts, px (negative = above). */
   introRise: number;
+  /** "Explore this map": how long the focused map takes to grow into the real map, ms. */
+  exploreMs: number;
   /** Height and corner radius of the Explore button, px. */
   exploreH: number;
   exploreRadius: number;
@@ -1985,8 +1998,9 @@ const TM_REALISTIC = 1;
 const TM_HYBRID = 2;
 const TM_DEFAULTS: TmTuning = {
   // Tuned by eye in the ?tm=1 panel, 2026-10-04.
-  focusW: 535, depth: 0.38, spread: 250, opacityStep: 0.11, dimStep: 0.47, labelOpacityStep: 0.51,
+  focusW: 535, maxScreenShare: 0.84, mapHeight: 1, jumpExtraMs: 110, depth: 0.38, spread: 250, opacityStep: 0.11, dimStep: 0.47, labelOpacityStep: 0.51,
   introMs: 900, introUiMs: 500, introStagger: 110, introEase: 0.9, introRise: 90,
+  exploreMs: 750,
   // The mock draws every button ~1.38× the site's size (its 34px buttons are
   // ~47px there), so its 64px Explore button with 16px corners is 47px / 12px here.
   exploreH: 47, exploreRadius: 12,
@@ -1999,8 +2013,17 @@ const TM_SPREAD_FALLOFF = 0.66;
 // Maps more than this many steps back fade out entirely, so the back of the
 // stack ends cleanly instead of smearing into a pile.
 const TM_VISIBLE_STEPS = 3.5;
-const TM_SLIDE = "640ms cubic-bezier(0.65, 0, 0.35, 1)";
+// Moving between years: one step takes TM_SLIDE_MS; each further step of a
+// longer jump adds `jumpExtraMs` (up to six steps' worth).
+const TM_SLIDE_MS = 640;
+// "Explore this map": how quickly everything except the focused map clears away.
+const TM_EXPLORE_FADE_MS = 220;
+// Phones get their own copy of every setting. It starts out identical to the
+// desktop set; tune it with ?tm=1 on a phone (or a phone-width window / the
+// layout lab's phone preview) and paste the result here.
+const TM_DEFAULTS_MOBILE: TmTuning = { ...TM_DEFAULTS };
 const TM_TUNING_KEY = "mm-time-machine-tuning-v1";
+const TM_TUNING_KEY_MOBILE = "mm-time-machine-tuning-mobile-v1";
 
 /** Opening-animation easing: blends from linear (0) to a strong ease-out (1). */
 function tmIntroEasing(intensity: number): string {
@@ -2021,35 +2044,50 @@ const TM_STRIP_LABEL_ROOM = 17;
 const tmStripHeight = (t: TmTuning) =>
   1 + t.stripBottom + Math.max(t.tickH, t.tickActiveH) + TM_STRIP_LABEL_ROOM + t.stripBottom;
 
-/** Time Machine tuning: the defaults, or — with ?tm=1 — live-editable values kept in this browser. */
-function useTmTuning() {
+/** Reads one device's saved tuning (only keys we know, only finite numbers). */
+function loadTmTuning(key: string, defaults: TmTuning): TmTuning {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<TmTuning> | null;
+    const out = { ...defaults };
+    for (const k of Object.keys(defaults) as (keyof TmTuning)[]) {
+      if (raw && typeof raw[k] === "number" && Number.isFinite(raw[k])) out[k] = raw[k] as number;
+    }
+    return out;
+  } catch {
+    return defaults;
+  }
+}
+
+/**
+ * Time Machine tuning for this device (phones have their own set): the
+ * defaults, or — with ?tm=1 — live-editable values kept in this browser.
+ */
+function useTmTuning(mobile: boolean) {
   const enabled = useMemo(() => {
     if (typeof window === "undefined") return false;
     const v = new URLSearchParams(window.location.search).get("tm");
     return v === "1" || v === "true";
   }, []);
-  const [tuning, setTuning] = useState<TmTuning>(() => {
-    if (!enabled) return TM_DEFAULTS;
-    try {
-      const raw = JSON.parse(localStorage.getItem(TM_TUNING_KEY) ?? "null") as Partial<TmTuning> | null;
-      const out = { ...TM_DEFAULTS };
-      for (const k of Object.keys(TM_DEFAULTS) as (keyof TmTuning)[]) {
-        if (raw && typeof raw[k] === "number" && Number.isFinite(raw[k])) out[k] = raw[k] as number;
-      }
-      return out;
-    } catch {
-      return TM_DEFAULTS;
-    }
-  });
+  const [sets, setSets] = useState<{ desktop: TmTuning; mobile: TmTuning }>(() =>
+    enabled
+      ? { desktop: loadTmTuning(TM_TUNING_KEY, TM_DEFAULTS), mobile: loadTmTuning(TM_TUNING_KEY_MOBILE, TM_DEFAULTS_MOBILE) }
+      : { desktop: TM_DEFAULTS, mobile: TM_DEFAULTS_MOBILE },
+  );
   useEffect(() => {
     if (!enabled) return;
     try {
-      localStorage.setItem(TM_TUNING_KEY, JSON.stringify(tuning));
+      localStorage.setItem(TM_TUNING_KEY, JSON.stringify(sets.desktop));
+      localStorage.setItem(TM_TUNING_KEY_MOBILE, JSON.stringify(sets.mobile));
     } catch {
       /* ignore */
     }
-  }, [enabled, tuning]);
-  return { enabled, tuning, setTuning };
+  }, [enabled, sets]);
+  const device = mobile ? "mobile" : "desktop";
+  const setTuning = useCallback(
+    (fn: (t: TmTuning) => TmTuning) => setSets((all) => ({ ...all, [device]: fn(all[device]) })),
+    [device],
+  );
+  return { enabled, tuning: sets[device], setTuning, defaults: mobile ? TM_DEFAULTS_MOBILE : TM_DEFAULTS };
 }
 
 // Whether the ?tm=1 panel is tucked away, and which tab it is on — kept for the
@@ -2061,10 +2099,20 @@ let tmPanelTab: "layout" | "planets" = "layout";
 function TmTuningPanel({
   tuning,
   setTuning,
+  defaults,
+  device,
   onReplay,
 }: {
   tuning: TmTuning;
   setTuning: (fn: (t: TmTuning) => TmTuning) => void;
+  /** The shipped values for this device (what Reset goes back to). */
+  defaults: TmTuning;
+  /**
+   * Which set is being edited, and where the panel can sit: "desktop"; "phone"
+   * (a real phone-width screen — the panel shares it with the Time Machine);
+   * "phone-preview" (the layout lab's phone frame, with room beside it).
+   */
+  device: "desktop" | "phone" | "phone-preview";
   /** Play the opening animation again. */
   onReplay: () => void;
 }) {
@@ -2090,17 +2138,21 @@ function TmTuningPanel({
     { value: TM_HYBRID, label: "Hybrid", hint: "Realistic on the focused or hovered map; outlines on the others." },
   ];
   const layoutRows: Row[] = [
-    { key: "focusW", label: "Focused map size", min: 220, max: 900, step: 5, suffix: "px" },
+    { key: "focusW", label: "Focused map size", min: 120, max: 900, step: 5, suffix: "px" },
+    { key: "maxScreenShare", label: "Max share of screen width", min: 0.4, max: 1, step: 0.01, digits: 2 },
+    { key: "mapHeight", label: "Map height (1 = whole map)", min: 0.4, max: 2.4, step: 0.01, digits: 2, suffix: "×" },
     { key: "depth", label: "Depth (smallest map)", min: 0.05, max: 1, step: 0.01, digits: 2 },
     { key: "spread", label: "Spread", min: 40, max: 600, step: 5, suffix: "px" },
     { key: "opacityStep", label: "Opacity differential", min: 0, max: 0.9, step: 0.01, digits: 2 },
     { key: "dimStep", label: "Dim intensity", min: 0, max: 0.9, step: 0.01, digits: 2 },
     { key: "labelOpacityStep", label: "Year opacity differential", min: 0, max: 0.9, step: 0.01, digits: 2 },
+    { key: "jumpExtraMs", label: "Year jump: extra time per year", min: 0, max: 400, step: 5, suffix: "ms" },
     { key: "introMs", label: "Intro duration", min: 100, max: 2500, step: 10, suffix: "ms" },
     { key: "introUiMs", label: "Intro duration: bar + Explore", min: 100, max: 2500, step: 10, suffix: "ms" },
     { key: "introStagger", label: "Intro offset", min: 0, max: 600, step: 5, suffix: "ms" },
     { key: "introEase", label: "Intro easing intensity", min: 0, max: 1, step: 0.01, digits: 2 },
     { key: "introRise", label: "Intro start height", min: -300, max: 300, step: 2, suffix: "px" },
+    { key: "exploreMs", label: "Explore: grow into the map", min: 150, max: 2500, step: 10, suffix: "ms" },
     { key: "exploreH", label: "Explore button height", min: 30, max: 90, step: 1, suffix: "px" },
     { key: "exploreRadius", label: "Explore corner radius", min: 0, max: 45, step: 1, suffix: "px" },
     { key: "tickSpread", label: "Hash spread", min: 24, max: 160, step: 1, suffix: "px" },
@@ -2112,26 +2164,39 @@ function TmTuningPanel({
   const btn: React.CSSProperties = {
     background: "#1d2229", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: 7, padding: "5px 10px", font: "inherit", fontSize: 12, cursor: "pointer",
   };
+  // Drawn straight into the page (not inside the Time Machine), so it can sit
+  // outside the layout lab's phone frame and is never clipped by the map area.
+  const font = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
+  const place: React.CSSProperties =
+    device === "phone"
+      ? { position: "fixed", top: 58, left: 8, right: 8, maxHeight: "42vh", overflowY: "auto", background: "rgba(22,26,33,0.86)" }
+      : device === "phone-preview"
+        ? { position: "fixed", top: 62, left: 16, width: 320, maxHeight: "calc(100vh - 80px)", overflowY: "auto", background: "#161a21" }
+        : { position: "fixed", top: 62, right: 16, width: 320, maxHeight: "calc(100vh - 80px)", overflowY: "auto", background: "#161a21" };
+  if (typeof document === "undefined") return null;
   if (hidden) {
-    return (
+    return createPortal(
       <button
         onClick={() => hide(false)}
-        style={{ ...btn, position: "absolute", top: 62, right: 16, zIndex: 40, background: "#161a21", fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif' }}
+        style={{ ...btn, position: "fixed", top: place.top, left: place.left, right: device === "phone" ? undefined : place.right, zIndex: 400, background: "#161a21", fontFamily: font }}
       >
         Show sliders
-      </button>
+      </button>,
+      document.body,
     );
   }
-  return (
+  return createPortal(
     <div
       style={{
-        position: "absolute", top: 62, right: 16, width: 290, zIndex: 40, background: "#161a21", border: "1px solid #2a313b", borderRadius: 10,
-        padding: "12px 14px 10px", color: "#e6e9ef", fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif', fontSize: 12,
+        ...place, zIndex: 400, border: "1px solid #2a313b", borderRadius: 10, boxSizing: "border-box",
+        padding: "12px 14px 10px", color: "#e6e9ef", fontFamily: font, fontSize: 12,
         boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ flex: 1, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#8f98a6", fontWeight: 600 }}>Time Machine</span>
+        <span style={{ flex: 1, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#8f98a6", fontWeight: 600 }}>
+          Time Machine · <span style={{ color: "#a7f3d0" }}>{device === "desktop" ? "Desktop" : "Phone"}</span>
+        </span>
         <button style={{ ...btn, padding: "3px 9px", fontSize: 11 }} onClick={() => hide(true)} title="Hide the sliders">Hide</button>
       </div>
       <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
@@ -2174,7 +2239,7 @@ function TmTuningPanel({
       )}
       {rows.map((r) => (
         <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ flex: 1, color: tuning[r.key] === TM_DEFAULTS[r.key] ? "#8f98a6" : "#e6e9ef" }}>{r.label}</span>
+          <span style={{ flex: 1, color: tuning[r.key] === defaults[r.key] ? "#8f98a6" : "#e6e9ef" }}>{r.label}</span>
           <input
             type="range" min={r.min} max={r.max} step={r.step} value={tuning[r.key]}
             onChange={(e) => setTuning((t) => ({ ...t, [r.key]: +e.target.value }))}
@@ -2196,10 +2261,11 @@ function TmTuningPanel({
           Copy settings
         </button>
         <button style={btn} onClick={onReplay} title="Play the opening animation again">Replay intro</button>
-        <button style={btn} onClick={() => setTuning(() => TM_DEFAULTS)}>Reset</button>
+        <button style={btn} onClick={() => setTuning(() => defaults)}>Reset</button>
         <span style={{ color: "#8f98a6", fontSize: 11 }}>{flash ?? ""}</span>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2229,12 +2295,13 @@ function MapThumbnail({
   exploreHover = false,
   onExploreHoverChange,
   width,
+  height,
   scale,
   labelShiftX,
   dim,
   labelDim,
   brightness,
-  animate,
+  exploring = false,
   planetMode,
   strokeBigPx,
   strokeSmallPx,
@@ -2253,6 +2320,8 @@ function MapThumbnail({
   onExploreHoverChange?: (hovered: boolean) => void;
   /** Layout width of the map (the focused size); `scale` shrinks it visually. */
   width: number;
+  /** Layout height of the map. Other than the map's own proportions = cropped to fill. */
+  height: number;
   scale: number;
   /** Sideways nudge for the year label, to sit under the map's visible part. */
   labelShiftX: number;
@@ -2262,8 +2331,8 @@ function MapThumbnail({
   labelDim: number;
   /** Brightness for its place in the stack (1 = focused, lower = darker). */
   brightness: number;
-  /** Ease the scale / fade (clicks, snap) vs. track the scroll 1:1 (scrub). */
-  animate: boolean;
+  /** "Explore this map" is playing: the year label clears away. */
+  exploring?: boolean;
   /** How the planets are drawn (TM_OUTLINE / TM_REALISTIC / TM_HYBRID). */
   planetMode: number;
   /** Outline thickness, px on the focused map: planets at/over the threshold, and under it. */
@@ -2294,12 +2363,15 @@ function MapThumbnail({
 
   // The planets, as one or two layers. Built once per layout / setting (not per
   // frame of the carousel sliding), since a map is ~170 planets.
+  // Screen px per slide unit in this thumbnail (it fills its box, cropping if
+  // the box isn't the map's shape).
+  const pxPerSu = Math.max(width / canvas.w, height / canvas.h);
   const realOn = planetMode === TM_REALISTIC || (planetMode === TM_HYBRID && (isSelected || isHovered));
   const wantOutline = planetMode !== TM_REALISTIC;
   const wantReal = planetMode !== TM_OUTLINE;
   const outlineLayer = useMemo(() => {
     if (!wantOutline || !layout) return null;
-    const suPerPx = canvas.w / width;
+    const suPerPx = 1 / pxPerSu;
     return layout.map((p) => {
       // Text-only entities have no circle; sub-pixel planets are skipped.
       if (p.isEntity || p.r < 2) return null;
@@ -2315,12 +2387,12 @@ function MapThumbnail({
         />
       );
     });
-  }, [wantOutline, layout, canvas.w, width, bigThresholdB, strokeBigPx, strokeSmallPx]);
+  }, [wantOutline, layout, pxPerSu, bigThresholdB, strokeBigPx, strokeSmallPx]);
   const realLayer = useMemo(() => {
     if (!wantReal || !layout) return null;
     // Pixel-sized details (glow, stripe hairlines) are scaled as if this were the
     // real map shrunk to thumbnail size; the outline thickness is the slider's.
-    const mini = mapPx / width;
+    const mini = mapPx / (canvas.w * pxPerSu);
     return layout.map((p) => {
       if (p.isEntity || p.r < 2) return null;
       const strokeWidthPx = (p.valuation_b >= bigThresholdB ? strokeBigPx : strokeSmallPx) * mini;
@@ -2341,11 +2413,11 @@ function MapThumbnail({
         />
       );
     });
-  }, [wantReal, layout, canvas.w, width, mapPx, bigThresholdB, strokeBigPx, strokeSmallPx, date.year]);
+  }, [wantReal, layout, canvas.w, pxPerSu, mapPx, bigThresholdB, strokeBigPx, strokeSmallPx, date.year]);
 
   // The map box is laid out at the focused size and shrunk with a transform;
   // the label rides up under the shrunken map's bottom edge.
-  const boxH = width / (canvas.w / canvas.h);
+  const boxH = height;
   const labelLift = -(boxH * (1 - scale)) / 2;
 
   // Border priority: selected (strongest) > hovered (signals clickability) >
@@ -2382,15 +2454,18 @@ function MapThumbnail({
       }}
     >
       <div
+        // The focused map is what "Explore this map" grows into the real one.
+        data-tm-focus-map={isSelected ? "" : undefined}
         style={{
           width: "100%",
-          aspectRatio: `${canvas.w / canvas.h}`,
+          height,
+          boxSizing: "border-box",
           transform: `scale(${scale})`,
           transformOrigin: "center",
           // A map further back is more see-through; hovering one lifts it a little.
-          opacity: isSelected ? 1 : Math.min(1, dim * (isHovered ? 1.35 : 1)),
+          opacity: Math.min(1, dim * (isHovered ? 1.35 : 1)),
           // Darker the further back; hovering a map at the back lifts it part-way.
-          filter: `brightness(${isSelected ? 1 : isHovered ? Math.min(1, brightness + (1 - brightness) * 0.5) : brightness})`,
+          filter: `brightness(${isHovered ? Math.min(1, brightness + (1 - brightness) * 0.5) : brightness})`,
           pointerEvents: "auto",
           background:
             "radial-gradient(ellipse at 30% 30%, #0f2a52 0%, #04102a 60%, #00050f 100%)",
@@ -2413,14 +2488,17 @@ function MapThumbnail({
             (hoverTimed
               ? `border-color ${EXPLORE_HOVER_TRANSITION}, box-shadow ${EXPLORE_HOVER_TRANSITION}`
               : `border-color 200ms ease, box-shadow ${FOCUS_GLOW_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`) +
-            (animate ? `, transform ${TM_SLIDE}, filter ${TM_SLIDE}, opacity ${TM_SLIDE}` : ", filter 200ms ease, opacity 200ms ease"),
+            // Size and place follow the carousel frame by frame (no easing of
+            // their own); only the hover lift is eased.
+            ", filter 200ms ease, opacity 200ms ease",
         }}
       >
         <svg
           width="100%"
           height="100%"
           viewBox={`${canvas.x} ${canvas.y} ${canvas.w} ${canvas.h}`}
-          preserveAspectRatio="xMidYMid meet"
+          // Fills the box; identical to "meet" when the box has the map's shape.
+          preserveAspectRatio="xMidYMid slice"
         >
           {/* The planets fade in once this year's layout has been solved. They
               never take the pointer — the whole map is one button. */}
@@ -2447,9 +2525,9 @@ function MapThumbnail({
           letterSpacing: 1,
           transform: `translate(${labelShiftX}px, ${labelLift}px)`,
           // The years fade with distance on their own setting, separate from the maps.
-          opacity: isSelected ? 1 : Math.min(1, labelDim * (isHovered ? 1.35 : 1)),
+          opacity: exploring ? 0 : Math.min(1, labelDim * (isHovered ? 1.35 : 1)),
           pointerEvents: "auto",
-          transition: `color 220ms ease, font-size 220ms ease${animate ? `, transform ${TM_SLIDE}, opacity ${TM_SLIDE}` : ", opacity 200ms ease"}`,
+          transition: "color 220ms ease, font-size 220ms ease, opacity 200ms ease",
         }}
       >
         {formatDate(date)}
@@ -2467,9 +2545,10 @@ function Carousel({
   onExplore,
   tuning,
   bigThresholdB,
+  exploring,
 }: {
   dates: MapDate[];
-  /** Fractional index into `dates` — the carousel's position. */
+  /** Fractional index into `dates` — where the carousel is headed. */
   position: number;
   /** Ease the transforms (clicks/snap) vs. track the scroll 1:1 (wheel scrub). */
   animate: boolean;
@@ -2479,9 +2558,49 @@ function Carousel({
   tuning: TmTuning;
   /** Valuation ($B) from which a planet counts as "bigger" (its own stroke slider). */
   bigThresholdB: number;
+  /** "Explore this map" is playing: everything but the focused map clears away. */
+  exploring: boolean;
 }) {
   // Nearest whole year — the focused map + the centre of the render window.
   const selectedIdx = Math.max(0, Math.min(dates.length - 1, Math.round(position)));
+  // Where the carousel is DRAWN. A wheel scrub (`animate` off) is followed 1:1.
+  // A jump — an arrow, a click, a hash mark — is travelled: the drawn position
+  // glides to the target, so every map on the way swings through the centre
+  // (growing, coming forward, falling back) however far the jump is. (Easing
+  // each map straight to its new slot instead made far jumps slide flat across
+  // each other and pop in front / behind.)
+  const [glide, setGlide] = useState(position);
+  // Keep the glide value on the wheel's position while scrubbing, so a jump or
+  // the snap that follows starts from what is on screen.
+  if (!animate && glide !== position) setGlide(position);
+  const shown = animate ? glide : position;
+  const shownRef = useRef(position);
+  const jumpExtraMs = tuning.jumpExtraMs;
+  useEffect(() => {
+    if (!animate) {
+      shownRef.current = position;
+      return;
+    }
+    const from = shownRef.current;
+    const dist = Math.abs(position - from);
+    if (dist < 0.0005) return;
+    // One step takes the usual slide time; further jumps take a little longer.
+    const ms = TM_SLIDE_MS + Math.min(6, Math.max(0, dist - 1)) * jumpExtraMs;
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const u = Math.max(0, Math.min(1, (now - t0) / ms));
+      const k = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; // ease in-out (cubic)
+      const v = u >= 1 ? position : from + (position - from) * k;
+      shownRef.current = v;
+      setGlide(v);
+      if (u < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // The jump's length is fixed when it starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position, animate]);
   const activeIdx = selectedIdx;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
@@ -2553,10 +2672,10 @@ function Carousel({
   for (let i = renderRange.minIdx; i <= renderRange.maxIdx; i++) slots.push(i);
 
   // On a narrow screen the focused map shrinks to fit, and the spread with it.
-  const fit = containerW > 0 ? Math.min(1, (containerW * 0.84) / tuning.focusW) : 1;
+  const fit = containerW > 0 ? Math.min(1, (containerW * tuning.maxScreenShare) / tuning.focusW) : 1;
   const focusW = tuning.focusW * fit;
   const spread = tuning.spread * fit;
-  const focusH = focusW / (canvas.w / canvas.h);
+  const focusH = (focusW / (canvas.w / canvas.h)) * tuning.mapHeight;
   // The map, its label and the Explore row are centred as one group.
   const LABEL_SPACE = 30; // label + its gap under the map
   const ROW_GAP = 22; // label → Explore row
@@ -2590,7 +2709,9 @@ function Carousel({
       style={{
         flex: 1,
         position: "relative",
-        overflow: "hidden",
+        // Clipped to the carousel — except while the focused map grows into the
+        // real map, which reaches past it (the Time Machine's own edge clips then).
+        overflow: exploring ? "visible" : "hidden",
         // Its own stacking context: the maps' z-order stays inside the carousel
         // and can't climb over the controls around it.
         zIndex: 0,
@@ -2601,7 +2722,7 @@ function Carousel({
         const isSelected = i === selectedIdx;
         const isActive = i === activeIdx;
         // Steps back from the focus (fractional while scrubbing).
-        const o = i - position;
+        const o = i - shown;
         const steps = Math.abs(o);
         const { scale, x } = place(o);
         // The year label sits under the part of the map you can actually see.
@@ -2636,7 +2757,8 @@ function Carousel({
               // Centred on the MAP (not the map + label), then moved sideways.
               transform: `translate(-50%, ${-focusH / 2}px) translateX(${x}px)`,
               zIndex: 100 - Math.round(steps * 10),
-              transition: animate ? `transform ${TM_SLIDE}` : "none",
+              transition: `opacity ${TM_EXPLORE_FADE_MS}ms ease`,
+              opacity: exploring && !isSelected ? 0 : 1,
               pointerEvents: "none",
               visibility: dim <= 0.001 ? "hidden" : "visible",
             }}
@@ -2654,12 +2776,13 @@ function Carousel({
               exploreHover={isSelected && exploreHover}
               onExploreHoverChange={setExploreHover}
               width={focusW}
+              height={focusH}
               scale={scale}
               labelShiftX={labelShiftX}
               dim={dim}
               labelDim={labelDim}
               brightness={brightness}
-              animate={animate}
+              exploring={exploring}
               planetMode={tuning.planetMode}
               strokeBigPx={tuning.strokeBigPx}
               strokeSmallPx={tuning.strokeSmallPx}
@@ -2680,6 +2803,8 @@ function Carousel({
           left: "50%",
           top: exploreTop,
           transform: "translateX(-50%)",
+          opacity: exploring ? 0 : 1,
+          transition: `opacity ${TM_EXPLORE_FADE_MS}ms ease`,
           zIndex: 200,
         }}
       >
@@ -2746,6 +2871,7 @@ function TimelineStrip({
   onSelect,
   onHover,
   tuning,
+  exploring,
 }: {
   dates: MapDate[];
   activeDate: MapDate;
@@ -2753,6 +2879,8 @@ function TimelineStrip({
   onSelect: (d: MapDate) => void;
   onHover: (d: MapDate | null) => void;
   tuning: TmTuning;
+  /** "Explore this map" is playing: the strip clears away. */
+  exploring: boolean;
 }) {
   // Room for the tallest tick + the year under it.
   const stripH = tmStripHeight(tuning);
@@ -2786,7 +2914,9 @@ function TimelineStrip({
       className="tm-enter"
       onMouseLeave={() => onHover(null)}
       style={{
-        animation: entering ? `tm-strip-in ${tuning.introUiMs}ms ${tmIntroEasing(tuning.introEase)} both` : undefined,
+        opacity: exploring ? 0 : 1,
+        transition: `opacity ${TM_EXPLORE_FADE_MS}ms ease`,
+        animation: entering && !exploring ? `tm-strip-in ${tuning.introUiMs}ms ${tmIntroEasing(tuning.introEase)} both` : undefined,
         height: stripH,
         flex: `0 0 ${stripH}px`,
         boxSizing: "border-box",
@@ -4294,7 +4424,7 @@ export default function MediaMap() {
 
   const dateRange = useMemo(() => buildYearRange(currentDate), [currentDate]);
   // Time Machine layout numbers (tunable with ?tm=1).
-  const tm = useTmTuning();
+  const tm = useTmTuning(isMobile);
   const tmStripH = tmStripHeight(tm.tuning);
   // Bumped by the tuning panel's "Replay intro": remounts the carousel so its
   // opening animation plays again.
@@ -4323,13 +4453,33 @@ export default function MediaMap() {
     setTimelineAnimate(true);
     setScrollIdx(i);
   };
+  // "Explore this map". When the focused year's layout is already solved (so
+  // its thumbnail IS the map, planet for planet), the thumbnail grows into the
+  // real map: `exploring` is set, the map switches year underneath, and the
+  // effect further down runs the hand-over before closing the Time Machine.
+  // Otherwise (other views, reduced motion, layout not ready) it closes at once
+  // and the map flies out from its wells, as before.
+  const [exploring, setExploring] = useState<MapDate | null>(null);
   const onExploreMap = () => {
+    if (exploring) return;
     const target = timelineFocus;
-    setActiveDate(target);
-    setFlyIntroToken((n) => n + 1); // direct Time-Machine explore → fly out from the wells
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
+    setActiveDate(target);
+    const canGrow =
+      viewMode === "map" &&
+      exploreGrowReadyRef.current &&
+      !!getSolvedYears()[target.year] &&
+      !(typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    if (canGrow) {
+      setExploring(target);
+      return;
+    }
+    setFlyIntroToken((n) => n + 1); // fly out from the wells
     setTimelineOpen(false);
   };
+  // Whether the map's layout is the seeded, repeatable kind (set further down,
+  // once the layout lab's knobs are known) — only then does a thumbnail match.
+  const exploreGrowReadyRef = useRef(false);
   // Wheel scrubs the carousel continuously (motion tied to the scroll, no per-year
   // snapping mid-gesture), then eases to the nearest year ~130ms after you stop.
   // Down / right → newer.
@@ -5003,12 +5153,15 @@ export default function MediaMap() {
     [basePositions, labPositions],
   );
 
-  const nodes = usePhysicsLayout({
+  // Layout lab: deterministic solve. A fresh arrangement per page load (held
+  // for the whole visit), or the published seed when that is switched off.
+  const layoutSeed = K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null;
+  // Everything that decides the layout on screen (the same shape `yearSpecAt`
+  // builds for any other year).
+  const liveSolveOpts: SolveLayoutOptions = {
     inputs,
     bounds: physicsBounds,
-    viewMode: layoutMode,
     positions: physicsPositions,
-    isEditMode: isEditMode || mobileEdit,
     anchorDiam,
     collidePadding: eff.collidePadding,
     entityRadius: eff.entityRadius,
@@ -5018,23 +5171,30 @@ export default function MediaMap() {
     labelRadii,
     connections: effectiveConnections,
     connectionStrength: eff.connectionPull,
+    seed: layoutSeed,
+    // Layout lab: the gap-filling forces.
+    centerPull: K?.centerPull,
+    gapFill: K?.gapFill,
+    gapMin: K?.gapMin,
+  };
+  const nodes = usePhysicsLayout({
+    ...liveSolveOpts,
+    viewMode: layoutMode,
+    isEditMode: isEditMode || mobileEdit,
     restartToken: physicsBump,
     resettleToken,
     flyIntroToken,
     layoutKey: String(activeDate.year),
     suspended: gameActive,
-    // Layout lab: deterministic solve + the gap-filling forces.
-    // A fresh arrangement per page load (held for the whole visit), or the
-    // published seed when that is switched off.
-    seed: K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null,
-    centerPull: K?.centerPull,
-    gapFill: K?.gapFill,
-    gapMin: K?.gapMin,
+    // Switching year: if the Time Machine has already solved this exact layout
+    // in the background, use it rather than solving it again on the spot.
+    presolved: () => (K ? solvedLayoutFor(activeDate.year, liveSolveOpts) : null),
+    // Under the Time Machine the map isn't visible, so a year switch just lands.
+    instant: timelineOpen,
   });
   // ---- Time Machine: each year's real layout ------------------------------
   // The solve options for ANY year, built by the same helpers the live map
   // uses for the year on screen (so for that year they are identical).
-  const layoutSeed = K ? (llab.applied.shuffleEachLoad ? llab.sessionSeed : seedFor(llab.applied, labMode)) : null;
   const yearSpecAt = (date: MapDate): SolveLayoutOptions | null => {
     if (baseCompanies.length === 0) return null;
     const sn = sanityDocs ? resolveSanityMapAt(sanityDocs, makeMoment(date.year, date.month)) : null;
@@ -5096,6 +5256,98 @@ export default function MediaMap() {
     // Closed, the Time Machine will open on last year — solve outward from there.
     focusYear: timelineOpen ? timelineFocus.year : currentDate.year - 1,
   });
+
+  useEffect(() => {
+    exploreGrowReadyRef.current = !!K && layoutMode === "map";
+  }, [K, layoutMode]);
+  // "Explore this map" hand-over: the focused thumbnail grows to exactly where
+  // the real map's canvas sits while the real map grows from the thumbnail's
+  // place in step with it, so the two coincide the whole way and simply
+  // cross-fade. The map comes up first (underneath); then the thumbnail fades
+  // off it, which is what brings the names in.
+  const mapLayerRef = useRef<HTMLDivElement | null>(null);
+  const exploreMs = tm.tuning.exploreMs;
+  useEffect(() => {
+    if (!exploring) return;
+    const anims: Animation[] = [];
+    let raf = 0;
+    let raf2 = 0;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      setTimelineOpen(false);
+      // The map layer's own opacity is back to 1 a frame or two after that; only
+      // then let go of the animations that were holding it.
+      raf = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          for (const a of anims) a.cancel();
+          setExploring(null);
+        });
+      });
+    };
+    const start = () => {
+      const layer = mapLayerRef.current;
+      const ctm = mapSvgRef.current?.getScreenCTM();
+      const box = document.querySelector<HTMLElement>("[data-tm-focus-map]");
+      const thumbSvg = box?.querySelector("svg");
+      if (!layer || !ctm || !box || !thumbSvg) return finish();
+      // Where the canvas sits on screen in the real map, and in the thumbnail.
+      const p0 = new DOMPoint(canvas.x, canvas.y).matrixTransform(ctm);
+      const p1 = new DOMPoint(canvas.x + canvas.w, canvas.y + canvas.h).matrixTransform(ctm);
+      const big = { x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y };
+      // (The thumbnail may be cropped — a taller or shorter box — so its canvas
+      // is measured the same way rather than taken from the box.)
+      const tctm = thumbSvg.getScreenCTM();
+      if (!tctm) return finish();
+      const q0 = new DOMPoint(canvas.x, canvas.y).matrixTransform(tctm);
+      const q1 = new DOMPoint(canvas.x + canvas.w, canvas.y + canvas.h).matrixTransform(tctm);
+      const small = { left: q0.x, top: q0.y, width: q1.x - q0.x, height: q1.y - q0.y };
+      const L = layer.getBoundingClientRect();
+      if (big.w <= 0 || small.width <= 0) return finish();
+      const s = small.width / big.w; // real map → thumbnail size
+      const timing: KeyframeAnimationOptions = { duration: exploreMs, easing: "cubic-bezier(0.65, 0, 0.35, 1)", fill: "both" };
+      // The real map: starts shrunk onto the thumbnail, ends at rest. Only
+      // transform + opacity are animated — the same as the thumbnail — so the
+      // browser runs both off the main thread, on one clock, and they stay
+      // locked together (anything else, e.g. a clip, would let one lag).
+      const dx = small.left - L.left - (big.x - L.left) * s;
+      const dy = small.top - L.top - (big.y - L.top) * s;
+      anims.push(layer.animate(
+        [
+          { transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0, offset: 0 },
+          { opacity: 1, offset: 0.4 },
+          { transformOrigin: "0 0", transform: "translate(0px, 0px) scale(1)", opacity: 1, offset: 1 },
+        ],
+        timing,
+      ));
+      // The thumbnail: grows about its centre onto the real map's canvas.
+      const cur = new DOMMatrix(getComputedStyle(box).transform).a || 1;
+      const tx = big.x + big.w / 2 - (small.left + small.width / 2);
+      const ty = big.y + big.h / 2 - (small.top + small.height / 2);
+      const grow = box.animate(
+        [
+          { transform: `translate(0px, 0px) scale(${cur})`, opacity: 1, offset: 0 },
+          { opacity: 1, offset: 0.4 },
+          { transform: `translate(${tx}px, ${ty}px) scale(${cur / s})`, opacity: 0, offset: 1 },
+        ],
+        timing,
+      );
+      anims.push(grow);
+      grow.onfinish = finish;
+    };
+    // Two frames on: the map has been re-laid-out for the explored year by then.
+    raf = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(start);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf2);
+      for (const a of anims) a.cancel();
+    };
+    // Runs once per Explore; the geometry is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploring]);
 
   // In linear mode the strip extends to the right of the canvas; compute the
   // total slide-coord width so the SVG can be sized wider than the viewport
@@ -6363,6 +6615,7 @@ export default function MediaMap() {
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
         <div
+          ref={mapLayerRef}
           style={{
             position: "absolute",
             // Fill the whole map area. In the mobile 4:5 view the canvas is
@@ -6371,7 +6624,8 @@ export default function MediaMap() {
             inset: 0,
             opacity: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? 0 : 1,
             pointerEvents: timelineOpen || viewMode === "list" || viewMode === "aggregate" ? "none" : "auto",
-            transition: "opacity 360ms ease",
+            // While "Explore this map" hands over, that animation owns the fade.
+            transition: exploring ? "none" : "opacity 360ms ease",
           }}
         >
         <div
@@ -7108,6 +7362,8 @@ export default function MediaMap() {
               // The year strip starts below the bottom edge when it slides in.
               // `clip`, not `hidden`: nothing in here should be able to scroll it.
               overflow: "clip",
+              // Hands off while "Explore this map" plays out.
+              pointerEvents: exploring ? "none" : undefined,
             }}
           >
             <Carousel
@@ -7121,6 +7377,7 @@ export default function MediaMap() {
               tuning={tm.tuning}
               // The same big / small split the map's type uses.
               bigThresholdB={KT?.labelThresholdB ?? 100}
+              exploring={!!exploring}
             />
             <TimelineStrip
               key={`strip-${tmIntroToken}`}
@@ -7130,9 +7387,16 @@ export default function MediaMap() {
               onSelect={(d) => { setHoveredDate(null); focusOn(d); }}
               onHover={setHoveredDate}
               tuning={tm.tuning}
+              exploring={!!exploring}
             />
             {tm.enabled && (
-              <TmTuningPanel tuning={tm.tuning} setTuning={tm.setTuning} onReplay={() => setTmIntroToken((n) => n + 1)} />
+              <TmTuningPanel
+                tuning={tm.tuning}
+                setTuning={tm.setTuning}
+                defaults={tm.defaults}
+                device={!isMobile ? "desktop" : realIsMobile ? "phone" : "phone-preview"}
+                onReplay={() => setTmIntroToken((n) => n + 1)}
+              />
             )}
           </div>
         )}
@@ -7325,6 +7589,9 @@ export default function MediaMap() {
               right: 16,
               top: 16,
               zIndex: 11,
+              opacity: exploring ? 0 : 1,
+              transition: `opacity ${TM_EXPLORE_FADE_MS}ms ease`,
+              pointerEvents: exploring ? "none" : undefined,
               display: "flex",
               alignItems: "center",
               gap: 8,
