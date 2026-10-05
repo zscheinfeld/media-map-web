@@ -203,6 +203,31 @@ html, body, #root {
   .mm-dim-in, .mm-card-in, .mm-dim-out, .mm-card-out { animation-duration: 1ms; animation-delay: 0ms; }
 }
 
+/* Every scroll bar on the site — the side panels, a planet's detail panel,
+   the Linear strip, the List, the labs — is the same thin light-blue bar on a
+   clear track. Set here once, so a new scroll area gets it without asking.
+   (`scrollbar-color` / `-width` are the standard properties; the
+   ::-webkit-scrollbar rules are for browsers that only know those. The two
+   classes below that hide their bar, and `.about-tabs`, still win.) */
+html {
+  scrollbar-color: #8196fe transparent; /* thumb, track — inherited by everything */
+}
+* {
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #8196fe;
+  border-radius: 8px;
+}
+
 /* A scroll area that draws no scrollbar of its own (the phone detail panel
    draws one itself, since phones can't style theirs). */
 .mm-hide-scrollbar {
