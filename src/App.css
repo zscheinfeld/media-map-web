@@ -166,7 +166,6 @@ html, body, #root {
   display: none; /* WebKit */
 }
 
-/* About-modal body: custom scrollbar with a blue handle. */
 /* Modals (About + game cards): the dim/blur fades in, the card fades up. */
 @keyframes mm-dim-in {
   from { opacity: 0; }
@@ -207,8 +206,9 @@ html, body, #root {
    the Linear strip, the List, the labs — is the same thin light-blue bar on a
    clear track. Set here once, so a new scroll area gets it without asking.
    (`scrollbar-color` / `-width` are the standard properties; the
-   ::-webkit-scrollbar rules are for browsers that only know those. The two
-   classes below that hide their bar, and `.about-tabs`, still win.) */
+   ::-webkit-scrollbar rules are for browsers that only know those. The
+   classes that hide their bar — `.mm-hide-scrollbar`, `.about-tabs`,
+   `.about-scroll` — still win.) */
 html {
   scrollbar-color: #8196fe transparent; /* thumb, track — inherited by everything */
 }
@@ -269,25 +269,13 @@ html {
   color: #fcfc06;
 }
 
+/* About-modal body: no scroll bar at all — the card is plainly a page to
+   scroll, and the bar only added a stripe down its edge. */
 .about-scroll {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #8196fe transparent; /* thumb, track (Firefox) */
+  scrollbar-width: none; /* Firefox, current Chrome / Safari */
 }
 .about-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-.about-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.about-scroll::-webkit-scrollbar-thumb {
-  background: #8196fe;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.about-scroll::-webkit-scrollbar-thumb:hover {
-  background: #9aabfe;
-  background-clip: padding-box;
+  display: none; /* older WebKit */
 }
 
 /* Game-mode countdown digit: pops in each second. */
