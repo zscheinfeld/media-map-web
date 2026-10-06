@@ -19,7 +19,7 @@ import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type CompanyDetail, type ResolvedSanityMap, type ValuationType } from "./sanityMap";
-import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBlob, exportImageWidth, exportLegendNamePx, exportPreviewFrame, exportPxPerUnit, exportShowsValuation, loadExportAssets, measureExportLayout, measureLabelTextWidth, DEFAULT_EXPORT_PANEL, EXPORT_LABEL_SIZE_DELTA, EXPORT_VALUATION_MIN_B, type ExportAssets, type ExportLayoutStats, type ExportPanelSettings } from "./exportMap";
+import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBlob, exportImageWidth, exportPreviewFrame, exportPxPerUnit, exportShowsValuation, loadExportAssets, measureExportLayout, measureLabelTextWidth, DEFAULT_EXPORT_PANEL, EXPORT_VALUATION_MIN_B, type ExportAssets, type ExportLayoutStats, type ExportPanelSettings } from "./exportMap";
 import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
@@ -6752,6 +6752,8 @@ export default function MediaMap() {
             mapScale: downloadCfg.mapScale,
             imageWidth: downloadCfg.imageWidth,
             mapOffsetX: downloadCfg.mapOffsetX,
+            legendMedium: downloadCfg.legendMedium,
+            legendScale: downloadCfg.legendScale,
           }
         : DEFAULT_EXPORT_PANEL,
     [llab.active, downloadCfg],
@@ -6966,11 +6968,10 @@ export default function MediaMap() {
       sectors: allSectors,
       counts,
       assets: exportAssets ?? { logoUri: null, qrUri: null, mapQrUri: null },
-      legendNamePx: exportLegendNamePx(exportType ? exportType.smallPx : Math.max(1, labelSizePx - EXPORT_LABEL_SIZE_DELTA), exportPanelCfg.mapScale),
       settings: exportPanelCfg,
       sectorColorOverride: sectorColorResolved,
     });
-  }, [exportPreview, currentDate.year, currentDate.month, allSectors, counts, exportAssets, exportType, labelSizePx, exportPanelCfg, sectorColorResolved]);
+  }, [exportPreview, currentDate.year, currentDate.month, allSectors, counts, exportAssets, exportPanelCfg, sectorColorResolved]);
   const nameThresholdEff = KT ? KT.nameThreshold : mobileView ? activeSettings.nameThreshold : 0;
   // Name declutter (layout lab "Name breathing room"): hand names out largest
   // planet first, skipping any whose box would come within `nameSpacing` px of

@@ -207,8 +207,8 @@ html, body, #root {
    clear track. Set here once, so a new scroll area gets it without asking.
    (`scrollbar-color` / `-width` are the standard properties; the
    ::-webkit-scrollbar rules are for browsers that only know those. The
-   classes that hide their bar — `.mm-hide-scrollbar`, `.about-tabs`,
-   `.about-scroll` — still win.) */
+   classes that hide their bar — `.mm-hide-scrollbar`, `.about-tabs` —
+   still win.) */
 html {
   scrollbar-color: #8196fe transparent; /* thumb, track — inherited by everything */
 }
@@ -269,14 +269,8 @@ html {
   color: #fcfc06;
 }
 
-/* About-modal body: no scroll bar at all — the card is plainly a page to
-   scroll, and the bar only added a stripe down its edge. */
-.about-scroll {
-  scrollbar-width: none; /* Firefox, current Chrome / Safari */
-}
-.about-scroll::-webkit-scrollbar {
-  display: none; /* older WebKit */
-}
+/* About-modal body: the site-wide light-blue scroll bar (set on every scroll
+   area above). */
 
 /* Game-mode countdown digit: pops in each second. */
 @keyframes mm-count-pop {

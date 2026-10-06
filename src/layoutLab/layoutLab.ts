@@ -162,6 +162,8 @@ export type DownloadSettings = {
   mapScale: number;
   imageWidth: number;
   mapOffsetX: number;
+  legendMedium: boolean;
+  legendScale: number;
 };
 // What the image uses until a layout with its own `download` is published.
 // Chosen by eye in the lab on 2026-10-05: arrangement #153934, a market cap
@@ -231,6 +233,8 @@ export function normalizeLayout(x: unknown): LayoutLabState {
       mapScale: fin(o.download?.mapScale) ? Math.max(EXPORT_MAP_SCALE_PANEL, Math.min(EXPORT_MAP_SCALE_FILL, o.download.mapScale)) : DEFAULT_DOWNLOAD.mapScale,
       imageWidth: fin(o.download?.imageWidth) ? Math.round(Math.max(EXPORT_MIN_IMAGE_W, Math.min(EXPORT_W, o.download.imageWidth))) : DEFAULT_DOWNLOAD.imageWidth,
       mapOffsetX: fin(o.download?.mapOffsetX) ? Math.round(Math.max(-1200, Math.min(1200, o.download.mapOffsetX))) : DEFAULT_DOWNLOAD.mapOffsetX,
+      legendMedium: typeof o.download?.legendMedium === "boolean" ? o.download.legendMedium : DEFAULT_DOWNLOAD.legendMedium,
+      legendScale: fin(o.download?.legendScale) && o.download.legendScale > 0 ? o.download.legendScale : DEFAULT_DOWNLOAD.legendScale,
       // No `download` at all → the default moves; otherwise only what it lists.
       moves: !o.download
         ? { ...DEFAULT_DOWNLOAD.moves }

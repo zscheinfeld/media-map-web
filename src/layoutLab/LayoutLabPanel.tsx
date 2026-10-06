@@ -725,6 +725,7 @@ export function LayoutLabPanel({
                 </p>
                 {([
                   ["legendGap", "Space between sectors", 0, 40, 1, (v: number) => `${Math.round(v)}px`],
+                  ["legendScale", "Sector name size", 0.6, 2, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineScale", "Headline size", 0.5, 1.6, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineGap", "Headline to counts", 0, 160, 1, (v: number) => `${Math.round(v)}px`],
                   ["mapScale", "Map size", EXPORT_MAP_SCALE_PANEL, EXPORT_MAP_SCALE_FILL, 0.001, (v: number) => (v >= EXPORT_MAP_SCALE_FILL - 0.002 ? "fills width" : v <= EXPORT_MAP_SCALE_PANEL + 0.002 ? "as before" : Math.abs(v - 1) < 0.002 ? "fits height" : `×${(v / EXPORT_MAP_SCALE_PANEL).toFixed(2)}`)],
@@ -757,6 +758,13 @@ export function LayoutLabPanel({
                     </button>
                   </div>
                 ))}
+                <Toggle on={dl.legendMedium} onChange={(v) => lab.setDownload({ legendMedium: v })}>
+                  Legend in Medium, like the planet names
+                </Toggle>
+                <p style={hint}>
+                  Sector name size is a multiple of the "N Companies" line (×1 = the same). The legend is Book, like that
+                  line and the planets' numbers; the checkbox sets it in Medium, like the planet names.
+                </p>
                 <p style={hint}>
                   Map size: "as before" keeps the planets the size they have always been in the image, centred with room
                   at the sides; "fills width" runs the map edge to edge and crops a strip off the top and bottom. Image

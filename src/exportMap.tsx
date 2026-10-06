@@ -525,6 +525,10 @@ export type ExportPanelSettings = {
   imageWidth: number;
   /** Slides the map sideways in the image, px (+ = right). */
   mapOffsetX: number;
+  /** Legend names in Medium (500), like the planet names, instead of Book (400), like their numbers. */
+  legendMedium: boolean;
+  /** Legend name size, as a multiple of the "N Companies" line's size. */
+  legendScale: number;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -533,6 +537,8 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   mapScale: EXPORT_MAP_SCALE_PANEL,
   imageWidth: EXPORT_W,
   mapOffsetX: 0,
+  legendMedium: false,
+  legendScale: 1,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -546,8 +552,6 @@ export type ExportPanelInput = {
   sectors: string[];
   counts: Record<string, number>;
   assets: ExportAssets;
-  /** Size of the legend's sector names, image px — set to the small planets' numbers. */
-  legendNamePx: number;
   settings: ExportPanelSettings;
   sectorColorOverride?: (sector: string) => string | null;
 };
@@ -559,7 +563,7 @@ export type ExportPanelInput = {
  * runs underneath. Also drawn live over the map by the lab's Download tab.
  */
 export function buildExportPanelMarkup(input: ExportPanelInput): string {
-  const { year, month, sectors, counts, assets, legendNamePx, settings, sectorColorOverride } = input;
+  const { year, month, sectors, counts, assets, settings, sectorColorOverride } = input;
   const W = exportImageWidth(settings), H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
   const FONT = LABEL_FONT_FAMILY;
   const PAD = 56;
@@ -589,21 +593,41 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
   cy += 52;
 
-  // Legend: swatch + name per sector, set at the small planets' number size,
+  // Legend: swatch + name per sector, set like the "N Companies" line (its
+  // size, Book weight — or Medium, like the planet names, on request),
   // `legendGap` apart. (No containers, no counts.)
-  const nameSize = legendNamePx;
+  const nameSize = c2Size * settings.legendScale;
+  const nameWeight = settings.legendMedium ? 500 : 400;
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
   let rowTop = cy;
+  let rowIndex = 0;
   for (const sector of sectors) {
     const flat = flatStyleForSector(sector);
-    const primary = sectorColorOverride?.(sector) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
+    const override = sectorColorOverride?.(sector) ?? null;
+    const primary = override ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
     const stroke = flat?.stroke && flat.stroke !== "transparent" ? flat.stroke : null;
     const midY = rowTop + rowH / 2;
     const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical centre
     const swY = (midY - swSize / 2).toFixed(1);
-    parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${Math.max(2, Math.round(swSize / 5))}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
-    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="500" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
+    const rx = Math.max(2, Math.round(swSize / 5));
+    // A sector whose key on the map is a colour sweep (Large Cap's rainbow)
+    // gets the same here, as a few vertical stripes sampled from it.
+    const bands = !override && flat?.swatchBackground ? gradientBands(flat.swatchBackground, LEGEND_SWATCH_STRIPES) : null;
+    if (bands) {
+      const id = `mm-export-swatch-${rowIndex}`;
+      const bw = swSize / bands.length;
+      parts.push(
+        `<defs><clipPath id="${id}"><rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${rx}"/></clipPath></defs>` +
+          `<g clip-path="url(#${id})">` +
+          bands.map((c, i) => `<rect x="${(PAD + i * bw).toFixed(2)}" y="${swY}" width="${(bw + 0.5).toFixed(2)}" height="${swSize}" fill="${c}"/>`).join("") +
+          `</g>`,
+      );
+    } else {
+      parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${rx}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
+    }
+    rowIndex++;
+    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="${nameWeight}" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
     rowTop += rowH + settings.legendGap;
   }
 
@@ -650,16 +674,20 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
 /** Image px per slide unit at a map scale (see EXPORT_MAP_SCALE_FILL). */
 export const exportPxPerUnit = (mapScale: number) => (EXPORT_H * mapScale) / CANVAS_DESKTOP.h;
 
+/** Stripes in the legend's swatch for a sector keyed by a colour sweep (see gradientBands). */
+const LEGEND_SWATCH_STRIPES = 4;
+/** `n` colours spread evenly along a CSS gradient's colour list (its hex stops, in order). */
+function gradientBands(gradient: string, n: number): string[] | null {
+  const stops = gradient.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
+  if (stops.length < 2) return null;
+  return Array.from({ length: n }, (_, i) => stops[Math.round((i * (stops.length - 1)) / Math.max(1, n - 1))]);
+}
+
 /** The lab's live preview: the image's frame inside the map area — as large as fits, centred. */
 export function exportPreviewFrame(containerW: number, containerH: number, imageW: number = EXPORT_W) {
   const w = Math.min(containerW, (containerH * imageW) / EXPORT_H);
   const h = (w * EXPORT_H) / imageW;
   return { left: (containerW - w) / 2, top: (containerH - h) / 2, w, h };
-}
-
-/** The legend's name size for a map drawn at `mapScale`: the small planets' numbers, in image px. */
-export function exportLegendNamePx(smallLabelPx: number, mapScale: number): number {
-  return smallLabelPx * EXPORT_SLIDE_UNITS_PER_PX * exportPxPerUnit(mapScale);
 }
 
 /** Rasterize the composite SVG over the site's background gradient → PNG blob. */
@@ -819,7 +847,6 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
     sectors: input.sectors,
     counts: input.counts,
     assets,
-    legendNamePx: exportLegendNamePx(type ? type.smallPx : Math.max(1, input.labelSizePx - EXPORT_LABEL_SIZE_DELTA), panelSettings.mapScale),
     settings: panelSettings,
     sectorColorOverride: input.sectorColorOverride,
   });
