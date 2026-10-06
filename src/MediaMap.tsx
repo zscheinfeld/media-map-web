@@ -614,8 +614,8 @@ function SectorPanelContent({
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-        <button onClick={() => onAll(true)} className="mm-hover mm-hairline" style={pillBtn}>All</button>
-        <button onClick={() => onAll(false)} className="mm-hover mm-hairline" style={pillBtn}>None</button>
+        <button onClick={() => onAll(true)} aria-label="Toggle all sectors visible" className="mm-hover mm-hairline" style={pillBtn}>All</button>
+        <button onClick={() => onAll(false)} aria-label="Toggle all sectors hidden" className="mm-hover mm-hairline" style={pillBtn}>None</button>
       </div>
       </div>
       {/* Sector list — the ONLY scrolling region (header above stays fixed).
@@ -910,7 +910,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           >
             Media Universe
           </div>
-          <button onClick={onCollapse} aria-label="Collapse panel" title="Collapse panel" className="panel-icon-btn" style={iconBtnStyle}>
+          <button onClick={onCollapse} aria-label="Collapse sector side panel" title="Collapse sector side panel" className="panel-icon-btn" style={iconBtnStyle}>
             <span className="material-symbols-outlined" style={{ fontSize: 22 }}>left_panel_close</span>
           </button>
         </div>
@@ -7597,7 +7597,7 @@ export default function MediaMap() {
       {!isMobile && (
         <button
           onClick={() => setSidebarOpen(true)}
-          aria-label="Open panel"
+          aria-label="Open sector side panel"
           // Invisible while the panel is open: out of the Tab order too.
           tabIndex={sidebarOpen || game.active ? -1 : 0}
           aria-hidden={sidebarOpen || game.active}
