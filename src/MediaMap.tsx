@@ -7391,6 +7391,18 @@ export default function MediaMap() {
     setA11yNote(describe(n));
     keepInView(n);
   };
+  // Landing on the map by keyboard (Tab, a skip link): the ring goes straight
+  // to the biggest company, so the stop is visible and spoken at once. A mouse
+  // click also focuses the map area, but shows nothing.
+  const landOnMap = () => {
+    if (kbCurrent || kbNodes.length === 0) return;
+    const biggest = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b)[0];
+    moveKbFocus(biggest);
+  };
+  const focusMap = () => {
+    containerRef.current?.focus({ preventScroll: true });
+    landOnMap();
+  };
   const onMapKeyDown = (e: React.KeyboardEvent) => {
     if (e.target !== e.currentTarget || game.active || timelineOpen || kbNodes.length === 0) return;
     const dirs: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
@@ -7507,6 +7519,13 @@ export default function MediaMap() {
         overflow: "hidden",
       }}
     >
+      {/* The first Tab stops: straight to the map, the search or the download,
+          ahead of the side panel's many sector checkboxes. */}
+      <nav aria-label="Skip to">
+        <button className="mm-skip" onClick={focusMap}>Skip to the map</button>
+        <button className="mm-skip" onClick={() => document.getElementById("mm-search-btn")?.focus()}>Skip to search</button>
+        <button className="mm-skip" onClick={() => document.getElementById("mm-download-btn")?.focus()}>Skip to download</button>
+      </nav>
       {!isMobile && (
         <Sidebar
           {...sectorPanelProps}
@@ -7604,7 +7623,11 @@ export default function MediaMap() {
           aria-label="Media universe map"
           aria-describedby="mm-map-help"
           onKeyDown={onMapKeyDown}
-          onFocus={(e) => { if (e.target === e.currentTarget) setMapHasFocus(true); }}
+          onFocus={(e) => {
+            if (e.target !== e.currentTarget) return;
+            setMapHasFocus(true);
+            if (e.currentTarget.matches(":focus-visible")) landOnMap();
+          }}
           onBlur={(e) => { if (e.target === e.currentTarget) setMapHasFocus(false); }}
           style={{
             width: "100%",
@@ -8753,6 +8776,7 @@ export default function MediaMap() {
               }}
             >
               <button
+                id="mm-download-btn"
                 aria-label="Download the map and more about the Media Universe"
                 title="Download"
                 className="mm-hover"

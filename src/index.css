@@ -35,3 +35,31 @@ html, body, #root {
   white-space: nowrap;
   border: 0;
 }
+
+/* "Skip to…" links: the first Tab stops on the page. Invisible until one has
+   keyboard focus, then a pill at the top left. */
+.mm-skip {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #3657fd;
+  color: #fff;
+  border: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateY(-200%);
+  opacity: 0;
+  pointer-events: none;
+}
+.mm-skip:focus-visible {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

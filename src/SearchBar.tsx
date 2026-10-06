@@ -162,6 +162,7 @@ export function SearchBar({
     >
       <button
         type="button"
+        id="mm-search-btn"
         aria-label={open ? "Search" : "Search companies"}
         title="Search companies ( / )"
         className="mm-hover"
