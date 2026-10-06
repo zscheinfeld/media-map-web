@@ -6753,6 +6753,7 @@ export default function MediaMap() {
             imageWidth: downloadCfg.imageWidth,
             mapOffsetX: downloadCfg.mapOffsetX,
             legendMedium: downloadCfg.legendMedium,
+            legendScale: downloadCfg.legendScale,
           }
         : DEFAULT_EXPORT_PANEL,
     [llab.active, downloadCfg],

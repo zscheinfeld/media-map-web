@@ -725,6 +725,7 @@ export function LayoutLabPanel({
                 </p>
                 {([
                   ["legendGap", "Space between sectors", 0, 40, 1, (v: number) => `${Math.round(v)}px`],
+                  ["legendScale", "Sector name size", 0.6, 2, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineScale", "Headline size", 0.5, 1.6, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineGap", "Headline to counts", 0, 160, 1, (v: number) => `${Math.round(v)}px`],
                   ["mapScale", "Map size", EXPORT_MAP_SCALE_PANEL, EXPORT_MAP_SCALE_FILL, 0.001, (v: number) => (v >= EXPORT_MAP_SCALE_FILL - 0.002 ? "fills width" : v <= EXPORT_MAP_SCALE_PANEL + 0.002 ? "as before" : Math.abs(v - 1) < 0.002 ? "fits height" : `×${(v / EXPORT_MAP_SCALE_PANEL).toFixed(2)}`)],
@@ -761,8 +762,9 @@ export function LayoutLabPanel({
                   Legend in Medium, like the planet names
                 </Toggle>
                 <p style={hint}>
-                  The legend is always the small planets' text size — a name and its number share one size; names are
-                  Medium (500), numbers Book (400). Off: Book, like the numbers. On: Medium, like the names.
+                  Sector name size is a multiple of the small planets' text size (a name and its number share one size;
+                  ×1 = the same). Names on the map are Medium (500), numbers Book (400): the checkbox picks which the
+                  legend matches.
                 </p>
                 <p style={hint}>
                   Map size: "as before" keeps the planets the size they have always been in the image, centred with room

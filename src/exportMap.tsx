@@ -527,6 +527,8 @@ export type ExportPanelSettings = {
   mapOffsetX: number;
   /** Legend names in Medium (500), like the planet names, instead of Book (400), like their numbers. */
   legendMedium: boolean;
+  /** Legend name size, as a multiple of the small planets' text size. */
+  legendScale: number;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -536,6 +538,7 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   imageWidth: EXPORT_W,
   mapOffsetX: 0,
   legendMedium: false,
+  legendScale: 1,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -595,7 +598,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   // Legend: swatch + name per sector, set like the small planets' numbers
   // (their size, Book weight — or Medium, like the planet names, on request),
   // `legendGap` apart. (No containers, no counts.)
-  const nameSize = legendNamePx;
+  const nameSize = legendNamePx * settings.legendScale;
   const nameWeight = settings.legendMedium ? 500 : 400;
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
