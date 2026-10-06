@@ -13,8 +13,10 @@ import {
   seedFor,
   type DeviceMode,
   type LayoutKnobs,
-  type LayoutLab,
-} from "./layoutLab";
+  type LayoutLab, DEFAULT_DOWNLOAD } from "./layoutLab";
+import { EXPORT_MIN_IMAGE_W } from "../exportMap";
+import { EXPORT_H, EXPORT_MAP_SCALE_FILL, EXPORT_MAP_SCALE_PANEL, EXPORT_W } from "../exportScene";
+const EXPORT_H_LABEL = `${EXPORT_H}px`;
 
 const FONT = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
 export const LAYOUT_PANEL_W = 340;
@@ -712,6 +714,54 @@ export function LayoutLabPanel({
                 <p style={hint}>
                   For the image only. The two sizes scale the map's desktop name sizes (Type tab): large for companies over
                   the big / small split, small for the rest. Bigger names need more room, so watch "How the names fit".
+                </p>
+              </fieldset>
+
+              <fieldset style={fs}>
+                <legend style={lg}>Overlay</legend>
+                <p style={hint}>
+                  The map shows the image — its frame, the headline, legend, logo and QR codes — while this tab is open.
+                  (The names are drawn at the image's sizes; planets nudged apart to fit them are not shown.)
+                </p>
+                {([
+                  ["legendGap", "Space between sectors", 0, 40, 1, (v: number) => `${Math.round(v)}px`],
+                  ["headlineScale", "Headline size", 0.5, 1.6, 0.01, (v: number) => `×${v.toFixed(2)}`],
+                  ["headlineGap", "Headline to counts", 0, 160, 1, (v: number) => `${Math.round(v)}px`],
+                  ["mapScale", "Map size", EXPORT_MAP_SCALE_PANEL, EXPORT_MAP_SCALE_FILL, 0.001, (v: number) => (v >= EXPORT_MAP_SCALE_FILL - 0.002 ? "fills width" : v <= EXPORT_MAP_SCALE_PANEL + 0.002 ? "as before" : Math.abs(v - 1) < 0.002 ? "fits height" : `×${(v / EXPORT_MAP_SCALE_PANEL).toFixed(2)}`)],
+                  ["imageWidth", "Image width", EXPORT_MIN_IMAGE_W, EXPORT_W, 10, (v: number) => `${Math.round(v)}px`],
+                  ["mapOffsetX", "Slide map", -1200, 1200, 10, (v: number) => (v === 0 ? "centred" : `${v > 0 ? "→" : "←"} ${Math.abs(Math.round(v))}px`)],
+                ] as const).map(([key, label, min, max, step, fmt]) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ flex: 1, fontSize: 12 }}>{label}</span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={Math.min(max, Math.max(min, dl[key]))}
+                      aria-label={`Download ${label.toLowerCase()}`}
+                      onChange={(e) => lab.setDownload({ [key]: +e.target.value })}
+                      style={{ flex: "0 0 112px", accentColor: ACCENT }}
+                    />
+                    <button
+                      onClick={() => lab.setDownload({ [key]: DEFAULT_DOWNLOAD[key] })}
+                      disabled={dl[key] === DEFAULT_DOWNLOAD[key]}
+                      title={dl[key] === DEFAULT_DOWNLOAD[key] ? "The default" : "Back to the default"}
+                      style={{
+                        width: 82, textAlign: "right", fontSize: 12, fontVariantNumeric: "tabular-nums",
+                        background: "none", border: "none", padding: 0, font: "inherit",
+                        color: dl[key] === DEFAULT_DOWNLOAD[key] ? "#8f98a6" : ACCENT, cursor: dl[key] === DEFAULT_DOWNLOAD[key] ? "default" : "pointer",
+                      }}
+                    >
+                      {fmt(dl[key])}
+                    </button>
+                  </div>
+                ))}
+                <p style={hint}>
+                  Map size: "as before" keeps the planets the size they have always been in the image, centred with room
+                  at the sides; "fills width" runs the map edge to edge and crops a strip off the top and bottom. Image
+                  width crops the image's sides (the height stays {EXPORT_H_LABEL}); Slide map moves the whole map
+                  left or right within it. The legend's type is the small planets' numbers.
                 </p>
               </fieldset>
 

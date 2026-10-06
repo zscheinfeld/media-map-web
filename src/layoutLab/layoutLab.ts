@@ -14,6 +14,8 @@
 // itself only appears with ?layout=1 in the URL.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_EXPORT_PANEL, EXPORT_MIN_IMAGE_W } from "../exportMap";
+import { EXPORT_MAP_SCALE_FILL, EXPORT_MAP_SCALE_PANEL, EXPORT_W } from "../exportScene";
 import { LAYOUT_PRESET } from "./preset";
 
 export type DeviceMode = "desktop" | "square" | "full";
@@ -153,6 +155,13 @@ export type DownloadSettings = {
    * arrangement clears them.
    */
   moves: Record<string, { x: number; y: number }>;
+  /** The overlay (headline, legend) and the map's size in the image — see ExportPanelSettings. */
+  legendGap: number;
+  headlineScale: number;
+  headlineGap: number;
+  mapScale: number;
+  imageWidth: number;
+  mapOffsetX: number;
 };
 // What the image uses until a layout with its own `download` is published.
 // Chosen by eye in the lab on 2026-10-05: arrangement #153934, a market cap
@@ -166,6 +175,7 @@ export const DEFAULT_DOWNLOAD: DownloadSettings = {
   smallScale: 0.78,
   // Asmodee is drawn in toward Sony (the arrangement leaves it out on its own).
   moves: { Asmodee: { x: 1313, y: -575 } },
+  ...DEFAULT_EXPORT_PANEL,
 };
 
 const perMode = <T,>(make: () => T): Record<DeviceMode, T> => ({ desktop: make(), square: make(), full: make() });
@@ -215,6 +225,12 @@ export function normalizeLayout(x: unknown): LayoutLabState {
       outlinePx: fin(o.download?.outlinePx) ? Math.max(0, o.download.outlinePx) : DEFAULT_DOWNLOAD.outlinePx,
       largeScale: fin(o.download?.largeScale) && o.download.largeScale > 0 ? o.download.largeScale : DEFAULT_DOWNLOAD.largeScale,
       smallScale: fin(o.download?.smallScale) && o.download.smallScale > 0 ? o.download.smallScale : DEFAULT_DOWNLOAD.smallScale,
+      legendGap: fin(o.download?.legendGap) ? Math.max(0, o.download.legendGap) : DEFAULT_DOWNLOAD.legendGap,
+      headlineScale: fin(o.download?.headlineScale) && o.download.headlineScale > 0 ? o.download.headlineScale : DEFAULT_DOWNLOAD.headlineScale,
+      headlineGap: fin(o.download?.headlineGap) ? Math.max(0, o.download.headlineGap) : DEFAULT_DOWNLOAD.headlineGap,
+      mapScale: fin(o.download?.mapScale) ? Math.max(EXPORT_MAP_SCALE_PANEL, Math.min(EXPORT_MAP_SCALE_FILL, o.download.mapScale)) : DEFAULT_DOWNLOAD.mapScale,
+      imageWidth: fin(o.download?.imageWidth) ? Math.round(Math.max(EXPORT_MIN_IMAGE_W, Math.min(EXPORT_W, o.download.imageWidth))) : DEFAULT_DOWNLOAD.imageWidth,
+      mapOffsetX: fin(o.download?.mapOffsetX) ? Math.round(Math.max(-1200, Math.min(1200, o.download.mapOffsetX))) : DEFAULT_DOWNLOAD.mapOffsetX,
       // No `download` at all → the default moves; otherwise only what it lists.
       moves: !o.download
         ? { ...DEFAULT_DOWNLOAD.moves }
