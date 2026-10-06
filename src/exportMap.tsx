@@ -494,6 +494,17 @@ async function fetchQrDataUri(url: string): Promise<string | null> {
   }
 }
 
+// The QR files carry a blank margin (the "quiet zone") inside their own box:
+// this share of the box on each side. The modules are drawn at the size asked
+// for — the box is enlarged and shifted by the margin — so a QR sits at the
+// same height as the logo beside it rather than a touch smaller.
+const QR_QUIET_ZONE = { substack: 0.0362, map: 0.0238 };
+function qrImage(uri: string, x: number, y: number, size: number, quiet: number): string {
+  const box = size / (1 - 2 * quiet);
+  const off = box * quiet;
+  return `<image x="${(x - off).toFixed(1)}" y="${(y - off).toFixed(1)}" width="${box.toFixed(1)}" height="${box.toFixed(1)}" href="${uri}" xlink:href="${uri}"/>`;
+}
+
 /** The image's artwork (logo + the two QR codes) as data URIs; null where a file is missing. */
 export type ExportAssets = { logoUri: string | null; qrUri: string | null; mapQrUri: string | null };
 export async function loadExportAssets(): Promise<ExportAssets> {
@@ -642,7 +653,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   const markTop = H - PAD - markH;
   let markX = PAD;
   if (assets.qrUri) {
-    parts.push(`<image x="${markX}" y="${markTop}" width="${markH}" height="${markH}" href="${assets.qrUri}" xlink:href="${assets.qrUri}"/>`);
+    parts.push(qrImage(assets.qrUri, markX, markTop, markH, QR_QUIET_ZONE.substack));
     markX += markH + 28;
   }
   if (assets.logoUri) {
@@ -669,7 +680,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
     const qrX = W - qrSize - qrMargin;
     const captionY = H - PAD;
     const qrY = captionY - cSize - 10 - qrSize;
-    parts.push(`<image x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" href="${assets.mapQrUri}" xlink:href="${assets.mapQrUri}"/>`);
+    parts.push(qrImage(assets.mapQrUri, qrX, qrY, qrSize, QR_QUIET_ZONE.map));
     parts.push(`<text ${noteStyle} x="${qrX + qrSize / 2}" y="${captionY}" text-anchor="middle">${esc(EXPORT_MAP_URL_LABEL)}</text>`);
   }
   return `<g>${parts.join("")}</g>`;
