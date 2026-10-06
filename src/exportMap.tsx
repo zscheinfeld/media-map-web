@@ -525,6 +525,8 @@ export type ExportPanelSettings = {
   imageWidth: number;
   /** Slides the map sideways in the image, px (+ = right). */
   mapOffsetX: number;
+  /** Legend names in Medium (500), like the planet names, instead of Book (400), like their numbers. */
+  legendMedium: boolean;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -533,6 +535,7 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   mapScale: EXPORT_MAP_SCALE_PANEL,
   imageWidth: EXPORT_W,
   mapOffsetX: 0,
+  legendMedium: false,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -590,8 +593,10 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   cy += 52;
 
   // Legend: swatch + name per sector, set like the small planets' numbers
-  // (their size, Book weight), `legendGap` apart. (No containers, no counts.)
+  // (their size, Book weight — or Medium, like the planet names, on request),
+  // `legendGap` apart. (No containers, no counts.)
   const nameSize = legendNamePx;
+  const nameWeight = settings.legendMedium ? 500 : 400;
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
   let rowTop = cy;
@@ -621,7 +626,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
       parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${rx}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
     }
     rowIndex++;
-    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="400" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
+    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="${nameWeight}" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
     rowTop += rowH + settings.legendGap;
   }
 

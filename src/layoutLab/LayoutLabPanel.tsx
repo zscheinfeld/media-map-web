@@ -757,6 +757,13 @@ export function LayoutLabPanel({
                     </button>
                   </div>
                 ))}
+                <Toggle on={dl.legendMedium} onChange={(v) => lab.setDownload({ legendMedium: v })}>
+                  Legend in Medium, like the planet names
+                </Toggle>
+                <p style={hint}>
+                  The legend is always the small planets' text size — a name and its number share one size; names are
+                  Medium (500), numbers Book (400). Off: Book, like the numbers. On: Medium, like the names.
+                </p>
                 <p style={hint}>
                   Map size: "as before" keeps the planets the size they have always been in the image, centred with room
                   at the sides; "fills width" runs the map edge to edge and crops a strip off the top and bottom. Image
