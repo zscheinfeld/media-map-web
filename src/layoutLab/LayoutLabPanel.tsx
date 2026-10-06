@@ -764,6 +764,9 @@ export function LayoutLabPanel({
                 <Toggle on={dl.legendMedium} onChange={(v) => lab.setDownload({ legendMedium: v })}>
                   Legend in Medium, like the planet names
                 </Toggle>
+                <Toggle on={dl.countSize} onChange={(v) => lab.setDownload({ countSize: v })}>
+                  "Companies" line and sector names as big as "Sectors"
+                </Toggle>
                 <p style={hint}>
                   Sector name size is a multiple of the "N Companies" line (×1 = the same). The legend is Book, like that
                   line and the planets' numbers; the checkbox sets it in Medium, like the planet names.

@@ -549,6 +549,8 @@ export type ExportPanelSettings = {
   qrOffsetY: number;
   /** Moves the logo and the Substack QR together up (−) or down (+), image px. */
   markOffsetY: number;
+  /** The "N Companies" line and the sector names at the size of "N Sectors" (instead of smaller). */
+  countSize: boolean;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -562,6 +564,7 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendTop: 28,
   qrOffsetY: 0,
   markOffsetY: 0,
+  countSize: false,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -610,7 +613,9 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
 
   // Counts: "N Sectors" (Medium, white), "N Companies" (Book, dimmer, smaller).
   const cSize = 26;
-  const c2Size = 20;
+  // "N Companies" (and the legend, which follows it) are smaller — or, on
+  // request, the same size as "N Sectors".
+  const c2Size = settings.countSize ? cSize : 20;
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="500" font-size="${cSize}" fill="#fff">${sectorTotal} Sectors</text>`);
   cy += c2Size + 8;
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);

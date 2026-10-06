@@ -167,6 +167,7 @@ export type DownloadSettings = {
   legendTop: number;
   qrOffsetY: number;
   markOffsetY: number;
+  countSize: boolean;
 };
 // What the image uses until a layout with its own `download` is published.
 // Chosen by eye in the lab on 2026-10-05: arrangement #153934, a market cap
@@ -241,6 +242,7 @@ export function normalizeLayout(x: unknown): LayoutLabState {
       legendTop: fin(o.download?.legendTop) ? Math.max(0, o.download.legendTop) : DEFAULT_DOWNLOAD.legendTop,
       qrOffsetY: fin(o.download?.qrOffsetY) ? Math.round(Math.max(-200, Math.min(200, o.download.qrOffsetY))) : DEFAULT_DOWNLOAD.qrOffsetY,
       markOffsetY: fin(o.download?.markOffsetY) ? Math.round(Math.max(-400, Math.min(400, o.download.markOffsetY))) : DEFAULT_DOWNLOAD.markOffsetY,
+      countSize: typeof o.download?.countSize === "boolean" ? o.download.countSize : DEFAULT_DOWNLOAD.countSize,
       // No `download` at all → the default moves; otherwise only what it lists.
       moves: !o.download
         ? { ...DEFAULT_DOWNLOAD.moves }
