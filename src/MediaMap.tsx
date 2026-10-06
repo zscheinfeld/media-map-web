@@ -4247,6 +4247,23 @@ function AggregateView({
     maxTotal > 0 && M > 0
       ? `Total market cap over time: one stacked bar per year from ${dates[0].year} to ${dates[M - 1].year}, each band a company, bar height relative to the peak of ${formatValuation(maxTotal)} in ${formatDate(dates[peakIdx])}. Use the left and right arrow keys to move between years, up and down to move between the companies in a year.`
       : "";
+  // The summary is spoken when the view arrives (not only when the chart is
+  // focused, where a description can go unread). Re-speaking the same text
+  // needs the live region's content to change, hence the alternating marker.
+  const spokenRef = useRef(0);
+  const speakSummary = () => {
+    spokenRef.current++;
+    setA11yNote(`Historical aggregate view. ${chartSummary}${spokenRef.current % 2 ? "" : "\u200b"}`);
+  };
+  const speakSummaryRef = useRef(speakSummary);
+  useEffect(() => {
+    speakSummaryRef.current = speakSummary;
+  });
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setTimeout(() => speakSummaryRef.current(), 500);
+    return () => window.clearTimeout(id);
+  }, [active]);
 
   return (
     <div
@@ -4260,10 +4277,13 @@ function AggregateView({
       aria-hidden={!active}
       onKeyDown={onChartKeyDown}
       onFocus={(e) => {
-        // Landing by keyboard: the tooltip appears on the biggest company of the latest year.
-        if (e.target === e.currentTarget && e.currentTarget.matches(":focus-visible") && (!hover || hover.k == null) && M > 0 && scale) {
+        if (e.target !== e.currentTarget) return;
+        // Landing by keyboard: the summary again, then the tooltip on the
+        // biggest company of the latest year.
+        if (e.currentTarget.matches(":focus-visible")) speakSummary();
+        if (e.currentTarget.matches(":focus-visible") && (!hover || hover.k == null) && M > 0 && scale) {
           const order = visibleBandsAt(M - 1);
-          if (order.length) selectBand(M - 1, order[0]);
+          if (order.length) window.setTimeout(() => selectBand(M - 1, order[0]), 1500);
         }
       }}
       onBlur={(e) => {
@@ -7636,6 +7656,25 @@ export default function MediaMap() {
   // The ring follows the planet only while the map has keyboard focus.
   const kbRingNode = mapHasFocus && kbCurrent ? (dragState && dragState.name === kbCurrent.name ? { ...kbCurrent, x: dragState.x, y: dragState.y } : kbCurrent) : null;
   const a11ySummary = `${kbNodes.length} media companies in ${allSectors.filter((s) => enabled.has(s)).length} sectors, drawn as planets sized by market cap. Use the arrow keys to move between companies, Enter to open a company's details, Escape to close them. The List view shows the same companies as a table.`;
+  // Switching views: say what arrived (the Aggregate chart speaks for itself).
+  const viewSpokenRef = useRef<AppViewMode | null>(null);
+  useEffect(() => {
+    if (viewSpokenRef.current === null) {
+      viewSpokenRef.current = viewMode; // the first load: the page title says it
+      return;
+    }
+    if (viewSpokenRef.current === viewMode) return;
+    viewSpokenRef.current = viewMode;
+    if (viewMode === "aggregate") return;
+    const text =
+      viewMode === "list"
+        ? `List view. A table of ${kbNodes.length} media companies with sector, market cap, all-time high and all-time low, sorted by market cap. Use the up and down arrow keys to move between companies, Enter to open one.`
+        : `${viewMode === "linear" ? "Linear view. The companies in a row, largest first. " : "Map view. "}${a11ySummary}`;
+    const id = window.setTimeout(() => setA11yNote(text), 500);
+    return () => window.clearTimeout(id);
+    // Only on a change of view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   const layoutLabPanel = llab.enabled ? (
     <LayoutLabPanel
