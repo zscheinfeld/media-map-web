@@ -3607,7 +3607,6 @@ function CompanyListView({
               // company, since the map's planets are not focusable one by one.
               role="button"
               tabIndex={0}
-              aria-label={`${usdFlag(r.name).display}, ${r.sector}, ${formatValuation(r.valuation)}`}
               onClick={() => onSelect(r.name)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
