@@ -209,10 +209,16 @@ export function AboutModal({
   open,
   onClose: onCloseProp,
   onDownloadMap,
+  initialSection = "about",
+  onSectionChange,
 }: {
   open: boolean;
   onClose: () => void;
   onDownloadMap: () => void;
+  /** The tab to open on: the Downloads tab, or the first. */
+  initialSection?: "about" | "downloads";
+  /** Fires as the reader moves between the first tab and the Downloads tab (for the address bar). */
+  onSectionChange?: (section: "about" | "downloads") => void;
 }) {
   // Every way out (✕, backdrop click, Esc) plays the exit animation first, then
   // tells the parent — so the dim fades out and the card drops away.
@@ -332,13 +338,32 @@ export function AboutModal({
     };
   }, [open, sections.length]);
 
-  // Reset to the top + first tab each time it opens.
+  // Reset to the top + first tab each time it opens — or, opened on the
+  // Downloads tab (its address), scroll there once the content is in.
+  const downloadsIdx = sections.findIndex((s) => /download/i.test(s.tabLabel));
   useEffect(() => {
-    if (open) {
-      setActive(0);
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0 }));
+    if (!open) return;
+    if (initialSection === "downloads" && downloadsIdx >= 0) {
+      setActive(downloadsIdx);
+      requestAnimationFrame(() => {
+        const el = sectionRefs.current[`sec-${downloadsIdx}`];
+        const root = scrollRef.current;
+        if (el && root) root.scrollTo({ top: Math.max(0, el.offsetTop - TABS_STUCK - 8) });
+      });
+      return;
     }
-  }, [open]);
+    setActive(0);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0 }));
+  }, [open, initialSection, downloadsIdx]);
+  // Tell the page which tab the reader is on (first vs Downloads).
+  const onSectionChangeRef = useRef(onSectionChange);
+  useEffect(() => {
+    onSectionChangeRef.current = onSectionChange;
+  });
+  useEffect(() => {
+    if (!open) return;
+    onSectionChangeRef.current?.(downloadsIdx >= 0 && active === downloadsIdx ? "downloads" : "about");
+  }, [open, active, downloadsIdx]);
 
   if (!open) return null;
 
