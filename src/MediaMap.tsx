@@ -6999,6 +6999,10 @@ export default function MediaMap() {
             mapOffsetX: downloadCfg.mapOffsetX,
             legendMedium: downloadCfg.legendMedium,
             legendScale: downloadCfg.legendScale,
+            legendTop: downloadCfg.legendTop,
+            qrOffsetY: downloadCfg.qrOffsetY,
+            markOffsetY: downloadCfg.markOffsetY,
+            countSize: downloadCfg.countSize,
           }
         : DEFAULT_EXPORT_PANEL,
     [llab.active, downloadCfg],

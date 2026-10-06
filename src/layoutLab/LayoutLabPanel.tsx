@@ -725,12 +725,15 @@ export function LayoutLabPanel({
                 </p>
                 {([
                   ["legendGap", "Space between sectors", 0, 40, 1, (v: number) => `${Math.round(v)}px`],
+                  ["legendTop", "Count to first sector", 0, 120, 1, (v: number) => `${Math.round(v)}px`],
                   ["legendScale", "Sector name size", 0.6, 2, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineScale", "Headline size", 0.5, 1.6, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineGap", "Headline to counts", 0, 160, 1, (v: number) => `${Math.round(v)}px`],
                   ["mapScale", "Map size", EXPORT_MAP_SCALE_PANEL, EXPORT_MAP_SCALE_FILL, 0.001, (v: number) => (v >= EXPORT_MAP_SCALE_FILL - 0.002 ? "fills width" : v <= EXPORT_MAP_SCALE_PANEL + 0.002 ? "as before" : Math.abs(v - 1) < 0.002 ? "fits height" : `×${(v / EXPORT_MAP_SCALE_PANEL).toFixed(2)}`)],
                   ["imageWidth", "Image width", EXPORT_MIN_IMAGE_W, EXPORT_W, 10, (v: number) => `${Math.round(v)}px`],
                   ["mapOffsetX", "Slide map", -1200, 1200, 10, (v: number) => (v === 0 ? "centred" : `${v > 0 ? "→" : "←"} ${Math.abs(Math.round(v))}px`)],
+                  ["qrOffsetY", "Substack QR up / down", -200, 200, 1, (v: number) => (v === 0 ? "in line" : `${v > 0 ? "↓" : "↑"} ${Math.abs(Math.round(v))}px`)],
+                  ["markOffsetY", "Logo + QR up / down", -400, 400, 1, (v: number) => (v === 0 ? "default" : `${v > 0 ? "↓" : "↑"} ${Math.abs(Math.round(v))}px`)],
                 ] as const).map(([key, label, min, max, step, fmt]) => (
                   <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <span style={{ flex: 1, fontSize: 12 }}>{label}</span>
@@ -760,6 +763,9 @@ export function LayoutLabPanel({
                 ))}
                 <Toggle on={dl.legendMedium} onChange={(v) => lab.setDownload({ legendMedium: v })}>
                   Legend in Medium, like the planet names
+                </Toggle>
+                <Toggle on={dl.countSize} onChange={(v) => lab.setDownload({ countSize: v })}>
+                  "Companies" line and sector names as big as "Sectors"
                 </Toggle>
                 <p style={hint}>
                   Sector name size is a multiple of the "N Companies" line (×1 = the same). The legend is Book, like that

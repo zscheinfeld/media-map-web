@@ -494,6 +494,20 @@ async function fetchQrDataUri(url: string): Promise<string | null> {
   }
 }
 
+// The QR files carry a blank margin (the "quiet zone") inside their own box:
+// this share of the box on each side. The modules are drawn at the size asked
+// for — the box is enlarged and shifted by the margin — so a QR sits at the
+// same height as the logo beside it rather than a touch smaller.
+const QR_QUIET_ZONE = { substack: 0.0362, map: 0.0238 };
+// Where the logo file's letters sit within its height: ESHAP's cap height runs
+// from 10.9% to 95.7% of the box (the head reaches a little above and below).
+const LOGO_CAP = { top: 0.109, height: 0.848 };
+function qrImage(uri: string, x: number, y: number, size: number, quiet: number): string {
+  const box = size / (1 - 2 * quiet);
+  const off = box * quiet;
+  return `<image x="${(x - off).toFixed(1)}" y="${(y - off).toFixed(1)}" width="${box.toFixed(1)}" height="${box.toFixed(1)}" href="${uri}" xlink:href="${uri}"/>`;
+}
+
 /** The image's artwork (logo + the two QR codes) as data URIs; null where a file is missing. */
 export type ExportAssets = { logoUri: string | null; qrUri: string | null; mapQrUri: string | null };
 export async function loadExportAssets(): Promise<ExportAssets> {
@@ -529,6 +543,14 @@ export type ExportPanelSettings = {
   legendMedium: boolean;
   /** Legend name size, as a multiple of the "N Companies" line's size. */
   legendScale: number;
+  /** Space between the "N Companies" line and the first sector, image px (default: twice `legendGap`). */
+  legendTop: number;
+  /** Moves the Substack QR up (−) or down (+) on its own, image px. */
+  qrOffsetY: number;
+  /** Moves the logo and the Substack QR together up (−) or down (+), image px. */
+  markOffsetY: number;
+  /** The "N Companies" line and the sector names at the size of "N Sectors" (instead of smaller). */
+  countSize: boolean;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -539,6 +561,10 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   mapOffsetX: 0,
   legendMedium: false,
   legendScale: 1,
+  legendTop: 28,
+  qrOffsetY: 0,
+  markOffsetY: 0,
+  countSize: false,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -587,11 +613,14 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
 
   // Counts: "N Sectors" (Medium, white), "N Companies" (Book, dimmer, smaller).
   const cSize = 26;
-  const c2Size = 20;
+  // "N Companies" (and the legend, which follows it) are smaller — or, on
+  // request, the same size as "N Sectors".
+  const c2Size = settings.countSize ? cSize : 20;
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="500" font-size="${cSize}" fill="#fff">${sectorTotal} Sectors</text>`);
   cy += c2Size + 8;
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
-  cy += 52;
+  // From that line's descenders down to the first sector name.
+  cy += c2Size * 0.2 + settings.legendTop;
 
   // Legend: swatch + name per sector, set like the "N Companies" line (its
   // size, Book weight — or Medium, like the planet names, on request),
@@ -635,11 +664,14 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   // scale note beside the logo. (QR files are recoloured white-on-dark by
   // fetchQrDataUri.)
   const markH = 92;
-  const markTop = H - PAD - markH;
+  const markTop = H - PAD - markH + settings.markOffsetY;
   let markX = PAD;
   if (assets.qrUri) {
-    parts.push(`<image x="${markX}" y="${markTop}" width="${markH}" height="${markH}" href="${assets.qrUri}" xlink:href="${assets.qrUri}"/>`);
-    markX += markH + 28;
+    // As tall as the logo's letters (their cap height, not the whole mark),
+    // and lined up with them — plus the QR's own nudge.
+    const capH = markH * LOGO_CAP.height;
+    parts.push(qrImage(assets.qrUri, markX, markTop + markH * LOGO_CAP.top + settings.qrOffsetY, capH, QR_QUIET_ZONE.substack));
+    markX += capH + 28;
   }
   if (assets.logoUri) {
     const logoW = Math.round(markH * (2625 / 933)); // the logo file's proportions
@@ -651,7 +683,9 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   // In the "N Companies" style (Book, 60% white):
   const noteStyle = `font-family='${FONT}' font-weight="400" font-size="${cSize}" fill="rgba(255,255,255,0.6)"`;
   const noteLH = 34;
-  const noteMid = markTop + markH / 2;
+  // The note stays put: it is centred on where the logo sits by default,
+  // whatever the logo + QR nudge.
+  const noteMid = H - PAD - markH / 2;
   const noteTop = noteMid - ((EXPORT_SCALE_NOTE.length - 1) * noteLH) / 2 + cSize * 0.34;
   parts.push(
     `<text ${noteStyle}>` +
@@ -665,7 +699,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
     const qrX = W - qrSize - qrMargin;
     const captionY = H - PAD;
     const qrY = captionY - cSize - 10 - qrSize;
-    parts.push(`<image x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" href="${assets.mapQrUri}" xlink:href="${assets.mapQrUri}"/>`);
+    parts.push(qrImage(assets.mapQrUri, qrX, qrY, qrSize, QR_QUIET_ZONE.map));
     parts.push(`<text ${noteStyle} x="${qrX + qrSize / 2}" y="${captionY}" text-anchor="middle">${esc(EXPORT_MAP_URL_LABEL)}</text>`);
   }
   return `<g>${parts.join("")}</g>`;
