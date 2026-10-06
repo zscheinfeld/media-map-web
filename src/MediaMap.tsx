@@ -7601,7 +7601,7 @@ export default function MediaMap() {
           // Invisible while the panel is open: out of the Tab order too.
           tabIndex={sidebarOpen || game.active ? -1 : 0}
           aria-hidden={sidebarOpen || game.active}
-          title="Open panel"
+          title="Open sector side panel"
           className="panel-icon-btn"
           style={{
             position: "fixed",
