@@ -762,9 +762,8 @@ export function LayoutLabPanel({
                   Legend in Medium, like the planet names
                 </Toggle>
                 <p style={hint}>
-                  Sector name size is a multiple of the small planets' text size (a name and its number share one size;
-                  ×1 = the same). Names on the map are Medium (500), numbers Book (400): the checkbox picks which the
-                  legend matches.
+                  Sector name size is a multiple of the "N Companies" line (×1 = the same). The legend is Book, like that
+                  line and the planets' numbers; the checkbox sets it in Medium, like the planet names.
                 </p>
                 <p style={hint}>
                   Map size: "as before" keeps the planets the size they have always been in the image, centred with room

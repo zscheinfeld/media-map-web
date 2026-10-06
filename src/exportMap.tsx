@@ -527,7 +527,7 @@ export type ExportPanelSettings = {
   mapOffsetX: number;
   /** Legend names in Medium (500), like the planet names, instead of Book (400), like their numbers. */
   legendMedium: boolean;
-  /** Legend name size, as a multiple of the small planets' text size. */
+  /** Legend name size, as a multiple of the "N Companies" line's size. */
   legendScale: number;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
@@ -552,8 +552,6 @@ export type ExportPanelInput = {
   sectors: string[];
   counts: Record<string, number>;
   assets: ExportAssets;
-  /** Size of the legend's sector names, image px — set to the small planets' numbers. */
-  legendNamePx: number;
   settings: ExportPanelSettings;
   sectorColorOverride?: (sector: string) => string | null;
 };
@@ -565,7 +563,7 @@ export type ExportPanelInput = {
  * runs underneath. Also drawn live over the map by the lab's Download tab.
  */
 export function buildExportPanelMarkup(input: ExportPanelInput): string {
-  const { year, month, sectors, counts, assets, legendNamePx, settings, sectorColorOverride } = input;
+  const { year, month, sectors, counts, assets, settings, sectorColorOverride } = input;
   const W = exportImageWidth(settings), H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
   const FONT = LABEL_FONT_FAMILY;
   const PAD = 56;
@@ -595,10 +593,10 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
   cy += 52;
 
-  // Legend: swatch + name per sector, set like the small planets' numbers
-  // (their size, Book weight — or Medium, like the planet names, on request),
+  // Legend: swatch + name per sector, set like the "N Companies" line (its
+  // size, Book weight — or Medium, like the planet names, on request),
   // `legendGap` apart. (No containers, no counts.)
-  const nameSize = legendNamePx * settings.legendScale;
+  const nameSize = c2Size * settings.legendScale;
   const nameWeight = settings.legendMedium ? 500 : 400;
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
@@ -690,11 +688,6 @@ export function exportPreviewFrame(containerW: number, containerH: number, image
   const w = Math.min(containerW, (containerH * imageW) / EXPORT_H);
   const h = (w * EXPORT_H) / imageW;
   return { left: (containerW - w) / 2, top: (containerH - h) / 2, w, h };
-}
-
-/** The legend's name size for a map drawn at `mapScale`: the small planets' numbers, in image px. */
-export function exportLegendNamePx(smallLabelPx: number, mapScale: number): number {
-  return smallLabelPx * EXPORT_SLIDE_UNITS_PER_PX * exportPxPerUnit(mapScale);
 }
 
 /** Rasterize the composite SVG over the site's background gradient → PNG blob. */
@@ -854,7 +847,6 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
     sectors: input.sectors,
     counts: input.counts,
     assets,
-    legendNamePx: exportLegendNamePx(type ? type.smallPx : Math.max(1, input.labelSizePx - EXPORT_LABEL_SIZE_DELTA), panelSettings.mapScale),
     settings: panelSettings,
     sectorColorOverride: input.sectorColorOverride,
   });
