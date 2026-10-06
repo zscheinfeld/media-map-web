@@ -22,6 +22,7 @@ import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type Compan
 import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBlob, exportImageWidth, exportPreviewFrame, exportPxPerUnit, exportShowsValuation, loadExportAssets, measureExportLayout, measureLabelTextWidth, DEFAULT_EXPORT_PANEL, EXPORT_VALUATION_MIN_B, type ExportAssets, type ExportLayoutStats, type ExportPanelSettings } from "./exportMap";
 import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
+import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
@@ -4966,6 +4967,10 @@ export default function MediaMap() {
 
   const [viewMode, setViewMode] = useState<AppViewMode>("map");
   const [aboutOpen, setAboutOpen] = useState(false);
+  // Which About tab the reader is on (first vs Downloads), and the tab to open
+  // on — both for the address bar (/about, /about/downloads).
+  const [aboutSection, setAboutSection] = useState<AboutSection>("about");
+  const [aboutOpenAt, setAboutOpenAt] = useState<AboutSection>("about");
   // The spatial layout shown beneath everything: map | linear. "list" is an
   // overlay that fades over whatever layout was last active, so the layout is
   // frozen here and "list" never drives the SVG geometry or the physics hook.
@@ -7244,6 +7249,81 @@ export default function MediaMap() {
         edited: !!llab.state.positions[labMode][labSelectedNode.name],
       }
     : null;
+  // ---- The address bar (see urlState.ts) ----
+  // What the app is showing, as a route; its path is written to the address
+  // bar whenever it changes, and a route read from the address bar (first load,
+  // back / forward) is applied through the same functions a click would call.
+  const currentRoute = useMemo<AppRoute>(
+    () => ({
+      view: viewMode,
+      year: activeDate.year !== currentDate.year ? activeDate.year : null,
+      timeMachine: timelineOpen ? { year: timelineFocus.year } : null,
+      about: aboutOpen ? aboutSection : null,
+      game: game.active,
+    }),
+    [viewMode, activeDate.year, currentDate.year, timelineOpen, timelineFocus.year, aboutOpen, aboutSection, game.active],
+  );
+  // While a route from the address bar is being applied (several state changes,
+  // a few renders), the address is corrected in place rather than pushed again.
+  const routeApplyingUntilRef = useRef(0);
+  const applyRoute = (r: AppRoute) => {
+    routeApplyingUntilRef.current = performance.now() + 400;
+    if (r.view !== viewMode) selectView(r.view);
+    const wantYear = r.year ?? currentDate.year;
+    const d = dateRange.find((x) => x.year === wantYear) ?? currentDate;
+    if (!sameDate(d, activeDate)) {
+      setActiveDate(d);
+      // A past year gets its pill, as Explore gives it.
+      if (d.year !== currentDate.year) setSavedViews((prev) => (prev.some((p) => sameDate(p, d)) ? prev : [...prev, d]));
+    }
+    if (r.timeMachine) {
+      if (!timelineOpen) openTimeline();
+      const y = r.timeMachine.year;
+      const focus = y !== null ? dateRange.find((x) => x.year === y) : null;
+      if (focus) focusOn(focus);
+    } else if (timelineOpen) {
+      setTimelineOpen(false);
+    }
+    if (r.about) {
+      setAboutOpenAt(r.about);
+      setAboutSection(r.about);
+      setAboutOpen(true);
+    } else if (aboutOpen) {
+      setAboutOpen(false);
+    }
+    if (r.game && !game.active && !isMobile) game.start();
+    else if (!r.game && game.active) game.exit();
+  };
+  const applyRouteRef = useRef(applyRoute);
+  useEffect(() => {
+    applyRouteRef.current = applyRoute;
+  });
+  // First load: the address decides what opens (the game once the map has planets).
+  const routeLoadedRef = useRef(false);
+  useEffect(() => {
+    if (routeLoadedRef.current || typeof window === "undefined") return;
+    const r = parseRoute(window.location.pathname, currentDate.year);
+    if (r.game && nodes.length === 0) return; // wait for the planets
+    routeLoadedRef.current = true;
+    if (routePath(r) !== "/") applyRouteRef.current(r);
+  }, [currentDate.year, nodes.length]);
+  // Back / forward.
+  useEffect(() => {
+    const onPop = () => applyRouteRef.current(parseRoute(window.location.pathname, currentDate.year));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [currentDate.year]);
+  // Write the address and the tab title. Query strings (?layout=1 …) are kept.
+  useEffect(() => {
+    if (typeof window === "undefined" || !routeLoadedRef.current) return;
+    const path = routePath(currentRoute);
+    document.title = routeTitle(currentRoute, "ESHAP Media Universe");
+    if (window.location.pathname === path) return;
+    const url = path + window.location.search + window.location.hash;
+    if (performance.now() < routeApplyingUntilRef.current) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  }, [currentRoute]);
+
   const layoutLabPanel = llab.enabled ? (
     <LayoutLabPanel
       lab={llab}
@@ -8649,7 +8729,13 @@ export default function MediaMap() {
         );
       })()}
 
-      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} onDownloadMap={downloadMapImage} />
+      <AboutModal
+        open={aboutOpen}
+        onClose={() => setAboutOpen(false)}
+        onDownloadMap={downloadMapImage}
+        initialSection={aboutOpenAt}
+        onSectionChange={setAboutSection}
+      />
     </div>
     </LabFrame>
   );

@@ -23,7 +23,7 @@ Deployment: Netlify, configured via [netlify.toml](netlify.toml). It builds `npm
 
 ## Architecture
 
-This is a single-page Vite + React + TypeScript app that renders a "media map" — a starfield of company "planets" sized by valuation, organized into sectors via a d3-force physics simulation. There's no router, no backend, no state manager; everything is hooks + an SVG scene.
+This is a single-page Vite + React + TypeScript app that renders a "media map" — a starfield of company "planets" sized by valuation, organized into sectors via a d3-force physics simulation. There's no backend and no state manager; everything is hooks + an SVG scene. The address bar follows the app ([src/urlState.ts](src/urlState.ts)): `/`, `/linear`, `/aggregate`, `/list`, a past year as `/map/2020` (any view), `/time-machine[/2018]`, `/about[/downloads]`, `/game`. MediaMap derives `currentRoute` from its state and pushes it (query strings are kept); a route read from the address — first load, back / forward — is applied through the same functions a click calls (`applyRoute`), so no transition is different for it. `scripts/sitemap.mjs` writes `public/sitemap.xml` (git-ignored) from those addresses before every build; `public/robots.txt` points at it.
 
 For a content-model / requirements view of the map (the authored item types — companies, entities, sectors, connections — and their attributes, written for non-engineers), see [docs/PROJECT.md](docs/PROJECT.md). Keep it in sync when the data model changes.
 
