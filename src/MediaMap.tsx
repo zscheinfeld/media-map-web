@@ -7173,7 +7173,21 @@ export default function MediaMap() {
       else next.add(s);
       return next;
     });
+    // Ticking a sector while the pointer rests on its row must not dim the
+    // rest of the map as the new planets arrive (see `spotlitSector`).
+    setHoverMutedSector(s);
   };
+  // The sector whose row the pointer is on spotlights its planets by dimming
+  // every other sector — but not a sector that is switched off (nothing to
+  // spotlight), and not the one just ticked or unticked, until the pointer
+  // moves to another row. So building the map up from "None" keeps every
+  // planet at full strength as each sector comes in.
+  const [hoverMutedSector, setHoverMutedSector] = useState<string | null>(null);
+  const hoverSector = (s: string | null) => {
+    setHoveredSector(s);
+    if (s !== hoverMutedSector) setHoverMutedSector(null);
+  };
+  const spotlitSector = hoveredSector !== null && enabled.has(hoveredSector) && hoveredSector !== hoverMutedSector ? hoveredSector : null;
 
   // Cull off-view planets in map mode. Linear mode extends far past the
   // map viewBox to the right (the scrollbar handles navigation), so don't
@@ -7437,7 +7451,7 @@ export default function MediaMap() {
     loading: loading || valuationsLoading,
     error,
     hoveredSector,
-    onHoverSector: setHoveredSector,
+    onHoverSector: hoverSector,
     onFocusSector: focusOnSector,
     sectorColorOverride: sectorColorResolved,
     panelBackground: panelBg,
@@ -8090,7 +8104,7 @@ export default function MediaMap() {
               // Dim with the planets on sector-hover: a line stays lit if either
               // endpoint is in the hovered sector (its relationships), else it dims.
               const connDimmed =
-                (hoveredSector !== null && a.sector !== hoveredSector && b.sector !== hoveredSector) ||
+                (spotlitSector !== null && a.sector !== spotlitSector && b.sector !== spotlitSector) ||
                 (searchMatches !== null && !searchMatches.has(a.name) && !searchMatches.has(b.name));
               return (
                 <g
@@ -8154,8 +8168,8 @@ export default function MediaMap() {
               return visibleSectors.map(s => {
                 const unknownIdx = unknownVisible.indexOf(s);
                 const c = effectiveSectorCenter(s, unknownIdx, unknownVisible.length);
-                const isHighlighted = hoveredSector === s;
-                const isFaded = hoveredSector !== null && !isHighlighted;
+                const isHighlighted = spotlitSector === s;
+                const isFaded = spotlitSector !== null && !isHighlighted;
                 const fill = isHighlighted
                   ? "rgba(255,255,255,0.95)"
                   : isFaded
@@ -8284,7 +8298,7 @@ export default function MediaMap() {
                   // sidebar while steering the paddle and would dim the field.
                   dimmed={
                     !game.active &&
-                    ((hoveredSector !== null && n.sector !== hoveredSector) ||
+                    ((spotlitSector !== null && n.sector !== spotlitSector) ||
                       (searchMatches !== null && !searchMatches.has(n.name)))
                   }
                   highlighted={searchMatches !== null && searchMatches.has(n.name)}
@@ -8329,7 +8343,7 @@ export default function MediaMap() {
                     onHoverChange={setHoveredPlanet}
                     onClick={() => {}}
                     dimmed={
-                      (hoveredSector !== null && n.sector !== hoveredSector) ||
+                      (spotlitSector !== null && n.sector !== spotlitSector) ||
                       (searchMatches !== null && !searchMatches.has(n.name))
                     }
                     highlighted={searchMatches !== null && searchMatches.has(n.name)}
@@ -8544,7 +8558,7 @@ export default function MediaMap() {
           active={viewMode === "aggregate" && !timelineOpen}
           data={aggregateData}
           zoomTarget={aggZoomTarget}
-          highlightSector={hoveredSector}
+          highlightSector={spotlitSector}
           highlightCompany={aggHighlight}
           onClearHighlight={() => setAggHighlight(null)}
           isMobile={isMobile}
