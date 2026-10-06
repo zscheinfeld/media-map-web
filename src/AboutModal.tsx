@@ -438,8 +438,10 @@ export function AboutModal({
         return (
           <h3
             key={key}
-            // The first heading names its section (see the section's aria-labelledby).
+            // The first heading names its section (see the section's aria-labelledby)
+            // and takes focus when its tab is chosen by keyboard.
             id={sectionIdx !== undefined && key === 0 ? `mm-about-h-${sectionIdx}` : undefined}
+            tabIndex={sectionIdx !== undefined && key === 0 ? -1 : undefined}
             style={{
               margin: "0 0 14px",
               fontSize: narrow ? 22 : 28,
@@ -678,7 +680,21 @@ export function AboutModal({
                   role="tab"
                   aria-selected={isActive}
                   aria-controls={`mm-about-sec-${i}`}
-                  onClick={() => scrollTo(i)}
+                  onClick={(e) => {
+                    scrollTo(i);
+                    // Chosen by keyboard (a click with no pointer): reading
+                    // continues from the section's heading.
+                    if (e.detail === 0) {
+                      window.setTimeout(() => document.getElementById(`mm-about-h-${i}`)?.focus({ preventScroll: true }), 450);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    const n = sections.length;
+                    const to = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+                    if (to === null) return;
+                    e.preventDefault();
+                    tabRefs.current[to]?.focus();
+                  }}
                   onMouseEnter={() => setHoveredTab(i)}
                   onMouseLeave={() => setHoveredTab(null)}
                   style={{
