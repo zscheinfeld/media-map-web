@@ -97,6 +97,8 @@ Same two-tier pattern as styling, but for planet coordinates.
 - **Hard pin** (`pin: true`): additionally sets `node.fx/fy`, which d3-force respects absolutely. Pinned planets don't move; other planets collide against them.
 - **No entry**: the sector center remains the attractor (current behavior). `node.pinned` is exposed on the node so the renderer can mark pinned planets in edit mode.
 
+**Editor password.** The editing tools' flags — `?edit=1` / `?edit=mobile`, `?layout=1`, `?style=1`, `?tm=1` — are behind a password prompt ([src/editorGate.ts](src/editorGate.ts), run from `main.tsx` before the app renders): the right answer is remembered in that browser (`mm-editor-unlocked`); a wrong or dismissed one drops the flags from the address. A deterrent only — the SHA-256 hash ships in the bundle, and publishing still needs a Sanity Studio login; the file says how to change the password.
+
 **Design mode** is gated on `?edit=1` in the URL (`useIsEditMode()` reads it once on mount, not reactive). When on:
 - A floating `EditorToolbar` appears top-left of the map area: selected planet inspector, pin/unpin/clear-position actions, copy-to-clipboard / download / reset.
 - Planets respond to mousedown for drag (separate from canvas pan via `stopPropagation`). The drag is tracked in `planetDragRef` + a `dragState` React state; while a planet is being dragged, the renderer overrides `node.x/y` with `dragState` for that single planet. On mouseup, the new `{x,y}` is committed to the `positions` map, the sim restarts via `positionsKey`, and the pin flag is preserved.
