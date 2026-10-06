@@ -725,6 +725,7 @@ export function LayoutLabPanel({
                 </p>
                 {([
                   ["legendGap", "Space between sectors", 0, 40, 1, (v: number) => `${Math.round(v)}px`],
+                  ["legendTop", "Count to first sector", 0, 120, 1, (v: number) => `${Math.round(v)}px`],
                   ["legendScale", "Sector name size", 0.6, 2, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineScale", "Headline size", 0.5, 1.6, 0.01, (v: number) => `×${v.toFixed(2)}`],
                   ["headlineGap", "Headline to counts", 0, 160, 1, (v: number) => `${Math.round(v)}px`],

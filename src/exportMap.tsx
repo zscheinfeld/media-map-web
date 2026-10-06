@@ -529,6 +529,8 @@ export type ExportPanelSettings = {
   legendMedium: boolean;
   /** Legend name size, as a multiple of the "N Companies" line's size. */
   legendScale: number;
+  /** Space between the "N Companies" line and the first sector, image px (default: twice `legendGap`). */
+  legendTop: number;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -539,6 +541,7 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   mapOffsetX: 0,
   legendMedium: false,
   legendScale: 1,
+  legendTop: 28,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -591,7 +594,8 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="500" font-size="${cSize}" fill="#fff">${sectorTotal} Sectors</text>`);
   cy += c2Size + 8;
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
-  cy += 52;
+  // From that line's descenders down to the first sector name.
+  cy += c2Size * 0.2 + settings.legendTop;
 
   // Legend: swatch + name per sector, set like the "N Companies" line (its
   // size, Book weight — or Medium, like the planet names, on request),
