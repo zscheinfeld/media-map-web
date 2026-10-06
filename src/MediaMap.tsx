@@ -508,6 +508,28 @@ const pillBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/**
+ * Keyboard movement inside a list that is one Tab stop from outside (the
+ * sector checkboxes, the List view's rows): Tab / Shift+Tab and the arrow keys
+ * move between its items, Home / End jump to the first / last, and Tab past
+ * either end leaves the list to the browser.
+ */
+function moveWithinGroup(e: React.KeyboardEvent<HTMLElement>, itemSelector: string) {
+  const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(itemSelector));
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  if (i < 0) return;
+  let to: number | null = null;
+  if (e.key === "Tab" || e.key === "ArrowDown" || e.key === "ArrowUp") to = i + (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey) ? -1 : 1);
+  else if (e.key === "Home") to = 0;
+  else if (e.key === "End") to = items.length - 1;
+  if (to === null) return;
+  const target = items[to];
+  if (!target) return; // past either end: the browser moves on
+  e.preventDefault();
+  target.focus();
+  target.scrollIntoView({ block: "nearest" });
+}
+
 function SectorPanelContent({
   sectors,
   counts,
@@ -601,7 +623,15 @@ function SectorPanelContent({
       {/* Sector list — the ONLY scrolling region (header above stays fixed).
           Clear the hover only when the cursor leaves the whole list — not when
           it crosses between rows — so the map doesn't flicker. */}
+      {/* Keyboard: the 17 checkboxes are not in the page's Tab order (a lap of
+          the page would walk through every one). "Skip to sectors" lands on the
+          first; from there Tab / Shift+Tab and the arrow keys move between them,
+          and Tab after the last leaves the list. */}
       <div
+        id="mm-sectors"
+        role="group"
+        aria-label="Sectors"
+        onKeyDown={(e) => moveWithinGroup(e, "[data-sector-toggle]")}
         style={{
           flex: 1,
           minHeight: 0,
@@ -681,7 +711,8 @@ function SectorPanelContent({
                 {customBg ? (
                   <span
                     role="checkbox"
-                    tabIndex={0}
+                    tabIndex={-1}
+                    data-sector-toggle=""
                     aria-checked={on}
                     aria-label={`Toggle ${s}`}
                     onClick={() => onToggle(s)}
@@ -749,6 +780,8 @@ function SectorPanelContent({
                 ) : (
                   <input
                     type="checkbox"
+                    tabIndex={-1}
+                    data-sector-toggle=""
                     checked={on}
                     onChange={() => onToggle(s)}
                     style={{
@@ -3513,6 +3546,14 @@ function CompanyListView({
   return (
     <div
       ref={scrollRef}
+      aria-hidden={!active}
+      // Never a Tab stop itself (Chrome makes a scroller focusable when nothing
+      // inside it is); the rows are the stops.
+      tabIndex={-1}
+      // Keyboard: the List is one Tab stop (its first row). Inside it, Tab /
+      // Shift+Tab and the arrow keys move between rows; Tab after the last
+      // row leaves the list. Enter / Space on a row opens the company.
+      onKeyDown={(e) => moveWithinGroup(e, "tr[role='button']")}
       style={{
         position: "absolute",
         // Start below the floating view-mode toggle (top:16, ~34px tall) so the
@@ -3606,7 +3647,7 @@ function CompanyListView({
               // keyboard (Tab, then Enter or Space) — the accessible way to every
               // company, since the map's planets are not focusable one by one.
               role="button"
-              tabIndex={0}
+              tabIndex={active && i === 0 ? 0 : -1}
               onClick={() => onSelect(r.name)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -7524,6 +7565,15 @@ export default function MediaMap() {
       <nav aria-label="Skip to">
         <button className="mm-skip" onClick={focusMap}>Skip to the map</button>
         <button className="mm-skip" onClick={() => document.getElementById("mm-search-btn")?.focus()}>Skip to search</button>
+        <button
+          className="mm-skip"
+          onClick={() => {
+            if (isMobile) setMobileSectorsOpen(true);
+            requestAnimationFrame(() => document.querySelector<HTMLElement>("#mm-sectors [data-sector-toggle]")?.focus());
+          }}
+        >
+          Skip to sectors
+        </button>
         <button className="mm-skip" onClick={() => document.getElementById("mm-download-btn")?.focus()}>Skip to download</button>
       </nav>
       {!isMobile && (
@@ -7537,6 +7587,9 @@ export default function MediaMap() {
         <button
           onClick={() => setSidebarOpen(true)}
           aria-label="Open panel"
+          // Invisible while the panel is open: out of the Tab order too.
+          tabIndex={sidebarOpen || game.active ? -1 : 0}
+          aria-hidden={sidebarOpen || game.active}
           title="Open panel"
           className="panel-icon-btn"
           style={{
@@ -8461,7 +8514,7 @@ export default function MediaMap() {
             type="button"
             onClick={game.start}
             className="eshap-logo eshap-logo--faint"
-            aria-label="Eshap"
+            aria-label="Eshap — play the game"
             style={{
               position: "absolute",
               left: 16,
