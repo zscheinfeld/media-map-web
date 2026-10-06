@@ -7626,9 +7626,24 @@ export default function MediaMap() {
     const dirs: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
     if (e.key in dirs) {
       e.preventDefault();
+      const bySize = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b);
+      // No planet yet (an arrow pressed before the landing above): start at the biggest.
+      if (!kbCurrent) {
+        if (landTimerRef.current !== null) window.clearTimeout(landTimerRef.current);
+        landTimerRef.current = null;
+        moveKbFocus(bySize[0]);
+        return;
+      }
+      // Linear is a row from the biggest down: the keys step along it.
+      if (layoutMode === "linear") {
+        const at = bySize.findIndex((n) => n.name === kbCurrent.name);
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+        const next = bySize[Math.max(0, Math.min(bySize.length - 1, at + step))];
+        if (next && next.name !== kbCurrent.name) moveKbFocus(next);
+        return;
+      }
       const [dx, dy] = dirs[e.key];
-      // No planet yet: start from the one nearest the middle of the view.
-      const from = kbCurrent ?? { x: view.x + view.w / 2, y: view.y + view.h / 2, name: "" };
+      const from = kbCurrent;
       let best: PlanetNode | null = null, bestScore = Infinity;
       for (const n of kbNodes) {
         if (n.name === from.name) continue;
@@ -7636,7 +7651,7 @@ export default function MediaMap() {
         const along = ox * dx + oy * dy; // progress in the key's direction
         if (along <= 0) continue;
         const across = Math.abs(ox * dy - oy * dx); // sideways drift
-        if (kbCurrent && across > along * 1.5) continue; // stay within a cone
+        if (across > along * 1.5) continue; // stay within a cone
         const score = along + across * 0.6;
         if (score < bestScore) { best = n; bestScore = score; }
       }
