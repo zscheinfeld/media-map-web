@@ -678,7 +678,9 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   // In the "N Companies" style (Book, 60% white):
   const noteStyle = `font-family='${FONT}' font-weight="400" font-size="${cSize}" fill="rgba(255,255,255,0.6)"`;
   const noteLH = 34;
-  const noteMid = markTop + markH / 2;
+  // The note stays put: it is centred on where the logo sits by default,
+  // whatever the logo + QR nudge.
+  const noteMid = H - PAD - markH / 2;
   const noteTop = noteMid - ((EXPORT_SCALE_NOTE.length - 1) * noteLH) / 2 + cSize * 0.34;
   parts.push(
     `<text ${noteStyle}>` +
