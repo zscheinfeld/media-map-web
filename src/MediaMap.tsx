@@ -3383,7 +3383,7 @@ function TimelineStrip({
             key={`${d.year}-${d.month}`}
             data-date={`${d.year}-${d.month}`}
             aria-label={`${d.year} media map`}
-            aria-current={isActive ? "true" : undefined}
+            aria-current={active ? "true" : undefined}
             onClick={() => onSelect(d)}
             onMouseEnter={() => onHover(d)}
             title={formatDate(d)}
