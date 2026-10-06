@@ -7632,7 +7632,7 @@ export default function MediaMap() {
         >
           Skip to sectors
         </button>
-        <button className="mm-skip" onClick={() => document.getElementById("mm-download-btn")?.focus()}>Skip to download</button>
+        <button className="mm-skip" aria-label="Skip to downloads and more about the media universe" onClick={() => document.getElementById("mm-download-btn")?.focus()}>Skip to download</button>
       </nav>
       {!isMobile && (
         <Sidebar
