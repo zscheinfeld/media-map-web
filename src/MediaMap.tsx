@@ -47,6 +47,13 @@ import { LAYOUT_PANEL_W, LayoutLabPanel, type LabSelection } from "./layoutLab/L
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
+/** What a screen reader calls each view tab. */
+const VIEW_TAB_LABELS: Record<AppViewMode, string> = {
+  map: "Map view",
+  linear: "Linear view",
+  aggregate: "Historical aggregate view",
+  list: "List view",
+};
 const VALUATION_LABELS: Record<ValuationType, string> = {
   market_cap: "Latest Market Cap",
   fundraising_valuation: "Fundraising Valuation",
@@ -2707,6 +2714,10 @@ function MapThumbnail({
   return (
     <button
       onClick={onClick}
+      // Mouse / touch only: the keyboard turns the carousel with the arrow
+      // buttons and the year hashes, so the maps are not Tab stops.
+      tabIndex={-1}
+      aria-hidden
       aria-label={isSelected ? `Explore the ${formatDate(date)} map` : `Show ${formatDate(date)}`}
       onMouseEnter={() => { setIsHovered(true); if (isSelected) onExploreHoverChange?.(true); }}
       onMouseLeave={() => { setIsHovered(false); if (isSelected) onExploreHoverChange?.(false); }}
@@ -8421,7 +8432,7 @@ export default function MediaMap() {
                   onClick={() => selectView(mode)}
                   role="tab"
                   aria-selected={active}
-                  aria-label={mode}
+                  aria-label={VIEW_TAB_LABELS[mode]}
                   title={isMobile ? mode.charAt(0).toUpperCase() + mode.slice(1) : undefined}
                   className="mm-hover"
                   style={{
@@ -8623,8 +8634,12 @@ export default function MediaMap() {
             // focus, with the other bottom controls: the detail panel sits there.
             opacity: timelineOpen || mobileFocus ? 0 : 1,
             pointerEvents: timelineOpen || mobileFocus ? "none" : undefined,
+            // Hidden: gone from the Tab order and screen readers too (after the fade).
+            visibility: timelineOpen || mobileFocus ? "hidden" : "visible",
             transform: mobileFocus ? "translateY(28px)" : "translateY(0)",
-            transition: mobileFocus || isMobile ? MOBILE_FOCUS_STEP_ASIDE : "opacity 200ms ease",
+            transition:
+              (mobileFocus || isMobile ? MOBILE_FOCUS_STEP_ASIDE : "opacity 200ms ease") +
+              (timelineOpen || mobileFocus ? ", visibility 0s linear 320ms" : ", visibility 0s"),
           }}
         >
           {displayedViewDates.map(d => {
