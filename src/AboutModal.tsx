@@ -238,7 +238,7 @@ export function AboutModal({
   const sections = content.sections;
   const narrow = useIsNarrow();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [active, setActive] = useState(0);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -432,12 +432,14 @@ export function AboutModal({
   const onClickFor = (b: { action: "link" | "download" }) =>
     b.action === "download" ? onDownloadMap : undefined;
 
-  const renderBlock = (b: Block, key: number) => {
+  const renderBlock = (b: Block, key: number, sectionIdx?: number) => {
     switch (b.kind) {
       case "header":
         return (
-          <h2
+          <h3
             key={key}
+            // The first heading names its section (see the section's aria-labelledby).
+            id={sectionIdx !== undefined && key === 0 ? `mm-about-h-${sectionIdx}` : undefined}
             style={{
               margin: "0 0 14px",
               fontSize: narrow ? 22 : 28,
@@ -448,7 +450,7 @@ export function AboutModal({
             }}
           >
             {b.text}
-          </h2>
+          </h3>
         );
       case "body":
         return <Paragraphs key={key} text={b.text} fontSize={narrow ? 16 : 18} />;
@@ -492,7 +494,7 @@ export function AboutModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="About the Media Universe"
+      aria-labelledby="mm-about-title"
       ref={dialogRef}
       onKeyDown={trapTab}
       onClick={onClose}
@@ -583,6 +585,9 @@ export function AboutModal({
           }}
         >
           <div
+            id="mm-about-title"
+            role="heading"
+            aria-level={2}
             style={{
               textAlign: "center",
               color: "#FFF",
@@ -612,7 +617,7 @@ export function AboutModal({
           >
             <img
               src={content.heroUrl}
-              alt="Media Universe"
+              alt="Evan Shapiro, hands raised, in front of the Media Universe map"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
@@ -672,6 +677,7 @@ export function AboutModal({
                   }}
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls={`mm-about-sec-${i}`}
                   onClick={() => scrollTo(i)}
                   onMouseEnter={() => setHoveredTab(i)}
                   onMouseLeave={() => setHoveredTab(null)}
@@ -733,9 +739,12 @@ export function AboutModal({
           {sections.map((s, i) => {
             const last = i === sections.length - 1;
             return (
-              <div
+              <section
                 key={i}
+                id={`mm-about-sec-${i}`}
                 data-index={i}
+                aria-labelledby={s.blocks[0]?.kind === "header" ? `mm-about-h-${i}` : undefined}
+                aria-label={s.blocks[0]?.kind === "header" ? undefined : s.tabLabel}
                 ref={(el) => {
                   sectionRefs.current[idOf(i)] = el;
                 }}
@@ -748,8 +757,8 @@ export function AboutModal({
               >
                 {/* Desktop: copy runs the full width inside the modal's padding.
                     Phone: unchanged (the column cap never bites at that width). */}
-                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map(renderBlock)}</div>
-              </div>
+                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map((b, k) => renderBlock(b, k, i))}</div>
+              </section>
             );
           })}
         </div>

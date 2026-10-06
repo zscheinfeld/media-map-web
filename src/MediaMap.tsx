@@ -622,7 +622,7 @@ function SectorPanelContent({
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
         <button onClick={() => onAll(true)} aria-label="Toggle all sectors visible" className="mm-hover mm-hairline" style={pillBtn}>All</button>
-        <button onClick={() => onAll(false)} aria-label="Toggle all sectors hidden" className="mm-hover mm-hairline" style={pillBtn}>None</button>
+        <button onClick={() => onAll(false)} aria-label="None: toggle all sectors hidden" className="mm-hover mm-hairline" style={pillBtn}>None</button>
       </div>
       </div>
       {/* Sector list — the ONLY scrolling region (header above stays fixed).
