@@ -936,6 +936,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           href="https://eshap.substack.com/"
           target="_blank"
           rel="noreferrer"
+          aria-label="Full map analysis on Substack"
           // Royal blue → white with blue text on hover (colours in App.css).
           className="mm-blue-btn"
           style={{
