@@ -3479,6 +3479,7 @@ function CompanyListView({
   sectorColorOverride,
   bgStops,
   onSelect,
+  onEnter,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -3489,6 +3490,8 @@ function CompanyListView({
   focusRow: { name: string; token: number } | null;
   /** A row was chosen (click, Enter or Space): open that company's details. */
   onSelect: (name: string) => void;
+  /** Keyboard focus came into the list from outside (to announce what it is). */
+  onEnter?: () => void;
   sectorColorOverride?: (s: string) => string | null;
   /** The live background gradient stops, sampled for the frozen column. */
   bgStops: [string, string, string];
@@ -3604,6 +3607,11 @@ function CompanyListView({
       // Keyboard: the List is one Tab stop (its first row). The arrow keys and
       // Home / End move between rows; Tab leaves. Enter / Space opens the company.
       onKeyDown={(e) => moveWithinGroup(e, "tr[role='button']")}
+      // Keyboard focus arriving from outside the list: say what the list is.
+      onFocus={(e) => {
+        const from = e.relatedTarget as Node | null;
+        if (active && onEnter && (!from || !e.currentTarget.contains(from)) && (e.target as HTMLElement).matches(":focus-visible")) onEnter();
+      }}
       style={{
         position: "absolute",
         // Start below the floating view-mode toggle (top:16, ~34px tall) so the
@@ -7589,13 +7597,17 @@ export default function MediaMap() {
     setA11yNote(describe(n));
     keepInView(n);
   };
-  // Landing on the map by keyboard (Tab, a skip link): the ring goes straight
-  // to the biggest company, so the stop is visible and spoken at once. A mouse
-  // click also focuses the map area, but shows nothing.
+  // Landing on the map by keyboard (Tab, a skip link): the view describes
+  // itself, then the ring goes to the biggest company, so the stop is visible
+  // and spoken. A mouse click also focuses the map area, but shows nothing.
+  const landTimerRef = useRef<number | null>(null);
   const landOnMap = () => {
-    if (kbCurrent || kbNodes.length === 0) return;
+    if (kbNodes.length === 0) return;
+    speak(viewSummaryText(viewMode));
+    if (kbCurrent) return;
     const biggest = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b)[0];
-    moveKbFocus(biggest);
+    if (landTimerRef.current !== null) window.clearTimeout(landTimerRef.current);
+    landTimerRef.current = window.setTimeout(() => moveKbFocus(biggest), 1800);
   };
   const focusMap = () => {
     if (viewMode === "aggregate") {
@@ -7656,7 +7668,23 @@ export default function MediaMap() {
   // The ring follows the planet only while the map has keyboard focus.
   const kbRingNode = mapHasFocus && kbCurrent ? (dragState && dragState.name === kbCurrent.name ? { ...kbCurrent, x: dragState.x, y: dragState.y } : kbCurrent) : null;
   const a11ySummary = `${kbNodes.length} media companies in ${allSectors.filter((s) => enabled.has(s)).length} sectors, drawn as planets sized by market cap. Use the arrow keys to move between companies, Enter to open a company's details, Escape to close them. The List view shows the same companies as a table.`;
-  // Switching views: say what arrived (the Aggregate chart speaks for itself).
+  // What each view is, in a sentence or two — spoken when the view arrives and
+  // again when the map / list takes keyboard focus, so the reader is oriented
+  // before the first company is read. (The Aggregate chart speaks for itself.)
+  const listSummary = `List view. A table of ${kbNodes.length} media companies with sector, market cap, all-time high and all-time low, sorted by market cap. Use the up and down arrow keys to move between companies, Enter to open one.`;
+  const viewSummaryText = (mode: AppViewMode) =>
+    mode === "list" ? listSummary : `${mode === "linear" ? "Linear view. The companies in a row, largest first. " : "Map view. "}${a11ySummary}`;
+  // Re-speaking the same text needs the live region's content to change, hence
+  // the alternating invisible marker.
+  const spokenCountRef = useRef(0);
+  const speak = (text: string) => {
+    spokenCountRef.current++;
+    setA11yNote(`${text}${spokenCountRef.current % 2 ? "" : "\u200b"}`);
+  };
+  const speakRef = useRef(speak);
+  useEffect(() => {
+    speakRef.current = speak;
+  });
   const viewSpokenRef = useRef<AppViewMode | null>(null);
   useEffect(() => {
     if (viewSpokenRef.current === null) {
@@ -7666,11 +7694,8 @@ export default function MediaMap() {
     if (viewSpokenRef.current === viewMode) return;
     viewSpokenRef.current = viewMode;
     if (viewMode === "aggregate") return;
-    const text =
-      viewMode === "list"
-        ? `List view. A table of ${kbNodes.length} media companies with sector, market cap, all-time high and all-time low, sorted by market cap. Use the up and down arrow keys to move between companies, Enter to open one.`
-        : `${viewMode === "linear" ? "Linear view. The companies in a row, largest first. " : "Map view. "}${a11ySummary}`;
-    const id = window.setTimeout(() => setA11yNote(text), 500);
+    const text = viewSummaryText(viewMode);
+    const id = window.setTimeout(() => speakRef.current(text), 500);
     return () => window.clearTimeout(id);
     // Only on a change of view.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -8426,6 +8451,7 @@ export default function MediaMap() {
             setInspectedPlanet(name);
             setA11yNote(`Opened details for ${usdFlag(name).display}`);
           }}
+          onEnter={() => speak(listSummary)}
         />
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
