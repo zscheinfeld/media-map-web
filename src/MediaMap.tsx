@@ -7479,10 +7479,21 @@ export default function MediaMap() {
   const kbCurrent = kbPlanet ? kbNodes.find((n) => n.name === kbPlanet) ?? null : null;
   const describe = (n: PlanetNode) => `${usdFlag(n.name).display}, ${n.sector}, ${formatValuation(n.valuation_b)}`;
   // Bring a planet into the viewport (at the current zoom) if it is outside it.
+  // Linear is a strip that scrolls sideways: scroll it so the planet is in view.
   const keepInView = (n: PlanetNode) => {
+    if (layoutMode === "linear") {
+      const el = containerRef.current;
+      if (!el || containerH <= 0) return;
+      const pxPerUnit = (containerH * zoom) / canvas.h;
+      const px = (n.x - canvas.x) * pxPerUnit;
+      const rPx = n.r * pxPerUnit + 40;
+      if (px - rPx >= el.scrollLeft && px + rPx <= el.scrollLeft + el.clientWidth) return;
+      el.scrollTo({ left: Math.max(0, px - el.clientWidth / 2), behavior: "smooth" });
+      return;
+    }
     const pad = n.r + 40 * slideUnitsPerPx;
     const inside = n.x - pad >= view.x && n.x + pad <= view.x + view.w && n.y - pad >= view.y && n.y + pad <= view.y + view.h;
-    if (inside || layoutMode === "linear") return;
+    if (inside) return;
     animateView(zoom, { x: n.x - (canvas.x + canvas.w / 2), y: n.y - (canvas.y + canvas.h / 2) }, 350);
   };
   const moveKbFocus = (n: PlanetNode) => {
