@@ -19,7 +19,8 @@ import { AboutModal } from "./AboutModal";
 import { COMPANY_CONNECTIONS, type Connection } from "./connections";
 import { isSanityConfigured } from "./sanityClient";
 import { useSanityMapDocs, useResolvedSanityMap, resolveSanityMapAt, type CompanyDetail, type ResolvedSanityMap, type ValuationType } from "./sanityMap";
-import { buildExportPng, clearTextWidthCache, downloadBlob, measureExportLayout, measureLabelTextWidth, EXPORT_VALUATION_MIN_B, type ExportLayoutStats } from "./exportMap";
+import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBlob, exportImageWidth, exportLegendNamePx, exportPreviewFrame, exportPxPerUnit, exportShowsValuation, loadExportAssets, measureExportLayout, measureLabelTextWidth, DEFAULT_EXPORT_PANEL, EXPORT_LABEL_SIZE_DELTA, EXPORT_VALUATION_MIN_B, type ExportAssets, type ExportLayoutStats, type ExportPanelSettings } from "./exportMap";
+import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -5347,6 +5348,10 @@ export default function MediaMap() {
   // place them IN THE IMAGE ONLY (the online map's layout is not touched).
   const downloadMoves = llab.applied.download.moves;
   const dlArrange = llab.downloadView && llab.applied.download.seed != null && layoutMode === "map" && !gameActive && !mobileView;
+  // Layout lab → Download: the desktop map previews the downloaded image — framed
+  // as the image frames it, its names at the image's sizes, with the image's
+  // overlay drawn on top (see ExportPreviewOverlay).
+  const exportPreview = llab.downloadView && layoutMode === "map" && !gameActive && !mobileView;
   // The year Sanity's own data last set each planet's position / each sector's
   // well, as of the year `sn` is resolved at — for the positions and wells the
   // layout lab layers its edits over (see `mobilePinnedOf`, `inputsOf`). A lab
@@ -5885,16 +5890,33 @@ export default function MediaMap() {
     return () => ro.disconnect();
   }, []);
 
+  const exportMapScale = llab.active ? llab.applied.download.mapScale : DEFAULT_EXPORT_PANEL.mapScale;
+  const exportImageW = exportImageWidth(llab.active ? llab.applied.download : DEFAULT_EXPORT_PANEL);
+  const exportOffsetX = llab.active ? llab.applied.download.mapOffsetX : DEFAULT_EXPORT_PANEL.mapOffsetX;
   const view = useMemo(() => {
     // Both desktop and the mobile 4:5 view frame the whole canvas ("meet"), so
     // the 4:5 view shows the entire portrait frame (fits the measured region on
     // a phone; letterboxed in the wide desktop editor).
+    if (exportPreview && containerW > 0 && containerH > 0) {
+      // Previewing the image: the canvas is drawn exactly as the image draws it
+      // in the 16:9 frame inside the map area (centred; its own zoom and pan
+      // wait until the preview is off).
+      const f = exportPreviewFrame(containerW, containerH, exportImageW);
+      const pxPerUnit = (f.h * exportMapScale) / canvas.h;
+      const z = pxPerUnit / Math.min(containerW / canvas.w, containerH / canvas.h);
+      const w = canvas.w / z;
+      const h = canvas.h / z;
+      // Slid sideways: the view's centre moves the other way, by the same
+      // distance in slide units (the image's px per unit at this map size).
+      const slide = exportOffsetX / exportPxPerUnit(exportMapScale);
+      return { x: canvas.x + (canvas.w - w) / 2 - slide, y: canvas.y + (canvas.h - h) / 2, w, h };
+    }
     const w = canvas.w / zoom;
     const h = canvas.h / zoom;
     const cx = canvas.x + canvas.w / 2 + pan.x;
     const cy = canvas.y + canvas.h / 2 + pan.y;
     return { x: cx - w / 2, y: cy - h / 2, w, h };
-  }, [zoom, pan, canvas]);
+  }, [zoom, pan, canvas, exportPreview, exportMapScale, exportImageW, exportOffsetX, containerW, containerH]);
 
   // Linear mode and map mode use different viewBox geometry, so the
   // slide-units-per-pixel ratio (used to size labels, strokes, glows, etc. so
@@ -6719,6 +6741,21 @@ export default function MediaMap() {
   // worth this much or more (the map itself shows it for Large Cap only). Set in
   // the layout lab's Download tab.
   const exportValuationMinB = llab.active ? llab.applied.download.valuationMinB : EXPORT_VALUATION_MIN_B;
+  // The image's overlay settings (layout lab → Download), else the defaults.
+  const exportPanelCfg = useMemo<ExportPanelSettings>(
+    () =>
+      llab.active
+        ? {
+            legendGap: downloadCfg.legendGap,
+            headlineScale: downloadCfg.headlineScale,
+            headlineGap: downloadCfg.headlineGap,
+            mapScale: downloadCfg.mapScale,
+            imageWidth: downloadCfg.imageWidth,
+            mapOffsetX: downloadCfg.mapOffsetX,
+          }
+        : DEFAULT_EXPORT_PANEL,
+    [llab.active, downloadCfg],
+  );
   // Where the image's planets come from. With a fixed download arrangement
   // (desktop only — the image is the desktop map): the PRESENT year, solved in
   // the background with that seed, whatever is on screen. Otherwise: the
@@ -6758,8 +6795,8 @@ export default function MediaMap() {
         : nodes.map((n) => `${n.name}:${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.targetR)}`).join("|")) +
       `#${currentDate.year}-${currentDate.month}|${labelSizePx}|${exportType ? Object.values(exportType).join("/") : ""}|${exportValuationMinB}|${effectiveConnections.length}|${allSectors.filter((s) => enabled.has(s)).join(",")}` +
       // Style lab: any override change invalidates the cached PNG.
-      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}|${bgStops.join(",")}`,
-    [exportFixedSeed, yearSpecStampId, exportMoves, nodes, currentDate.year, currentDate.month, labelSizePx, exportType, exportValuationMinB, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state, bgStops],
+      `|${lab.hasOverrides ? JSON.stringify(lab.state) : ""}|${bgStops.join(",")}|${JSON.stringify(exportPanelCfg)}`,
+    [exportFixedSeed, yearSpecStampId, exportMoves, nodes, currentDate.year, currentDate.month, labelSizePx, exportType, exportValuationMinB, exportPanelCfg, effectiveConnections, allSectors, enabled, lab.hasOverrides, lab.state, bgStops],
   );
   const generateExportPng = useCallback(async (): Promise<Blob | null> => {
     // Let an in-flight render finish first, then re-check: it may have produced
@@ -6776,6 +6813,7 @@ export default function MediaMap() {
           labelSizePx,
           type: exportType,
           valuationMinB: exportValuationMinB,
+          panel: exportPanelCfg,
           bounds: physicsBounds,
           year: currentDate.year,
           month: currentDate.month,
@@ -6796,7 +6834,7 @@ export default function MediaMap() {
       });
     exportInFlightRef.current = run;
     return run;
-  }, [exportKey, getExportNodes, effectiveConnections, labelSizePx, exportType, exportValuationMinB, physicsBounds, currentDate.year, currentDate.month, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, sectorColorResolved]);
+  }, [exportKey, getExportNodes, effectiveConnections, labelSizePx, exportType, exportValuationMinB, exportPanelCfg, physicsBounds, currentDate.year, currentDate.month, allSectors, counts, lab.hasOverrides, labStyleFor, bgStops, sectorColorResolved]);
 
   // Layout lab → Download: how well the names fit this arrangement at this
   // cut-off — measured on the very nodes the image would be drawn from.
@@ -6897,11 +6935,42 @@ export default function MediaMap() {
       ? canvas.w / K.designWidth / naturalSlideUnitsPerPx
       : 1;
   const renderLabelPx = (n: PlanetNode) => {
+    // Previewing the image: its own name sizes (layout lab → Download).
+    if (exportPreview && exportType) return !n.isEntity && n.valuation_b >= exportType.thresholdB ? exportType.largePx : exportType.smallPx;
     const px = typePxOf(n.valuation_b, n.isEntity);
     const sized = KT ? Math.max(Math.min(llab.applied.minTypePx, px), px * typeScale) : px;
     return sized * labelScaleForZoom(zoom, KT?.zoomTypeGrowth, KT?.zoomTypeMax);
   };
-  const labelStrokePxEff = KT ? KT.labelStrokePx * Math.max(typeScale, 0.5) : undefined;
+  const labelStrokePxEff = exportPreview && exportType ? exportType.strokePx : KT ? KT.labelStrokePx * Math.max(typeScale, 0.5) : undefined;
+  // Which names carry a market cap: the image's rule while previewing it.
+  const showValuationFor = (n: PlanetNode) =>
+    exportPreview ? exportShowsValuation(n, exportValuationMinB) : zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap";
+  // The image's overlay, drawn over the map while previewing (its artwork is
+  // loaded once, on first use).
+  const [exportAssets, setExportAssets] = useState<ExportAssets | null>(null);
+  useEffect(() => {
+    if (!exportPreview || exportAssets) return;
+    let on = true;
+    void loadExportAssets().then((a) => {
+      if (on) setExportAssets(a);
+    });
+    return () => {
+      on = false;
+    };
+  }, [exportPreview, exportAssets]);
+  const exportPreviewMarkup = useMemo(() => {
+    if (!exportPreview) return null;
+    return buildExportPanelMarkup({
+      year: currentDate.year,
+      month: currentDate.month,
+      sectors: allSectors,
+      counts,
+      assets: exportAssets ?? { logoUri: null, qrUri: null, mapQrUri: null },
+      legendNamePx: exportLegendNamePx(exportType ? exportType.smallPx : Math.max(1, labelSizePx - EXPORT_LABEL_SIZE_DELTA), exportPanelCfg.mapScale),
+      settings: exportPanelCfg,
+      sectorColorOverride: sectorColorResolved,
+    });
+  }, [exportPreview, currentDate.year, currentDate.month, allSectors, counts, exportAssets, exportType, labelSizePx, exportPanelCfg, sectorColorResolved]);
   const nameThresholdEff = KT ? KT.nameThreshold : mobileView ? activeSettings.nameThreshold : 0;
   // Name declutter (layout lab "Name breathing room"): hand names out largest
   // planet first, skipping any whose box would come within `nameSpacing` px of
@@ -7551,9 +7620,12 @@ export default function MediaMap() {
                   : placed
                     ? { ...n, x: placed.x, y: placed.y }
                     : n;
-              const renderNode = lab.hasOverrides
+              const styled = lab.hasOverrides
                 ? { ...dragNode, style: labStyleFor(n.name, n.sector, n.style) }
                 : dragNode;
+              // Previewing the image: no pin cues (every planet of a fixed
+              // arrangement is pinned), so it looks as the image will.
+              const renderNode = exportPreview && styled.pinned ? { ...styled, pinned: false } : styled;
               // Game mode: a parked planet is a transparent disc with a 1px
               // sector-coloured outline; when it launches it cross-fades back
               // to its normal look (two stacked renders, opacity-tweened).
@@ -7572,7 +7644,7 @@ export default function MediaMap() {
                         dimmed={false}
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
-                        showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        showValuation={showValuationFor(n)}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7587,7 +7659,7 @@ export default function MediaMap() {
                         dimmed={false}
                         labelSizePx={renderLabelPx(n)}
                         labelStrokePx={labelStrokePxEff}
-                        showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                        showValuation={showValuationFor(n)}
                         labelSuppressed={nameHidden(n, mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap")}
                         labelMinScreenDiameter={nameFloor}
                       />
@@ -7645,7 +7717,7 @@ export default function MediaMap() {
                       (connectMode && connectFrom === n.name))
                   }
                   onPlanetMouseDown={(isEditMode || mobileEdit || arrange || dlArrange) && !connectMode ? onPlanetDragStart : undefined}
-                  showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                  showValuation={showValuationFor(n)}
                   // Mobile view: show names by on-screen size (tunable threshold).
                   // Desktop: only Large Cap until zoomed in.
                   labelSuppressed={nameHidden(
@@ -7683,7 +7755,7 @@ export default function MediaMap() {
                     highlighted={searchMatches !== null && searchMatches.has(n.name)}
                     labelSizePx={renderLabelPx(n)}
                     labelStrokePx={labelStrokePxEff}
-                    showValuation={zoom >= VALUATION_ZOOM_THRESHOLD || n.sector === "Large Cap"}
+                    showValuation={showValuationFor(n)}
                     labelSuppressed={nameHidden(
                       n,
                       mobileView ? false : isMobile && zoom < MOBILE_LABEL_ZOOM_THRESHOLD && n.sector !== "Large Cap",
@@ -7848,6 +7920,9 @@ export default function MediaMap() {
                 );
               })}
           </svg>
+          {exportPreview && exportPreviewMarkup && (
+            <ExportPreviewOverlay containerW={containerW} containerH={containerH} imageW={exportImageW} markup={exportPreviewMarkup} />
+          )}
         </div>
         </div>
 

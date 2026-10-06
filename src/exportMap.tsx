@@ -1,6 +1,7 @@
 // Static PNG export of the present-year map (3840×2160, 16:9): the full
-// canonical desktop canvas right-aligned into the frame, a left info panel that
-// mirrors the site's side panel, and the Substack QR.
+// canonical desktop canvas across the whole frame, an info column at the left
+// drawn over it (headline, counts, sector legend), the Substack QR + logo and a
+// note bottom-left, and a QR to the map bottom-right.
 //
 // The export does NOT re-run physics. It starts from the live, settled layout
 // (the composition the map is tuned to) and runs a deterministic geometry pass
@@ -15,9 +16,10 @@ import type { ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { formatValuation, type Bounds, type PlanetNode } from "@media-map/map-core";
-import { flatStyleForSector, hueForSector } from "./sectors";
+import { CANVAS_DESKTOP, flatStyleForSector, hueForSector } from "./sectors";
 import {
   EXPORT_H,
+  EXPORT_MAP_SCALE_PANEL,
   EXPORT_PANEL_W,
   EXPORT_SLIDE_UNITS_PER_PX,
   EXPORT_W,
@@ -464,9 +466,8 @@ async function fetchDataUri(url: string): Promise<string | null> {
 
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Left info panel (matches the site side panel's type styles) + the QR. */
-// The side panel's navy. The QR codes' backgrounds use it too, so the one on the
-// panel has no visible square and the one over the map matches it.
+// The info column's navy (also behind the QR codes, so their squares vanish
+// into the bottom-left mark and match each other).
 const EXPORT_PANEL_BG = "#05060f";
 
 /**
@@ -493,121 +494,178 @@ async function fetchQrDataUri(url: string): Promise<string | null> {
   }
 }
 
+/** The image's artwork (logo + the two QR codes) as data URIs; null where a file is missing. */
+export type ExportAssets = { logoUri: string | null; qrUri: string | null; mapQrUri: string | null };
+export async function loadExportAssets(): Promise<ExportAssets> {
+  const [logoUri, qrUri, mapQrUri] = await Promise.all([
+    fetchDataUri("/Evan-logo-new.png"),
+    fetchQrDataUri("/Eshap_QR.svg"),
+    fetchQrDataUri("/Map_Eshap_TV_QR.svg"),
+  ]);
+  return { logoUri, qrUri, mapQrUri };
+}
+
 // Month abbreviations for the headline ("OCT. 2026"); May is not abbreviated.
 const HEADLINE_MONTHS = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
-// The note under the map (bottom-left of the map area).
+// The note beside the logo (bottom-left).
 const EXPORT_SCALE_NOTE = ["Objects are to scale based on market cap", "except PSM: based on 2024/2025 revenue"];
 const EXPORT_MAP_URL_LABEL = "Map.Eshap.TV";
 
-function buildPanelMarkup(
-  year: number,
-  month: number | null,
-  sectors: string[],
-  counts: Record<string, number>,
-  logoUri: string | null,
-  /** Substack QR (bottom-left, beside the logo). */
-  qrUri: string | null,
-  /** QR to the map itself (bottom-right, over the map). */
-  mapQrUri: string | null,
-  sectorColorOverride?: (sector: string) => string | null,
-): string {
-  const W = EXPORT_W, H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
+/** The parts of the image's overlay the layout lab's Download tab can adjust. */
+export type ExportPanelSettings = {
+  /** Space between the legend's rows, image px. */
+  legendGap: number;
+  /** Headline size, as a multiple of its base size. */
+  headlineScale: number;
+  /** Space between the headline and the "N Sectors" line, image px. */
+  headlineGap: number;
+  /** How big the map is drawn (EXPORT_MAP_SCALE_PANEL = as it always was … 1 = fits the height … EXPORT_MAP_SCALE_FILL = fills the width). */
+  mapScale: number;
+  /** The image's width, px (EXPORT_W at most; the height stays EXPORT_H). Narrower crops the map's sides equally. */
+  imageWidth: number;
+  /** Slides the map sideways in the image, px (+ = right). */
+  mapOffsetX: number;
+};
+export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
+  legendGap: 14,
+  headlineScale: 1,
+  headlineGap: 68,
+  mapScale: EXPORT_MAP_SCALE_PANEL,
+  imageWidth: EXPORT_W,
+  mapOffsetX: 0,
+};
+/** The narrowest the image can be cropped to, px. */
+export const EXPORT_MIN_IMAGE_W = 2000;
+export const exportImageWidth = (s: Pick<ExportPanelSettings, "imageWidth">) =>
+  Math.round(Math.max(EXPORT_MIN_IMAGE_W, Math.min(EXPORT_W, s.imageWidth)));
+const EXPORT_HEADLINE_BASE_PX = 58;
+
+export type ExportPanelInput = {
+  year: number;
+  month: number | null;
+  sectors: string[];
+  counts: Record<string, number>;
+  assets: ExportAssets;
+  /** Size of the legend's sector names, image px — set to the small planets' numbers. */
+  legendNamePx: number;
+  settings: ExportPanelSettings;
+  sectorColorOverride?: (sector: string) => string | null;
+};
+
+/**
+ * The overlay drawn over the map (as SVG markup, in image px): the headline,
+ * counts and sector legend down the left; the Substack QR, logo and scale note
+ * bottom-left; the QR to the map bottom-right. No panel background — the map
+ * runs underneath. Also drawn live over the map by the lab's Download tab.
+ */
+export function buildExportPanelMarkup(input: ExportPanelInput): string {
+  const { year, month, sectors, counts, assets, legendNamePx, settings, sectorColorOverride } = input;
+  const W = exportImageWidth(settings), H = EXPORT_H, PANEL_W = EXPORT_PANEL_W;
   const FONT = LABEL_FONT_FAMILY;
   const PAD = 56;
   const sectorTotal = sectors.length;
   const companyTotal = Object.values(counts).reduce((a, b) => a + b, 0);
   const parts: string[] = [];
-  parts.push(`<rect x="0" y="0" width="${PANEL_W}" height="${H}" fill="${EXPORT_PANEL_BG}"/>`);
 
   // Headline: MEDIA / UNIVERSE / {MON. year} (uppercase, Demi 600, -1% tracking,
   // 90% lh). The month is the map's current one, so it rolls over on its own.
-  const hlSize = 58;
+  const hlSize = EXPORT_HEADLINE_BASE_PX * settings.headlineScale;
   const hlLH = hlSize * 0.9;
   const monthLabel = month && month >= 1 && month <= 12 ? `${HEADLINE_MONTHS[month - 1]} ` : "";
   const hlLines = ["MEDIA", "UNIVERSE", `${monthLabel}${year}`];
   let cy = PAD + hlSize;
   parts.push(
-    `<text font-family='${FONT}' font-weight="600" font-size="${hlSize}" fill="#fff" letter-spacing="${(-0.01 * hlSize).toFixed(2)}" style="text-transform:uppercase">` +
-      hlLines.map((l, i) => `<tspan x="${PAD}" y="${cy + i * hlLH}">${esc(l)}</tspan>`).join("") +
+    `<text font-family='${FONT}' font-weight="600" font-size="${hlSize.toFixed(1)}" fill="#fff" letter-spacing="${(-0.01 * hlSize).toFixed(2)}" style="text-transform:uppercase">` +
+      hlLines.map((l, i) => `<tspan x="${PAD}" y="${(cy + i * hlLH).toFixed(1)}">${esc(l)}</tspan>`).join("") +
       `</text>`,
   );
-  cy += (hlLines.length - 1) * hlLH + 68;
+  cy += (hlLines.length - 1) * hlLH + settings.headlineGap;
 
-  // Counts.
+  // Counts: "N Sectors" (Medium, white), "N Companies" (Book, dimmer, smaller).
   const cSize = 26;
-  parts.push(`<text x="${PAD}" y="${cy}" font-family='${FONT}' font-weight="500" font-size="${cSize}" fill="#fff">${sectorTotal} Sectors</text>`);
-  cy += 34;
-  parts.push(`<text x="${PAD}" y="${cy}" font-family='${FONT}' font-weight="400" font-size="${cSize}" fill="rgba(255,255,255,0.6)">${companyTotal} Companies</text>`);
-  cy += 62;
+  const c2Size = 20;
+  parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="500" font-size="${cSize}" fill="#fff">${sectorTotal} Sectors</text>`);
+  cy += c2Size + 8;
+  parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
+  cy += 52;
 
-  // Legend — one subtle rounded container per sector (matches the sidebar rows),
-  // with vertical padding for breathing room. Contents: swatch + name + count.
-  const logoReserve = 150;
-  const rowGap = 10;
-  const availH = H - cy - PAD - logoReserve;
-  const containerH = Math.min(66, (availH - (sectorTotal - 1) * rowGap) / Math.max(1, sectorTotal));
-  const nameSize = 24;
-  const swSize = Math.min(28, containerH - 22);
-  const innerPadX = 18;
-  const rowW = PANEL_W - PAD * 2;
+  // Legend: swatch + name per sector, set at the small planets' number size,
+  // `legendGap` apart. (No containers, no counts.)
+  const nameSize = legendNamePx;
+  const swSize = Math.max(10, Math.round(nameSize * 0.72));
+  const rowH = nameSize;
   let rowTop = cy;
-  for (const s of sectors) {
-    const flat = flatStyleForSector(s);
-    const primary = sectorColorOverride?.(s) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(s)}, 70%, 55%)`;
+  for (const sector of sectors) {
+    const flat = flatStyleForSector(sector);
+    const primary = sectorColorOverride?.(sector) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
     const stroke = flat?.stroke && flat.stroke !== "transparent" ? flat.stroke : null;
-    const midY = rowTop + containerH / 2;
-    const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical center
+    const midY = rowTop + rowH / 2;
+    const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical centre
     const swY = (midY - swSize / 2).toFixed(1);
-    parts.push(`<rect x="${PAD}" y="${rowTop.toFixed(1)}" width="${rowW}" height="${containerH.toFixed(1)}" rx="8" fill="rgba(255,255,255,0.05)"/>`);
-    parts.push(`<rect x="${PAD + innerPadX}" y="${swY}" width="${swSize}" height="${swSize}" rx="5" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
-    parts.push(`<text x="${PAD + innerPadX + swSize + 14}" y="${textY}" font-family='${FONT}' font-weight="500" font-size="${nameSize}" fill="#fff">${esc(s)}</text>`);
-    parts.push(`<text x="${PANEL_W - PAD - innerPadX}" y="${textY}" text-anchor="end" font-family='${FONT}' font-weight="400" font-size="${nameSize}" fill="rgba(255,255,255,0.55)">${counts[s] ?? 0}</text>`);
-    rowTop += containerH + rowGap;
+    parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${Math.max(2, Math.round(swSize / 5))}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
+    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="500" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
+    rowTop += rowH + settings.legendGap;
   }
 
-  // Bottom-left of the panel: the Substack QR, then the Eshap logo, one height.
-  // (QR files are recoloured white-on-dark by fetchQrDataUri.)
+  // Bottom-left: the Substack QR, then the Eshap logo, one height, then the
+  // scale note beside the logo. (QR files are recoloured white-on-dark by
+  // fetchQrDataUri.)
   const markH = 92;
   const markTop = H - PAD - markH;
   let markX = PAD;
-  if (qrUri) {
-    parts.push(`<image x="${markX}" y="${markTop}" width="${markH}" height="${markH}" href="${qrUri}" xlink:href="${qrUri}"/>`);
+  if (assets.qrUri) {
+    parts.push(`<image x="${markX}" y="${markTop}" width="${markH}" height="${markH}" href="${assets.qrUri}" xlink:href="${assets.qrUri}"/>`);
     markX += markH + 28;
   }
-  if (logoUri) {
+  if (assets.logoUri) {
     const logoW = Math.round(markH * (2625 / 933)); // the logo file's proportions
-    parts.push(`<image x="${markX}" y="${markTop}" width="${logoW}" height="${markH}" preserveAspectRatio="xMinYMid meet" href="${logoUri}" xlink:href="${logoUri}"/>`);
+    parts.push(`<image x="${markX}" y="${markTop}" width="${logoW}" height="${markH}" preserveAspectRatio="xMinYMid meet" href="${assets.logoUri}" xlink:href="${assets.logoUri}"/>`);
+    markX += logoW + 36;
+  } else {
+    markX = Math.max(markX, PANEL_W + PAD);
   }
-
-  // Over the map, in the "182 Companies" style (26px, Book, 60% white):
+  // In the "N Companies" style (Book, 60% white):
   const noteStyle = `font-family='${FONT}' font-weight="400" font-size="${cSize}" fill="rgba(255,255,255,0.6)"`;
-  const over: string[] = [];
-  //  - bottom-left of the map area: the scale note, centred on the logo's height;
   const noteLH = 34;
   const noteMid = markTop + markH / 2;
   const noteTop = noteMid - ((EXPORT_SCALE_NOTE.length - 1) * noteLH) / 2 + cSize * 0.34;
-  over.push(
+  parts.push(
     `<text ${noteStyle}>` +
-      EXPORT_SCALE_NOTE.map((l, i) => `<tspan x="${PANEL_W + PAD}" y="${(noteTop + i * noteLH).toFixed(1)}">${esc(l)}</tspan>`).join("") +
+      EXPORT_SCALE_NOTE.map((l, i) => `<tspan x="${markX}" y="${(noteTop + i * noteLH).toFixed(1)}">${esc(l)}</tspan>`).join("") +
       `</text>`,
   );
-  //  - bottom-right: the QR to the map, with its address underneath.
+  // Bottom-right: the QR to the map, with its address underneath.
   const qrSize = 172;
   const qrMargin = 72;
-  if (mapQrUri) {
+  if (assets.mapQrUri) {
     const qrX = W - qrSize - qrMargin;
     const captionY = H - PAD;
     const qrY = captionY - cSize - 10 - qrSize;
-    over.push(`<image x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" href="${mapQrUri}" xlink:href="${mapQrUri}"/>`);
-    over.push(`<text ${noteStyle} x="${qrX + qrSize / 2}" y="${captionY}" text-anchor="middle">${esc(EXPORT_MAP_URL_LABEL)}</text>`);
+    parts.push(`<image x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" href="${assets.mapQrUri}" xlink:href="${assets.mapQrUri}"/>`);
+    parts.push(`<text ${noteStyle} x="${qrX + qrSize / 2}" y="${captionY}" text-anchor="middle">${esc(EXPORT_MAP_URL_LABEL)}</text>`);
   }
-  return `<g>${parts.join("")}</g>${over.join("")}`;
+  return `<g>${parts.join("")}</g>`;
+}
+
+/** Image px per slide unit at a map scale (see EXPORT_MAP_SCALE_FILL). */
+export const exportPxPerUnit = (mapScale: number) => (EXPORT_H * mapScale) / CANVAS_DESKTOP.h;
+
+/** The lab's live preview: the image's frame inside the map area — as large as fits, centred. */
+export function exportPreviewFrame(containerW: number, containerH: number, imageW: number = EXPORT_W) {
+  const w = Math.min(containerW, (containerH * imageW) / EXPORT_H);
+  const h = (w * EXPORT_H) / imageW;
+  return { left: (containerW - w) / 2, top: (containerH - h) / 2, w, h };
+}
+
+/** The legend's name size for a map drawn at `mapScale`: the small planets' numbers, in image px. */
+export function exportLegendNamePx(smallLabelPx: number, mapScale: number): number {
+  return smallLabelPx * EXPORT_SLIDE_UNITS_PER_PX * exportPxPerUnit(mapScale);
 }
 
 /** Rasterize the composite SVG over the site's background gradient → PNG blob. */
-function rasterize(rootSvg: string, bgStops?: [string, string, string]): Promise<Blob | null> {
+function rasterize(rootSvg: string, W: number, bgStops?: [string, string, string]): Promise<Blob | null> {
   return new Promise((resolve) => {
-    const W = EXPORT_W, H = EXPORT_H;
+    const H = EXPORT_H;
     const svgUrl = URL.createObjectURL(new Blob([rootSvg], { type: "image/svg+xml;charset=utf-8" }));
     const img = new Image();
     img.onload = () => {
@@ -661,6 +719,8 @@ export type ExportInput = {
   /** Style-lab overrides (branch experiment): background stops + sector colours. */
   bgStops?: [string, string, string];
   sectorColorOverride?: (sector: string) => string | null;
+  /** The overlay's adjustable parts (layout lab → Download); defaults otherwise. */
+  panel?: ExportPanelSettings | null;
 };
 
 /** Name size per node: the map's large / small split, or one shrunk size without the type rules. */
@@ -746,19 +806,28 @@ export async function buildExportPng(input: ExportInput): Promise<Blob | null> {
       labelPx={labelPx}
       labelStrokePx={type?.strokePx ?? DEFAULT_LABEL_STROKE_PX}
       showValuation={(n) => exportShowsValuation(n, valuationMinB)}
+      mapScale={(input.panel ?? DEFAULT_EXPORT_PANEL).mapScale}
+      imageW={exportImageWidth(input.panel ?? DEFAULT_EXPORT_PANEL)}
+      offsetX={(input.panel ?? DEFAULT_EXPORT_PANEL).mapOffsetX}
     />,
   );
-  const [fontCss, logoUri, qrUri, mapQrUri] = await Promise.all([
-    buildMapFontCss(),
-    fetchDataUri("/Evan-logo-new.png"),
-    fetchQrDataUri("/Eshap_QR.svg"),
-    fetchQrDataUri("/Map_Eshap_TV_QR.svg"),
-  ]);
-  const panel = buildPanelMarkup(input.year, input.month ?? null, input.sectors, input.counts, logoUri, qrUri, mapQrUri, input.sectorColorOverride);
+  const [fontCss, assets] = await Promise.all([buildMapFontCss(), loadExportAssets()]);
+  const panelSettings = input.panel ?? DEFAULT_EXPORT_PANEL;
+  const panel = buildExportPanelMarkup({
+    year: input.year,
+    month: input.month ?? null,
+    sectors: input.sectors,
+    counts: input.counts,
+    assets,
+    legendNamePx: exportLegendNamePx(type ? type.smallPx : Math.max(1, input.labelSizePx - EXPORT_LABEL_SIZE_DELTA), panelSettings.mapScale),
+    settings: panelSettings,
+    sectorColorOverride: input.sectorColorOverride,
+  });
+  const imageW = exportImageWidth(panelSettings);
   const root =
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${EXPORT_W}" height="${EXPORT_H}" viewBox="0 0 ${EXPORT_W} ${EXPORT_H}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${imageW}" height="${EXPORT_H}" viewBox="0 0 ${imageW} ${EXPORT_H}">` +
     `<style>${fontCss}</style>${mapMarkup}${panel}</svg>`;
-  return rasterize(root, input.bgStops);
+  return rasterize(root, imageW, input.bgStops);
 }
 
 /** Trigger a browser download of a prepared PNG blob. */
