@@ -1171,13 +1171,29 @@ function PlanetDetailPanel({
   const open = node !== null;
   const valuation = node?.valuation_b ?? 0;
   const mobile = mobileHeight !== null;
+  const nodeName = node?.name ?? null;
+
+  // Keyboard: focus moves to the ✕ when a company opens, Escape closes, and
+  // focus goes back to where it was (the map, or the List row) on close.
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const from = document.activeElement as HTMLElement | null;
+    if (from && !closeBtnRef.current?.contains(from)) returnFocusRef.current = from;
+    const id = requestAnimationFrame(() => closeBtnRef.current?.focus({ preventScroll: true }));
+    return () => {
+      cancelAnimationFrame(id);
+      const back = returnFocusRef.current;
+      if (back && back.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [open, nodeName]);
 
   // Phone: the panel is cropped, so it shows its own scroll bar (phones only
   // flash theirs while scrolling, and can't be styled) — the light blue of the
   // other scroll bars. `thumb` is its top and height, px, within the track.
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [thumb, setThumb] = useState<{ top: number; h: number } | null>(null);
-  const nodeName = node?.name ?? null;
   useEffect(() => {
     const el = scrollerRef.current;
     if (!mobile || !el) return;
@@ -1209,6 +1225,14 @@ function PlanetDetailPanel({
   return (
     <aside
       aria-hidden={!open}
+      role="region"
+      aria-label={node ? `${usdFlag(node.name).display} details` : "Company details"}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       data-detail-panel=""
       style={{
         position: "fixed",
@@ -1267,6 +1291,7 @@ function PlanetDetailPanel({
         >
          <div>
           <button
+            ref={closeBtnRef}
             onClick={onClose}
             aria-label="Close detail panel"
             style={{
@@ -3369,6 +3394,7 @@ function CompanyListView({
   focusRow,
   sectorColorOverride,
   bgStops,
+  onSelect,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -3377,6 +3403,8 @@ function CompanyListView({
   isMobile: boolean;
   /** A search pick: scroll this row into view and flash it (token re-fires). */
   focusRow: { name: string; token: number } | null;
+  /** A row was chosen (click, Enter or Space): open that company's details. */
+  onSelect: (name: string) => void;
   sectorColorOverride?: (s: string) => string | null;
   /** The live background gradient stops, sampled for the frozen column. */
   bgStops: [string, string, string];
@@ -3574,6 +3602,21 @@ function CompanyListView({
             <tr
               key={r.name}
               data-name={r.name}
+              // A row is a button: it opens the company's details. Reachable by
+              // keyboard (Tab, then Enter or Space) — the accessible way to every
+              // company, since the map's planets are not focusable one by one.
+              role="button"
+              tabIndex={0}
+              aria-label={`${usdFlag(r.name).display}, ${r.sector}, ${formatValuation(r.valuation)}`}
+              onClick={() => onSelect(r.name)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(r.name);
+                }
+              }}
+              onFocus={() => setHoveredRow(r.name)}
+              onBlur={() => setHoveredRow(prev => (prev === r.name ? null : prev))}
               onMouseEnter={() => setHoveredRow(r.name)}
               onMouseLeave={() => setHoveredRow(prev => (prev === r.name ? null : prev))}
               style={{
@@ -7324,6 +7367,79 @@ export default function MediaMap() {
     else window.history.pushState(null, "", url);
   }, [currentRoute]);
 
+  // ---- Keyboard access to the map ----
+  // The map area is one Tab stop. With it focused, the arrow keys move a focus
+  // ring from planet to planet (the nearest one in that direction), Home / End
+  // go to the biggest / smallest, Enter opens the company's details, Escape
+  // closes them and zooms out. Each move is announced through a live region.
+  // The planets themselves stay out of the accessibility tree (180 SVG nodes
+  // would be noise); the List view is the table form of the same companies.
+  const [kbPlanet, setKbPlanet] = useState<string | null>(null);
+  const [mapHasFocus, setMapHasFocus] = useState(false);
+  const [a11yNote, setA11yNote] = useState("");
+  const kbNodes = useMemo(() => nodes.filter((n) => !n.isEntity && enabled.has(n.sector)), [nodes, enabled]);
+  const kbCurrent = kbPlanet ? kbNodes.find((n) => n.name === kbPlanet) ?? null : null;
+  const describe = (n: PlanetNode) => `${usdFlag(n.name).display}, ${n.sector}, ${formatValuation(n.valuation_b)}`;
+  // Bring a planet into the viewport (at the current zoom) if it is outside it.
+  const keepInView = (n: PlanetNode) => {
+    const pad = n.r + 40 * slideUnitsPerPx;
+    const inside = n.x - pad >= view.x && n.x + pad <= view.x + view.w && n.y - pad >= view.y && n.y + pad <= view.y + view.h;
+    if (inside || layoutMode === "linear") return;
+    animateView(zoom, { x: n.x - (canvas.x + canvas.w / 2), y: n.y - (canvas.y + canvas.h / 2) }, 350);
+  };
+  const moveKbFocus = (n: PlanetNode) => {
+    setKbPlanet(n.name);
+    setA11yNote(describe(n));
+    keepInView(n);
+  };
+  const onMapKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || game.active || timelineOpen || kbNodes.length === 0) return;
+    const dirs: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+    if (e.key in dirs) {
+      e.preventDefault();
+      const [dx, dy] = dirs[e.key];
+      // No planet yet: start from the one nearest the middle of the view.
+      const from = kbCurrent ?? { x: view.x + view.w / 2, y: view.y + view.h / 2, name: "" };
+      let best: PlanetNode | null = null, bestScore = Infinity;
+      for (const n of kbNodes) {
+        if (n.name === from.name) continue;
+        const ox = n.x - from.x, oy = n.y - from.y;
+        const along = ox * dx + oy * dy; // progress in the key's direction
+        if (along <= 0) continue;
+        const across = Math.abs(ox * dy - oy * dx); // sideways drift
+        if (kbCurrent && across > along * 1.5) continue; // stay within a cone
+        const score = along + across * 0.6;
+        if (score < bestScore) { best = n; bestScore = score; }
+      }
+      if (best) moveKbFocus(best);
+      return;
+    }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      const sorted = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b);
+      moveKbFocus(e.key === "Home" ? sorted[0] : sorted[sorted.length - 1]);
+      return;
+    }
+    if ((e.key === "Enter" || e.key === " ") && kbCurrent) {
+      e.preventDefault();
+      travelToNode(kbCurrent, true);
+      setInspectedPlanet(kbCurrent.name);
+      setA11yNote(`Opened details for ${usdFlag(kbCurrent.name).display}`);
+      return;
+    }
+    if (e.key === "Escape") {
+      if (inspectedPlanet || zoom > MIN_ZOOM + 0.01) {
+        e.preventDefault();
+        setInspectedPlanet(null);
+        if (layoutMode !== "linear") resetView();
+        setA11yNote("Closed details");
+      }
+    }
+  };
+  // The ring follows the planet only while the map has keyboard focus.
+  const kbRingNode = mapHasFocus && kbCurrent ? (dragState && dragState.name === kbCurrent.name ? { ...kbCurrent, x: dragState.x, y: dragState.y } : kbCurrent) : null;
+  const a11ySummary = `${kbNodes.length} media companies in ${allSectors.filter((s) => enabled.has(s)).length} sectors, drawn as planets sized by market cap. Use the arrow keys to move between companies, Enter to open a company's details, Escape to close them. The List view shows the same companies as a table.`;
+
   const layoutLabPanel = llab.enabled ? (
     <LayoutLabPanel
       lab={llab}
@@ -7484,10 +7600,19 @@ export default function MediaMap() {
         >
         <div
           ref={containerRef}
+          tabIndex={0}
+          role="application"
+          aria-label="Media universe map"
+          aria-describedby="mm-map-help"
+          onKeyDown={onMapKeyDown}
+          onFocus={(e) => { if (e.target === e.currentTarget) setMapHasFocus(true); }}
+          onBlur={(e) => { if (e.target === e.currentTarget) setMapHasFocus(false); }}
           style={{
             width: "100%",
             height: "100%",
             position: "relative",
+            // The focus ring is drawn around the focused planet instead.
+            outline: "none",
             overflowX: layoutMode === "linear" ? "auto" : "hidden",
             overflowY: "hidden",
             cursor: layoutMode === "linear" ? "default" : "grab",
@@ -7522,8 +7647,11 @@ export default function MediaMap() {
             }
           }}
         >
+          <p id="mm-map-help" className="sr-only">{a11ySummary}</p>
+          <div className="sr-only" aria-live="polite" aria-atomic="true">{a11yNote}</div>
           <svg
             ref={mapSvgRef}
+            aria-hidden="true"
             width={
               layoutMode === "linear" && containerH > 0
                 ? Math.max(containerW, (linearStripSlideWidth / canvas.h) * containerH * zoom)
@@ -8000,6 +8128,18 @@ export default function MediaMap() {
                   </g>
                 );
               })}
+            {/* Keyboard focus ring around the planet the arrow keys are on. */}
+            {kbRingNode && (
+              <circle
+                cx={kbRingNode.x}
+                cy={kbRingNode.y}
+                r={kbRingNode.r + 6 * slideUnitsPerPx}
+                fill="none"
+                stroke="#8196fe"
+                strokeWidth={3 * slideUnitsPerPx}
+                pointerEvents="none"
+              />
+            )}
           </svg>
           {exportPreview && exportPreviewMarkup && (
             <ExportPreviewOverlay containerW={containerW} containerH={containerH} imageW={exportImageW} markup={exportPreviewMarkup} />
@@ -8020,6 +8160,10 @@ export default function MediaMap() {
           active={viewMode === "list" && !timelineOpen}
           isMobile={isMobile}
           focusRow={listFocus}
+          onSelect={(name) => {
+            setInspectedPlanet(name);
+            setA11yNote(`Opened details for ${usdFlag(name).display}`);
+          }}
         />
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
@@ -8136,6 +8280,8 @@ export default function MediaMap() {
                 grows over the space they leave. */}
             <div
               ref={tabsRef}
+              role="tablist"
+              aria-label="Views"
               aria-hidden={searchOpen}
               style={{
                 display: "flex",
@@ -8153,7 +8299,8 @@ export default function MediaMap() {
                 <button
                   key={mode}
                   onClick={() => selectView(mode)}
-                  aria-pressed={active}
+                  role="tab"
+                  aria-selected={active}
                   aria-label={mode}
                   title={isMobile ? mode.charAt(0).toUpperCase() + mode.slice(1) : undefined}
                   className="mm-hover"

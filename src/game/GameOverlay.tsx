@@ -91,7 +91,7 @@ export function GameOverlay({
         <div style={backdrop}>
           <div style={dimLayer} aria-hidden className={closing ? "mm-dim-out" : "mm-dim-in"} />
           <div style={scroller} className="mm-blue-scroll">
-          <div className={closing ? "mm-card-out" : "mm-card-in"} style={{ ...modalCard, width: 800 }}>
+          <div role="dialog" aria-modal="true" aria-label="Media Universe game" className={closing ? "mm-card-out" : "mm-card-in"} style={{ ...modalCard, width: 800 }}>
             <div
               style={{
                 fontSize: 64,
@@ -182,7 +182,7 @@ export function GameOverlay({
           <div style={backdrop}>
           <div style={dimLayer} aria-hidden className={closing ? "mm-dim-out" : "mm-dim-in"} />
           <div style={scroller} className="mm-blue-scroll">
-            <div className={closing ? "mm-card-out" : "mm-card-in"} style={{ ...modalCard, width: 800 }}>
+            <div role="dialog" aria-modal="true" aria-label="Media Universe game" className={closing ? "mm-card-out" : "mm-card-in"} style={{ ...modalCard, width: 800 }}>
               <div style={{ fontSize: 64, fontWeight: 600, lineHeight: 0.95, fontVariantNumeric: "tabular-nums" }}>
                 {formatValuation(hud.savedCap)}
               </div>

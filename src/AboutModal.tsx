@@ -365,6 +365,32 @@ export function AboutModal({
     onSectionChangeRef.current?.(downloadsIdx >= 0 && active === downloadsIdx ? "downloads" : "about");
   }, [open, active, downloadsIdx]);
 
+  // Keyboard: focus moves to the ✕ when the modal opens, stays inside it
+  // (Tab wraps), and goes back to where it was when it closes.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const id = requestAnimationFrame(() => closeBtnRef.current?.focus({ preventScroll: true }));
+    return () => {
+      cancelAnimationFrame(id);
+      const back = returnFocusRef.current;
+      if (back && back.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [open]);
+  const trapTab = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab" || !dialogRef.current) return;
+    const items = [...dialogRef.current.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter(
+      (el) => !el.hasAttribute("disabled") && el.getClientRects().length > 0,
+    );
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
   if (!open) return null;
 
   const scrollTo = (i: number) => {
@@ -379,6 +405,7 @@ export function AboutModal({
   // mobile, where the narrower title would otherwise run into it.
   const closeButton = (
     <button
+      ref={closeBtnRef}
       onClick={onClose}
       aria-label="Close"
       // Same hover and 0.5px hairline as the map's buttons (App.css).
@@ -466,6 +493,8 @@ export function AboutModal({
       role="dialog"
       aria-modal="true"
       aria-label="About the Media Universe"
+      ref={dialogRef}
+      onKeyDown={trapTab}
       onClick={onClose}
       style={{
         position: "fixed",
@@ -609,6 +638,8 @@ export function AboutModal({
           >
             <div
               ref={tabScrollRef}
+              role="tablist"
+              aria-label="About sections"
               className="about-tabs"
               onScroll={updateFade}
               style={{
@@ -639,6 +670,8 @@ export function AboutModal({
                   ref={(el) => {
                     tabRefs.current[i] = el;
                   }}
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => scrollTo(i)}
                   onMouseEnter={() => setHoveredTab(i)}
                   onMouseLeave={() => setHoveredTab(null)}
