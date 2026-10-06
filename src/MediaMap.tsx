@@ -3615,7 +3615,7 @@ function CompanyListView({
       tabIndex={-1}
       // Keyboard: the List is one Tab stop (its first row). The arrow keys and
       // Home / End move between rows; Tab leaves. Enter / Space opens the company.
-      onKeyDown={(e) => moveWithinGroup(e, "tr[role='button']")}
+      onKeyDown={(e) => moveWithinGroup(e, "tr[data-list-row]")}
       // Keyboard focus arriving from outside the list: say what the list is.
       onFocus={(e) => {
         const from = e.relatedTarget as Node | null;
@@ -3710,11 +3710,13 @@ function CompanyListView({
             <tr
               key={r.name}
               data-name={r.name}
-              // A row is a button: it opens the company's details. Reachable by
-              // keyboard (Tab, then Enter or Space) — the accessible way to every
-              // company, since the map's planets are not focusable one by one.
-              role="button"
+              // A row opens the company's details (click, Enter or Space). By
+              // keyboard the rows are the accessible way to every company, since
+              // the map's planets are not focusable one by one. A screen reader
+              // hears each cell with its column name, with a pause between them.
+              data-list-row=""
               tabIndex={active && i === 0 ? 0 : -1}
+              aria-label={`Company: ${usdFlag(r.name).display}. Sector: ${r.sector}. Valuation: ${formatValuation(r.valuation)}. All-time high: ${formatValuation(r.ath)} in ${formatDate(r.athDate)}. All-time low: ${formatValuation(r.atl)} in ${formatDate(r.atlDate)}.`}
               onClick={() => onSelect(r.name)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -7641,7 +7643,7 @@ export default function MediaMap() {
       return;
     }
     if (viewMode === "list") {
-      document.querySelector<HTMLElement>("tr[role='button'][tabindex='0']")?.focus({ preventScroll: true });
+      document.querySelector<HTMLElement>("tr[data-list-row][tabindex='0']")?.focus({ preventScroll: true });
       return;
     }
     containerRef.current?.focus({ preventScroll: true });
