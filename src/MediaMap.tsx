@@ -3264,7 +3264,7 @@ function Carousel({
         {/* "Explore this map" — loads the map at the focused year and closes
             the Time Machine. */}
         <button
-          aria-label="Explore the map at this view"
+          aria-label="Explore this map"
           onClick={explore}
           onMouseEnter={() => setExploreHover(true)}
           onMouseLeave={() => setExploreHover(false)}
