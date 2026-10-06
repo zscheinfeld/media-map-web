@@ -732,6 +732,8 @@ export function LayoutLabPanel({
                   ["mapScale", "Map size", EXPORT_MAP_SCALE_PANEL, EXPORT_MAP_SCALE_FILL, 0.001, (v: number) => (v >= EXPORT_MAP_SCALE_FILL - 0.002 ? "fills width" : v <= EXPORT_MAP_SCALE_PANEL + 0.002 ? "as before" : Math.abs(v - 1) < 0.002 ? "fits height" : `×${(v / EXPORT_MAP_SCALE_PANEL).toFixed(2)}`)],
                   ["imageWidth", "Image width", EXPORT_MIN_IMAGE_W, EXPORT_W, 10, (v: number) => `${Math.round(v)}px`],
                   ["mapOffsetX", "Slide map", -1200, 1200, 10, (v: number) => (v === 0 ? "centred" : `${v > 0 ? "→" : "←"} ${Math.abs(Math.round(v))}px`)],
+                  ["qrOffsetY", "Substack QR up / down", -200, 200, 1, (v: number) => (v === 0 ? "in line" : `${v > 0 ? "↓" : "↑"} ${Math.abs(Math.round(v))}px`)],
+                  ["markOffsetY", "Logo + QR up / down", -400, 400, 1, (v: number) => (v === 0 ? "default" : `${v > 0 ? "↓" : "↑"} ${Math.abs(Math.round(v))}px`)],
                 ] as const).map(([key, label, min, max, step, fmt]) => (
                   <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <span style={{ flex: 1, fontSize: 12 }}>{label}</span>

@@ -545,6 +545,10 @@ export type ExportPanelSettings = {
   legendScale: number;
   /** Space between the "N Companies" line and the first sector, image px (default: twice `legendGap`). */
   legendTop: number;
+  /** Moves the Substack QR up (−) or down (+) on its own, image px. */
+  qrOffsetY: number;
+  /** Moves the logo and the Substack QR together up (−) or down (+), image px. */
+  markOffsetY: number;
 };
 export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendGap: 14,
@@ -556,6 +560,8 @@ export const DEFAULT_EXPORT_PANEL: ExportPanelSettings = {
   legendMedium: false,
   legendScale: 1,
   legendTop: 28,
+  qrOffsetY: 0,
+  markOffsetY: 0,
 };
 /** The narrowest the image can be cropped to, px. */
 export const EXPORT_MIN_IMAGE_W = 2000;
@@ -653,13 +659,13 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   // scale note beside the logo. (QR files are recoloured white-on-dark by
   // fetchQrDataUri.)
   const markH = 92;
-  const markTop = H - PAD - markH;
+  const markTop = H - PAD - markH + settings.markOffsetY;
   let markX = PAD;
   if (assets.qrUri) {
     // As tall as the logo's letters (their cap height, not the whole mark),
-    // and lined up with them.
+    // and lined up with them — plus the QR's own nudge.
     const capH = markH * LOGO_CAP.height;
-    parts.push(qrImage(assets.qrUri, markX, markTop + markH * LOGO_CAP.top, capH, QR_QUIET_ZONE.substack));
+    parts.push(qrImage(assets.qrUri, markX, markTop + markH * LOGO_CAP.top + settings.qrOffsetY, capH, QR_QUIET_ZONE.substack));
     markX += capH + 28;
   }
   if (assets.logoUri) {
