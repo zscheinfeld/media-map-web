@@ -499,6 +499,9 @@ async function fetchQrDataUri(url: string): Promise<string | null> {
 // for — the box is enlarged and shifted by the margin — so a QR sits at the
 // same height as the logo beside it rather than a touch smaller.
 const QR_QUIET_ZONE = { substack: 0.0362, map: 0.0238 };
+// Where the logo file's letters sit within its height: ESHAP's cap height runs
+// from 10.9% to 95.7% of the box (the head reaches a little above and below).
+const LOGO_CAP = { top: 0.109, height: 0.848 };
 function qrImage(uri: string, x: number, y: number, size: number, quiet: number): string {
   const box = size / (1 - 2 * quiet);
   const off = box * quiet;
@@ -653,8 +656,11 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   const markTop = H - PAD - markH;
   let markX = PAD;
   if (assets.qrUri) {
-    parts.push(qrImage(assets.qrUri, markX, markTop, markH, QR_QUIET_ZONE.substack));
-    markX += markH + 28;
+    // As tall as the logo's letters (their cap height, not the whole mark),
+    // and lined up with them.
+    const capH = markH * LOGO_CAP.height;
+    parts.push(qrImage(assets.qrUri, markX, markTop + markH * LOGO_CAP.top, capH, QR_QUIET_ZONE.substack));
+    markX += capH + 28;
   }
   if (assets.logoUri) {
     const logoW = Math.round(markH * (2625 / 933)); // the logo file's proportions
