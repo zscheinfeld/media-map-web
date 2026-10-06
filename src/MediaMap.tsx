@@ -510,24 +510,22 @@ const pillBtn: React.CSSProperties = {
 
 /**
  * Keyboard movement inside a list that is one Tab stop from outside (the
- * sector checkboxes, the List view's rows): Tab / Shift+Tab and the arrow keys
- * move between its items, Home / End jump to the first / last, and Tab past
- * either end leaves the list to the browser.
+ * sector checkboxes, the List view's rows): the arrow keys move between its
+ * items and Home / End jump to the first / last. Tab leaves the list, as the
+ * convention has it.
  */
 function moveWithinGroup(e: React.KeyboardEvent<HTMLElement>, itemSelector: string) {
   const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(itemSelector));
   const i = items.indexOf(document.activeElement as HTMLElement);
   if (i < 0) return;
   let to: number | null = null;
-  if (e.key === "Tab" || e.key === "ArrowDown" || e.key === "ArrowUp") to = i + (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey) ? -1 : 1);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") to = Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowUp" ? -1 : 1)));
   else if (e.key === "Home") to = 0;
   else if (e.key === "End") to = items.length - 1;
   if (to === null) return;
-  const target = items[to];
-  if (!target) return; // past either end: the browser moves on
   e.preventDefault();
-  target.focus();
-  target.scrollIntoView({ block: "nearest" });
+  items[to].focus();
+  items[to].scrollIntoView({ block: "nearest" });
 }
 
 function SectorPanelContent({
@@ -625,8 +623,7 @@ function SectorPanelContent({
           it crosses between rows — so the map doesn't flicker. */}
       {/* Keyboard: the 17 checkboxes are not in the page's Tab order (a lap of
           the page would walk through every one). "Skip to sectors" lands on the
-          first; from there Tab / Shift+Tab and the arrow keys move between them,
-          and Tab after the last leaves the list. */}
+          first; the arrow keys and Home / End move between them; Tab leaves. */}
       <div
         id="mm-sectors"
         role="group"
@@ -3074,6 +3071,12 @@ function Carousel({
     onExplore(dates[settleTarget]);
   };
 
+  // Keyboard: the arrows are the first thing to focus when the Time Machine opens.
+  const prevBtnRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => prevBtnRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const canPrev = frontIdx > 0;
   const canNext = frontIdx < dates.length - 1;
   const stepBtn = (enabled: boolean): React.CSSProperties => ({
@@ -3204,6 +3207,7 @@ function Carousel({
       >
       <div className="tm-enter" style={{ display: "flex", alignItems: "center", gap: 12, ...introStyle(1, tuning.introUiMs) }}>
         <button
+          ref={prevBtnRef}
           aria-label="Previous year"
           className="tm-btn"
           onClick={() => canPrev && onSelect(dates[frontIdx - 1])}
@@ -3550,9 +3554,8 @@ function CompanyListView({
       // Never a Tab stop itself (Chrome makes a scroller focusable when nothing
       // inside it is); the rows are the stops.
       tabIndex={-1}
-      // Keyboard: the List is one Tab stop (its first row). Inside it, Tab /
-      // Shift+Tab and the arrow keys move between rows; Tab after the last
-      // row leaves the list. Enter / Space on a row opens the company.
+      // Keyboard: the List is one Tab stop (its first row). The arrow keys and
+      // Home / End move between rows; Tab leaves. Enter / Space opens the company.
       onKeyDown={(e) => moveWithinGroup(e, "tr[role='button']")}
       style={{
         position: "absolute",
@@ -7390,6 +7393,14 @@ export default function MediaMap() {
     routeLoadedRef.current = true;
     if (routePath(r) !== "/") applyRouteRef.current(r);
   }, [currentDate.year, nodes.length]);
+  // The Time Machine button gets focus back when the Time Machine closes.
+  const timelineWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (timelineWasOpenRef.current && !timelineOpen) {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>("button[aria-label='Open time machine']")?.focus({ preventScroll: true }));
+    }
+    timelineWasOpenRef.current = timelineOpen;
+  }, [timelineOpen]);
   // Back / forward.
   useEffect(() => {
     const onPop = () => applyRouteRef.current(parseRoute(window.location.pathname, currentDate.year));
@@ -8450,6 +8461,19 @@ export default function MediaMap() {
         {timelineOpen && (
           <div
             onWheel={onTimelineWheel}
+            role="region"
+            aria-label="Time Machine"
+            // ← → step a year (as the arrow buttons do); Escape closes.
+            onKeyDown={(e) => {
+              if (exploring) return;
+              if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                const d = dateRange[clampIdx(focusIdx + (e.key === "ArrowLeft" ? -1 : 1))];
+                if (d) { e.preventDefault(); setHoveredDate(null); focusOn(d); }
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setTimelineOpen(false);
+              }
+            }}
             style={{
               position: "absolute",
               inset: 0,
