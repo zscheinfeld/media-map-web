@@ -595,14 +595,32 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
   let rowTop = cy;
+  let rowIndex = 0;
   for (const sector of sectors) {
     const flat = flatStyleForSector(sector);
-    const primary = sectorColorOverride?.(sector) ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
+    const override = sectorColorOverride?.(sector) ?? null;
+    const primary = override ?? flat?.fill ?? flat?.stripes?.[0] ?? `hsl(${hueForSector(sector)}, 70%, 55%)`;
     const stroke = flat?.stroke && flat.stroke !== "transparent" ? flat.stroke : null;
     const midY = rowTop + rowH / 2;
     const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical centre
     const swY = (midY - swSize / 2).toFixed(1);
-    parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${Math.max(2, Math.round(swSize / 5))}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
+    const rx = Math.max(2, Math.round(swSize / 5));
+    // A sector whose key on the map is a colour sweep (Large Cap's rainbow)
+    // gets the same here, as a few vertical stripes sampled from it.
+    const bands = !override && flat?.swatchBackground ? gradientBands(flat.swatchBackground, LEGEND_SWATCH_STRIPES) : null;
+    if (bands) {
+      const id = `mm-export-swatch-${rowIndex}`;
+      const bw = swSize / bands.length;
+      parts.push(
+        `<defs><clipPath id="${id}"><rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${rx}"/></clipPath></defs>` +
+          `<g clip-path="url(#${id})">` +
+          bands.map((c, i) => `<rect x="${(PAD + i * bw).toFixed(2)}" y="${swY}" width="${(bw + 0.5).toFixed(2)}" height="${swSize}" fill="${c}"/>`).join("") +
+          `</g>`,
+      );
+    } else {
+      parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${rx}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
+    }
+    rowIndex++;
     parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="400" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
     rowTop += rowH + settings.legendGap;
   }
@@ -649,6 +667,15 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
 
 /** Image px per slide unit at a map scale (see EXPORT_MAP_SCALE_FILL). */
 export const exportPxPerUnit = (mapScale: number) => (EXPORT_H * mapScale) / CANVAS_DESKTOP.h;
+
+/** Stripes in the legend's swatch for a sector keyed by a colour sweep (see gradientBands). */
+const LEGEND_SWATCH_STRIPES = 4;
+/** `n` colours spread evenly along a CSS gradient's colour list (its hex stops, in order). */
+function gradientBands(gradient: string, n: number): string[] | null {
+  const stops = gradient.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
+  if (stops.length < 2) return null;
+  return Array.from({ length: n }, (_, i) => stops[Math.round((i * (stops.length - 1)) / Math.max(1, n - 1))]);
+}
 
 /** The lab's live preview: the image's frame inside the map area — as large as fits, centred. */
 export function exportPreviewFrame(containerW: number, containerH: number, imageW: number = EXPORT_W) {
