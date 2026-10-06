@@ -238,7 +238,7 @@ export function AboutModal({
   const sections = content.sections;
   const narrow = useIsNarrow();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [active, setActive] = useState(0);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -365,6 +365,32 @@ export function AboutModal({
     onSectionChangeRef.current?.(downloadsIdx >= 0 && active === downloadsIdx ? "downloads" : "about");
   }, [open, active, downloadsIdx]);
 
+  // Keyboard: focus moves to the ✕ when the modal opens, stays inside it
+  // (Tab wraps), and goes back to where it was when it closes.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const id = requestAnimationFrame(() => closeBtnRef.current?.focus({ preventScroll: true }));
+    return () => {
+      cancelAnimationFrame(id);
+      const back = returnFocusRef.current;
+      if (back && back.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [open]);
+  const trapTab = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab" || !dialogRef.current) return;
+    const items = [...dialogRef.current.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter(
+      (el) => !el.hasAttribute("disabled") && el.getClientRects().length > 0,
+    );
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
   if (!open) return null;
 
   const scrollTo = (i: number) => {
@@ -379,6 +405,7 @@ export function AboutModal({
   // mobile, where the narrower title would otherwise run into it.
   const closeButton = (
     <button
+      ref={closeBtnRef}
       onClick={onClose}
       aria-label="Close"
       // Same hover and 0.5px hairline as the map's buttons (App.css).
@@ -405,12 +432,16 @@ export function AboutModal({
   const onClickFor = (b: { action: "link" | "download" }) =>
     b.action === "download" ? onDownloadMap : undefined;
 
-  const renderBlock = (b: Block, key: number) => {
+  const renderBlock = (b: Block, key: number, sectionIdx?: number) => {
     switch (b.kind) {
       case "header":
         return (
-          <h2
+          <h3
             key={key}
+            // The first heading names its section (see the section's aria-labelledby)
+            // and takes focus when its tab is chosen by keyboard.
+            id={sectionIdx !== undefined && key === 0 ? `mm-about-h-${sectionIdx}` : undefined}
+            tabIndex={sectionIdx !== undefined && key === 0 ? -1 : undefined}
             style={{
               margin: "0 0 14px",
               fontSize: narrow ? 22 : 28,
@@ -421,7 +452,7 @@ export function AboutModal({
             }}
           >
             {b.text}
-          </h2>
+          </h3>
         );
       case "body":
         return <Paragraphs key={key} text={b.text} fontSize={narrow ? 16 : 18} />;
@@ -465,7 +496,9 @@ export function AboutModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="About the Media Universe"
+      aria-labelledby="mm-about-title"
+      ref={dialogRef}
+      onKeyDown={trapTab}
       onClick={onClose}
       style={{
         position: "fixed",
@@ -554,6 +587,9 @@ export function AboutModal({
           }}
         >
           <div
+            id="mm-about-title"
+            role="heading"
+            aria-level={2}
             style={{
               textAlign: "center",
               color: "#FFF",
@@ -583,7 +619,7 @@ export function AboutModal({
           >
             <img
               src={content.heroUrl}
-              alt="Media Universe"
+              alt="Evan Shapiro, hands raised, in front of the Media Universe map"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
@@ -609,6 +645,8 @@ export function AboutModal({
           >
             <div
               ref={tabScrollRef}
+              role="tablist"
+              aria-label="About sections"
               className="about-tabs"
               onScroll={updateFade}
               style={{
@@ -639,7 +677,24 @@ export function AboutModal({
                   ref={(el) => {
                     tabRefs.current[i] = el;
                   }}
-                  onClick={() => scrollTo(i)}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`mm-about-sec-${i}`}
+                  onClick={(e) => {
+                    scrollTo(i);
+                    // Chosen by keyboard (a click with no pointer): reading
+                    // continues from the section's heading.
+                    if (e.detail === 0) {
+                      window.setTimeout(() => document.getElementById(`mm-about-h-${i}`)?.focus({ preventScroll: true }), 450);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    const n = sections.length;
+                    const to = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+                    if (to === null) return;
+                    e.preventDefault();
+                    tabRefs.current[to]?.focus();
+                  }}
                   onMouseEnter={() => setHoveredTab(i)}
                   onMouseLeave={() => setHoveredTab(null)}
                   style={{
@@ -700,9 +755,12 @@ export function AboutModal({
           {sections.map((s, i) => {
             const last = i === sections.length - 1;
             return (
-              <div
+              <section
                 key={i}
+                id={`mm-about-sec-${i}`}
                 data-index={i}
+                aria-labelledby={s.blocks[0]?.kind === "header" ? `mm-about-h-${i}` : undefined}
+                aria-label={s.blocks[0]?.kind === "header" ? undefined : s.tabLabel}
                 ref={(el) => {
                   sectionRefs.current[idOf(i)] = el;
                 }}
@@ -715,8 +773,8 @@ export function AboutModal({
               >
                 {/* Desktop: copy runs the full width inside the modal's padding.
                     Phone: unchanged (the column cap never bites at that width). */}
-                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map(renderBlock)}</div>
-              </div>
+                <div style={narrow ? { maxWidth: 500, margin: "0 auto" } : undefined}>{s.blocks.map((b, k) => renderBlock(b, k, i))}</div>
+              </section>
             );
           })}
         </div>

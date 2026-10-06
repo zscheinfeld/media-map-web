@@ -47,6 +47,13 @@ import { LAYOUT_PANEL_W, LayoutLabPanel, type LabSelection } from "./layoutLab/L
 import type { SearchItem } from "./searchMatch";
 
 // Side-panel label for each company's primary metric (chosen in Sanity).
+/** What a screen reader calls each view tab. */
+const VIEW_TAB_LABELS: Record<AppViewMode, string> = {
+  map: "Map view",
+  linear: "Linear view",
+  aggregate: "Historical aggregate view",
+  list: "List view",
+};
 const VALUATION_LABELS: Record<ValuationType, string> = {
   market_cap: "Latest Market Cap",
   fundraising_valuation: "Fundraising Valuation",
@@ -508,6 +515,26 @@ const pillBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/**
+ * Keyboard movement inside a list that is one Tab stop from outside (the
+ * sector checkboxes, the List view's rows): the arrow keys move between its
+ * items and Home / End jump to the first / last. Tab leaves the list, as the
+ * convention has it.
+ */
+function moveWithinGroup(e: React.KeyboardEvent<HTMLElement>, itemSelector: string) {
+  const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(itemSelector));
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  if (i < 0) return;
+  let to: number | null = null;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") to = Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowUp" ? -1 : 1)));
+  else if (e.key === "Home") to = 0;
+  else if (e.key === "End") to = items.length - 1;
+  if (to === null) return;
+  e.preventDefault();
+  items[to].focus();
+  items[to].scrollIntoView({ block: "nearest" });
+}
+
 function SectorPanelContent({
   sectors,
   counts,
@@ -523,6 +550,9 @@ function SectorPanelContent({
   onClose,
   sectorColorOverride,
 }: SectorPanelProps & { onClose?: () => void }) {
+  // Companies on the map with the current sector filter (the header reads
+  // "120 of 182 companies" while some sectors are off).
+  const visibleTotal = sectors.filter((sec) => enabled.has(sec)).reduce((a, sec) => a + (counts[sec] ?? 0), 0);
   // The mobile drawer is the only caller that passes `onClose`, so it doubles as
   // the mobile/desktop discriminator. Sector rows read larger on the phone
   // (touch target) and tighter on desktop.
@@ -559,7 +589,13 @@ function SectorPanelContent({
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: 0.4 }}>Sectors</div>
           <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-            {loading ? "Loading…" : error ? "Error" : `${total} companies`}
+            {loading
+              ? "Loading…"
+              : error
+                ? "Error"
+                : visibleTotal === total
+                  ? `${total} companies`
+                  : `${visibleTotal} of ${total} companies`}
           </div>
         </div>
         {onClose && (
@@ -594,14 +630,21 @@ function SectorPanelContent({
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-        <button onClick={() => onAll(true)} className="mm-hover mm-hairline" style={pillBtn}>All</button>
-        <button onClick={() => onAll(false)} className="mm-hover mm-hairline" style={pillBtn}>None</button>
+        <button onClick={() => onAll(true)} aria-label="Toggle all sectors visible" className="mm-hover mm-hairline" style={pillBtn}>All</button>
+        <button onClick={() => onAll(false)} aria-label="None: toggle all sectors hidden" className="mm-hover mm-hairline" style={pillBtn}>None</button>
       </div>
       </div>
       {/* Sector list — the ONLY scrolling region (header above stays fixed).
           Clear the hover only when the cursor leaves the whole list — not when
           it crosses between rows — so the map doesn't flicker. */}
+      {/* Keyboard: the 17 checkboxes are not in the page's Tab order (a lap of
+          the page would walk through every one). "Skip to sectors" lands on the
+          first; the arrow keys and Home / End move between them; Tab leaves. */}
       <div
+        id="mm-sectors"
+        role="group"
+        aria-label="Sectors"
+        onKeyDown={(e) => moveWithinGroup(e, "[data-sector-toggle]")}
         style={{
           flex: 1,
           minHeight: 0,
@@ -681,7 +724,8 @@ function SectorPanelContent({
                 {customBg ? (
                   <span
                     role="checkbox"
-                    tabIndex={0}
+                    tabIndex={-1}
+                    data-sector-toggle=""
                     aria-checked={on}
                     aria-label={`Toggle ${s}`}
                     onClick={() => onToggle(s)}
@@ -749,6 +793,8 @@ function SectorPanelContent({
                 ) : (
                   <input
                     type="checkbox"
+                    tabIndex={-1}
+                    data-sector-toggle=""
                     checked={on}
                     onChange={() => onToggle(s)}
                     style={{
@@ -880,7 +926,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           >
             Media Universe
           </div>
-          <button onClick={onCollapse} aria-label="Collapse panel" title="Collapse panel" className="panel-icon-btn" style={iconBtnStyle}>
+          <button onClick={onCollapse} aria-label="Collapse sector side panel" title="Collapse sector side panel" className="panel-icon-btn" style={iconBtnStyle}>
             <span className="material-symbols-outlined" style={{ fontSize: 22 }}>left_panel_close</span>
           </button>
         </div>
@@ -906,6 +952,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           href="https://eshap.substack.com/"
           target="_blank"
           rel="noreferrer"
+          aria-label="Full map analysis on Substack"
           // Royal blue → white with blue text on hover (colours in App.css).
           className="mm-blue-btn"
           style={{
@@ -1069,7 +1116,7 @@ function niceTicks(min: number, max: number, count: number): number[] {
 }
 
 /** Scrubable historical market-cap line chart with year (X) + value (Y) axes. */
-function HistoryChart({ series }: { series: { month: string; value: number }[] }) {
+function HistoryChart({ series, label }: { series: { month: string; value: number }[]; label?: string }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const W = 300, H = 132;
   const M = { top: 8, right: 6, bottom: 18, left: 36 };
@@ -1115,6 +1162,10 @@ function HistoryChart({ series }: { series: { month: string; value: number }[] }
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
+        // Keyboard / screen readers: a Tab stop that reads the whole series.
+        role="img"
+        tabIndex={0}
+        aria-label={label}
         style={{ display: "block", cursor: "crosshair", overflow: "visible" }}
         onMouseMove={onMove}
         onMouseLeave={() => setHoverIdx(null)}
@@ -1171,13 +1222,53 @@ function PlanetDetailPanel({
   const open = node !== null;
   const valuation = node?.valuation_b ?? 0;
   const mobile = mobileHeight !== null;
+  const nodeName = node?.name ?? null;
+  const valuationLabel = VALUATION_LABELS[detail?.valuationType ?? "market_cap"];
+  // What a screen reader hears when the panel opens (focus lands on the panel):
+  // name, sector, the valuation, the data source and the vitals. The chart and
+  // any links are Tab stops after that.
+  const summary = node
+    ? [
+        `${node.sector}.`,
+        `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
+        detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
+        isPresent && detail && detail.vitals.length > 0
+          ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  const historyLabel =
+    history.length > 0
+      ? `Historical ${valuationLabel.replace(/^Latest /, "").toLowerCase()}, ${history[0].month.slice(0, 4)} to ${history[history.length - 1].month.slice(0, 4)}: ${history
+          .map((h) => `${h.month.slice(0, 4)} ${formatValuation(h.value)}`)
+          .join(", ")}.`
+      : undefined;
+
+  // Keyboard: focus moves to the panel when a company opens (it reads the
+  // summary above), Escape closes, and focus goes back to where it was (the
+  // map, or the List row) on close.
+  const panelRef = useRef<HTMLElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const from = document.activeElement as HTMLElement | null;
+    if (from && !panelRef.current?.contains(from)) returnFocusRef.current = from;
+    const id = requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }));
+    return () => {
+      cancelAnimationFrame(id);
+      const back = returnFocusRef.current;
+      if (back && back.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [open, nodeName]);
 
   // Phone: the panel is cropped, so it shows its own scroll bar (phones only
   // flash theirs while scrolling, and can't be styled) — the light blue of the
   // other scroll bars. `thumb` is its top and height, px, within the track.
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [thumb, setThumb] = useState<{ top: number; h: number } | null>(null);
-  const nodeName = node?.name ?? null;
   useEffect(() => {
     const el = scrollerRef.current;
     if (!mobile || !el) return;
@@ -1208,7 +1299,18 @@ function PlanetDetailPanel({
 
   return (
     <aside
+      ref={panelRef}
       aria-hidden={!open}
+      role="region"
+      tabIndex={-1}
+      aria-label={node ? `${usdFlag(node.name).display} detail panel` : "Company detail panel"}
+      aria-describedby="mm-detail-summary"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       data-detail-panel=""
       style={{
         position: "fixed",
@@ -1246,8 +1348,10 @@ function PlanetDetailPanel({
           "transform 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 380ms cubic-bezier(0.22, 1, 0.36, 1)",
         zIndex: 30,
         pointerEvents: open ? "auto" : "none",
+        outline: "none",
       }}
     >
+      <p id="mm-detail-summary" className="sr-only">{summary}</p>
       {node && (
         <div
           ref={scrollerRef}
@@ -1267,6 +1371,7 @@ function PlanetDetailPanel({
         >
          <div>
           <button
+            ref={closeBtnRef}
             onClick={onClose}
             aria-label="Close detail panel"
             style={{
@@ -1314,7 +1419,7 @@ function PlanetDetailPanel({
 
           {history.length >= CHART_YEARS_MIN && (
             <PanelSection label="Historical Market Cap">
-              <HistoryChart series={history} />
+              <HistoryChart series={history} label={historyLabel} />
             </PanelSection>
           )}
 
@@ -2618,6 +2723,10 @@ function MapThumbnail({
   return (
     <button
       onClick={onClick}
+      // Mouse / touch only: the keyboard turns the carousel with the arrow
+      // buttons and the year hashes, so the maps are not Tab stops.
+      tabIndex={-1}
+      aria-hidden
       aria-label={isSelected ? `Explore the ${formatDate(date)} map` : `Show ${formatDate(date)}`}
       onMouseEnter={() => { setIsHovered(true); if (isSelected) onExploreHoverChange?.(true); }}
       onMouseLeave={() => { setIsHovered(false); if (isSelected) onExploreHoverChange?.(false); }}
@@ -3016,6 +3125,12 @@ function Carousel({
     onExplore(dates[settleTarget]);
   };
 
+  // Keyboard: the arrows are the first thing to focus when the Time Machine opens.
+  const prevBtnRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => prevBtnRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const canPrev = frontIdx > 0;
   const canNext = frontIdx < dates.length - 1;
   const stepBtn = (enabled: boolean): React.CSSProperties => ({
@@ -3146,6 +3261,7 @@ function Carousel({
       >
       <div className="tm-enter" style={{ display: "flex", alignItems: "center", gap: 12, ...introStyle(1, tuning.introUiMs) }}>
         <button
+          ref={prevBtnRef}
           aria-label="Previous year"
           className="tm-btn"
           onClick={() => canPrev && onSelect(dates[frontIdx - 1])}
@@ -3157,7 +3273,7 @@ function Carousel({
         {/* "Explore this map" — loads the map at the focused year and closes
             the Time Machine. */}
         <button
-          aria-label="Explore the map at this view"
+          aria-label="Explore this map"
           onClick={explore}
           onMouseEnter={() => setExploreHover(true)}
           onMouseLeave={() => setExploreHover(false)}
@@ -3275,6 +3391,8 @@ function TimelineStrip({
           <button
             key={`${d.year}-${d.month}`}
             data-date={`${d.year}-${d.month}`}
+            aria-label={`${formatDate(d)} media map`}
+            aria-current={active ? "true" : undefined}
             onClick={() => onSelect(d)}
             onMouseEnter={() => onHover(d)}
             title={formatDate(d)}
@@ -3369,6 +3487,8 @@ function CompanyListView({
   focusRow,
   sectorColorOverride,
   bgStops,
+  onSelect,
+  onEnter,
 }: {
   rows: ListRow[];
   sort: ListSort;
@@ -3377,6 +3497,10 @@ function CompanyListView({
   isMobile: boolean;
   /** A search pick: scroll this row into view and flash it (token re-fires). */
   focusRow: { name: string; token: number } | null;
+  /** A row was chosen (click, Enter or Space): open that company's details. */
+  onSelect: (name: string) => void;
+  /** Keyboard focus came into the list from outside (to announce what it is). */
+  onEnter?: () => void;
   sectorColorOverride?: (s: string) => string | null;
   /** The live background gradient stops, sampled for the frozen column. */
   bgStops: [string, string, string];
@@ -3485,6 +3609,18 @@ function CompanyListView({
   return (
     <div
       ref={scrollRef}
+      aria-hidden={!active}
+      // Never a Tab stop itself (Chrome makes a scroller focusable when nothing
+      // inside it is); the rows are the stops.
+      tabIndex={-1}
+      // Keyboard: the List is one Tab stop (its first row). The arrow keys and
+      // Home / End move between rows; Tab leaves. Enter / Space opens the company.
+      onKeyDown={(e) => moveWithinGroup(e, "tr[data-list-row]")}
+      // Keyboard focus arriving from outside the list: say what the list is.
+      onFocus={(e) => {
+        const from = e.relatedTarget as Node | null;
+        if (active && onEnter && (!from || !e.currentTarget.contains(from)) && (e.target as HTMLElement).matches(":focus-visible")) onEnter();
+      }}
       style={{
         position: "absolute",
         // Start below the floating view-mode toggle (top:16, ~34px tall) so the
@@ -3574,6 +3710,22 @@ function CompanyListView({
             <tr
               key={r.name}
               data-name={r.name}
+              // A row opens the company's details (click, Enter or Space). By
+              // keyboard the rows are the accessible way to every company, since
+              // the map's planets are not focusable one by one. A screen reader
+              // hears each cell with its column name, with a pause between them.
+              data-list-row=""
+              tabIndex={active && i === 0 ? 0 : -1}
+              aria-label={`Company: ${usdFlag(r.name).display}. Sector: ${r.sector}. Valuation: ${formatValuation(r.valuation)}. All-time high: ${formatValuation(r.ath)} in ${formatDate(r.athDate)}. All-time low: ${formatValuation(r.atl)} in ${formatDate(r.atlDate)}.`}
+              onClick={() => onSelect(r.name)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(r.name);
+                }
+              }}
+              onFocus={() => setHoveredRow(r.name)}
+              onBlur={() => setHoveredRow(prev => (prev === r.name ? null : prev))}
               onMouseEnter={() => setHoveredRow(r.name)}
               onMouseLeave={() => setHoveredRow(prev => (prev === r.name ? null : prev))}
               style={{
@@ -4068,14 +4220,100 @@ function AggregateView({
 
   const hoverBand = hover?.k != null ? bands[hover.k] : null;
 
+  // Keyboard: the chart is one Tab stop. ← → move between years, ↑ ↓ between
+  // the companies stacked in a year (top to bottom on screen), Home / End to
+  // the first / last year. The chosen band shows its tooltip and is announced.
+  const [a11yNote, setA11yNote] = useState("");
+  const visibleBandsAt = (i: number) =>
+    bands.map((_, k) => k).filter((k) => bands[k].values[i] > 0).sort((a, b) => stacks.upper[a][i] - stacks.upper[b][i]);
+  const selectBand = (i: number, k: number) => {
+    const sx = xCenter(i), sy = (stacks.upper[k][i] + stacks.lower[k][i]) / 2;
+    // A zoomed chart scrolls sideways: keep the chosen bar in view.
+    const el = scrollRef.current;
+    if (el && (sx < el.scrollLeft + 20 || sx > el.scrollLeft + el.clientWidth - 20)) el.scrollTo({ left: Math.max(0, sx - el.clientWidth / 2), behavior: "smooth" });
+    setHover({ i, k, sx, sy, touch: false, scrollLeft: el?.scrollLeft ?? 0 });
+    setA11yNote(`${usdFlag(bands[k].name).display}, ${formatValuation(bands[k].values[i])}, ${formatDate(dates[i])}`);
+  };
+  const onChartKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || M === 0 || !scale) return;
+    const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    // Nothing chosen yet: the biggest company in the latest year.
+    if (!hover || hover.k == null) {
+      const i = M - 1, order = visibleBandsAt(i);
+      if (order.length) selectBand(i, order[0]);
+      return;
+    }
+    let { i, k } = hover;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+      i = e.key === "Home" ? 0 : e.key === "End" ? M - 1 : Math.max(0, Math.min(M - 1, i + (e.key === "ArrowLeft" ? -1 : 1)));
+      // Same company in that year if it is there, else the nearest band in the stack.
+      if (!(bands[k].values[i] > 0)) {
+        const order = visibleBandsAt(i);
+        if (!order.length) return;
+        const y = (stacks.upper[k][hover.i] + stacks.lower[k][hover.i]) / 2;
+        k = order.reduce((best, c) => (Math.abs((stacks.upper[c][i] + stacks.lower[c][i]) / 2 - y) < Math.abs((stacks.upper[best][i] + stacks.lower[best][i]) / 2 - y) ? c : best), order[0]);
+      }
+    } else {
+      const order = visibleBandsAt(i);
+      const at = order.indexOf(k);
+      k = order[Math.max(0, Math.min(order.length - 1, at + (e.key === "ArrowUp" ? -1 : 1)))];
+    }
+    selectBand(i, k);
+  };
+  const chartSummary =
+    maxTotal > 0 && M > 0
+      ? `Total market cap over time: one stacked bar per year from ${dates[0].year} to ${dates[M - 1].year}, each band a company, bar height relative to the peak of ${formatValuation(maxTotal)} in ${formatDate(dates[peakIdx])}. Use the left and right arrow keys to move between years, up and down to move between the companies in a year.`
+      : "";
+  // The summary is spoken when the view arrives (not only when the chart is
+  // focused, where a description can go unread). Re-speaking the same text
+  // needs the live region's content to change, hence the alternating marker.
+  const spokenRef = useRef(0);
+  const speakSummary = () => {
+    spokenRef.current++;
+    setA11yNote(`Historical aggregate view. ${chartSummary}${spokenRef.current % 2 ? "" : "\u200b"}`);
+  };
+  const speakSummaryRef = useRef(speakSummary);
+  useEffect(() => {
+    speakSummaryRef.current = speakSummary;
+  });
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setTimeout(() => speakSummaryRef.current(), 500);
+    return () => window.clearTimeout(id);
+  }, [active]);
+
   return (
     <div
       ref={wrapRef}
+      id="mm-aggregate"
+      // Hidden views are not Tab stops.
+      tabIndex={active ? 0 : -1}
+      role="application"
+      aria-label="Historical aggregate chart"
+      aria-describedby="mm-aggregate-summary"
+      aria-hidden={!active}
+      onKeyDown={onChartKeyDown}
+      onFocus={(e) => {
+        if (e.target !== e.currentTarget) return;
+        // Landing by keyboard: the summary again, then the tooltip on the
+        // biggest company of the latest year.
+        if (e.currentTarget.matches(":focus-visible")) speakSummary();
+        if (e.currentTarget.matches(":focus-visible") && (!hover || hover.k == null) && M > 0 && scale) {
+          const order = visibleBandsAt(M - 1);
+          if (order.length) window.setTimeout(() => selectBand(M - 1, order[0]), 1500);
+        }
+      }}
+      onBlur={(e) => {
+        if (e.target === e.currentTarget) setHover(null);
+      }}
       // A search pick stays pinned until the user clicks anywhere in the chart.
       onClick={() => {
         if (highlightCompany) onClearHighlight();
       }}
       style={{
+        outline: "none",
         position: "absolute",
         inset: 0,
         zIndex: 5,
@@ -4185,8 +4423,10 @@ function AggregateView({
         )}
       </div>
 
+      <p id="mm-aggregate-summary" className="sr-only">{chartSummary}</p>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{a11yNote}</div>
       {maxTotal > 0 && dims.w > 0 && (
-        <div style={{ position: "absolute", top: captionTop, left: 14, right: 14, lineHeight: 1.35, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
+        <div aria-hidden style={{ position: "absolute", top: captionTop, left: 14, right: 14, lineHeight: 1.35, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
           Total market cap over time · height relative to peak ({formatValuation(maxTotal)}, {formatDate(dates[peakIdx])})
         </div>
       )}
@@ -7307,6 +7547,31 @@ export default function MediaMap() {
     routeLoadedRef.current = true;
     if (routePath(r) !== "/") applyRouteRef.current(r);
   }, [currentDate.year, nodes.length]);
+  // Escape anywhere (not only inside the panel or on the map) closes the
+  // company detail panel. The About modal, search and game handle their own.
+  const escapeRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    escapeRef.current = () => {
+      if (!inspectedPlanet || aboutOpen || game.active || timelineOpen || searchOpen) return;
+      setInspectedPlanet(null);
+      if (layoutMode !== "linear") resetView();
+    };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) escapeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // The Time Machine button gets focus back when the Time Machine closes.
+  const timelineWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (timelineWasOpenRef.current && !timelineOpen) {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>("button[aria-label='Open time machine']")?.focus({ preventScroll: true }));
+    }
+    timelineWasOpenRef.current = timelineOpen;
+  }, [timelineOpen]);
   // Back / forward.
   useEffect(() => {
     const onPop = () => applyRouteRef.current(parseRoute(window.location.pathname, currentDate.year));
@@ -7323,6 +7588,161 @@ export default function MediaMap() {
     if (performance.now() < routeApplyingUntilRef.current) window.history.replaceState(null, "", url);
     else window.history.pushState(null, "", url);
   }, [currentRoute]);
+
+  // ---- Keyboard access to the map ----
+  // The map area is one Tab stop. With it focused, the arrow keys move a focus
+  // ring from planet to planet (the nearest one in that direction), Home / End
+  // go to the biggest / smallest, Enter opens the company's details, Escape
+  // closes them and zooms out. Each move is announced through a live region.
+  // The planets themselves stay out of the accessibility tree (180 SVG nodes
+  // would be noise); the List view is the table form of the same companies.
+  const [kbPlanet, setKbPlanet] = useState<string | null>(null);
+  const [mapHasFocus, setMapHasFocus] = useState(false);
+  const [a11yNote, setA11yNote] = useState("");
+  const kbNodes = useMemo(() => nodes.filter((n) => !n.isEntity && enabled.has(n.sector)), [nodes, enabled]);
+  const kbCurrent = kbPlanet ? kbNodes.find((n) => n.name === kbPlanet) ?? null : null;
+  const describe = (n: PlanetNode) => `${usdFlag(n.name).display}, ${n.sector}, ${formatValuation(n.valuation_b)}`;
+  // Bring a planet into the viewport (at the current zoom) if it is outside it.
+  // Linear is a strip that scrolls sideways: scroll it so the planet is in view.
+  const keepInView = (n: PlanetNode) => {
+    if (layoutMode === "linear") {
+      const el = containerRef.current;
+      if (!el || containerH <= 0) return;
+      const pxPerUnit = (containerH * zoom) / canvas.h;
+      const px = (n.x - canvas.x) * pxPerUnit;
+      const rPx = n.r * pxPerUnit + 40;
+      if (px - rPx >= el.scrollLeft && px + rPx <= el.scrollLeft + el.clientWidth) return;
+      el.scrollTo({ left: Math.max(0, px - el.clientWidth / 2), behavior: "smooth" });
+      return;
+    }
+    const pad = n.r + 40 * slideUnitsPerPx;
+    const inside = n.x - pad >= view.x && n.x + pad <= view.x + view.w && n.y - pad >= view.y && n.y + pad <= view.y + view.h;
+    if (inside) return;
+    animateView(zoom, { x: n.x - (canvas.x + canvas.w / 2), y: n.y - (canvas.y + canvas.h / 2) }, 350);
+  };
+  const moveKbFocus = (n: PlanetNode) => {
+    setKbPlanet(n.name);
+    setA11yNote(describe(n));
+    keepInView(n);
+  };
+  // Landing on the map by keyboard (Tab, a skip link): the view describes
+  // itself, then the ring goes to the biggest company, so the stop is visible
+  // and spoken. A mouse click also focuses the map area, but shows nothing.
+  const landTimerRef = useRef<number | null>(null);
+  const landOnMap = () => {
+    if (kbNodes.length === 0) return;
+    speak(viewSummaryText(viewMode));
+    if (kbCurrent) return;
+    const biggest = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b)[0];
+    if (landTimerRef.current !== null) window.clearTimeout(landTimerRef.current);
+    landTimerRef.current = window.setTimeout(() => moveKbFocus(biggest), 1800);
+  };
+  const focusMap = () => {
+    if (viewMode === "aggregate") {
+      document.getElementById("mm-aggregate")?.focus({ preventScroll: true });
+      return;
+    }
+    if (viewMode === "list") {
+      document.querySelector<HTMLElement>("tr[data-list-row][tabindex='0']")?.focus({ preventScroll: true });
+      return;
+    }
+    containerRef.current?.focus({ preventScroll: true });
+    landOnMap();
+  };
+  const onMapKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || game.active || timelineOpen || kbNodes.length === 0) return;
+    const dirs: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+    if (e.key in dirs) {
+      e.preventDefault();
+      const bySize = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b);
+      // No planet yet (an arrow pressed before the landing above): start at the biggest.
+      if (!kbCurrent) {
+        if (landTimerRef.current !== null) window.clearTimeout(landTimerRef.current);
+        landTimerRef.current = null;
+        moveKbFocus(bySize[0]);
+        return;
+      }
+      // Linear is a row from the biggest down: the keys step along it.
+      if (layoutMode === "linear") {
+        const at = bySize.findIndex((n) => n.name === kbCurrent.name);
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+        const next = bySize[Math.max(0, Math.min(bySize.length - 1, at + step))];
+        if (next && next.name !== kbCurrent.name) moveKbFocus(next);
+        return;
+      }
+      const [dx, dy] = dirs[e.key];
+      const from = kbCurrent;
+      let best: PlanetNode | null = null, bestScore = Infinity;
+      for (const n of kbNodes) {
+        if (n.name === from.name) continue;
+        const ox = n.x - from.x, oy = n.y - from.y;
+        const along = ox * dx + oy * dy; // progress in the key's direction
+        if (along <= 0) continue;
+        const across = Math.abs(ox * dy - oy * dx); // sideways drift
+        if (across > along * 1.5) continue; // stay within a cone
+        const score = along + across * 0.6;
+        if (score < bestScore) { best = n; bestScore = score; }
+      }
+      if (best) moveKbFocus(best);
+      return;
+    }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      const sorted = [...kbNodes].sort((a, b) => b.valuation_b - a.valuation_b);
+      moveKbFocus(e.key === "Home" ? sorted[0] : sorted[sorted.length - 1]);
+      return;
+    }
+    if ((e.key === "Enter" || e.key === " ") && kbCurrent) {
+      e.preventDefault();
+      travelToNode(kbCurrent, true);
+      setInspectedPlanet(kbCurrent.name);
+      setA11yNote(`Opened details for ${usdFlag(kbCurrent.name).display}`);
+      return;
+    }
+    if (e.key === "Escape") {
+      if (inspectedPlanet || zoom > MIN_ZOOM + 0.01) {
+        e.preventDefault();
+        setInspectedPlanet(null);
+        if (layoutMode !== "linear") resetView();
+        setA11yNote("Closed details");
+      }
+    }
+  };
+  // The ring follows the planet only while the map has keyboard focus.
+  const kbRingNode = mapHasFocus && kbCurrent ? (dragState && dragState.name === kbCurrent.name ? { ...kbCurrent, x: dragState.x, y: dragState.y } : kbCurrent) : null;
+  const a11ySummary = `${kbNodes.length} media companies in ${allSectors.filter((s) => enabled.has(s)).length} sectors, drawn as planets sized by market cap. Use the arrow keys to move between companies, Enter to open a company's details, Escape to close them. The List view shows the same companies as a table.`;
+  // What each view is, in a sentence or two — spoken when the view arrives and
+  // again when the map / list takes keyboard focus, so the reader is oriented
+  // before the first company is read. (The Aggregate chart speaks for itself.)
+  const listSummary = `List view. A table of ${kbNodes.length} media companies with sector, market cap, all-time high and all-time low, sorted by market cap. Use the up and down arrow keys to move between companies, Enter to open one.`;
+  const viewSummaryText = (mode: AppViewMode) =>
+    mode === "list" ? listSummary : `${mode === "linear" ? "Linear view. The companies in a row, largest first. " : "Map view. "}${a11ySummary}`;
+  // Re-speaking the same text needs the live region's content to change, hence
+  // the alternating invisible marker.
+  const spokenCountRef = useRef(0);
+  const speak = (text: string) => {
+    spokenCountRef.current++;
+    setA11yNote(`${text}${spokenCountRef.current % 2 ? "" : "\u200b"}`);
+  };
+  const speakRef = useRef(speak);
+  useEffect(() => {
+    speakRef.current = speak;
+  });
+  const viewSpokenRef = useRef<AppViewMode | null>(null);
+  useEffect(() => {
+    if (viewSpokenRef.current === null) {
+      viewSpokenRef.current = viewMode; // the first load: the page title says it
+      return;
+    }
+    if (viewSpokenRef.current === viewMode) return;
+    viewSpokenRef.current = viewMode;
+    if (viewMode === "aggregate") return;
+    const text = viewSummaryText(viewMode);
+    const id = window.setTimeout(() => speakRef.current(text), 500);
+    return () => window.clearTimeout(id);
+    // Only on a change of view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   const layoutLabPanel = llab.enabled ? (
     <LayoutLabPanel
@@ -7392,6 +7812,24 @@ export default function MediaMap() {
         overflow: "hidden",
       }}
     >
+      {/* The first Tab stops: straight to the map, the search or the download,
+          ahead of the side panel's many sector checkboxes. */}
+      <nav aria-label="Skip to">
+        <button className="mm-skip" onClick={focusMap}>
+          {viewMode === "aggregate" ? "Skip to the chart" : viewMode === "list" ? "Skip to the list" : "Skip to the map"}
+        </button>
+        <button className="mm-skip" onClick={() => document.getElementById("mm-search-btn")?.focus()}>Skip to search</button>
+        <button
+          className="mm-skip"
+          onClick={() => {
+            if (isMobile) setMobileSectorsOpen(true);
+            requestAnimationFrame(() => document.querySelector<HTMLElement>("#mm-sectors [data-sector-toggle]")?.focus());
+          }}
+        >
+          Skip to sectors
+        </button>
+        <button className="mm-skip" aria-label="Skip to downloads and more about the media universe" onClick={() => document.getElementById("mm-download-btn")?.focus()}>Skip to download</button>
+      </nav>
       {!isMobile && (
         <Sidebar
           {...sectorPanelProps}
@@ -7402,8 +7840,11 @@ export default function MediaMap() {
       {!isMobile && (
         <button
           onClick={() => setSidebarOpen(true)}
-          aria-label="Open panel"
-          title="Open panel"
+          aria-label="Open sector side panel"
+          // Invisible while the panel is open: out of the Tab order too.
+          tabIndex={sidebarOpen || game.active ? -1 : 0}
+          aria-hidden={sidebarOpen || game.active}
+          title="Open sector side panel"
           className="panel-icon-btn"
           style={{
             position: "fixed",
@@ -7468,6 +7909,43 @@ export default function MediaMap() {
         {/* Live interactive map — always mounted so physics keeps running.
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
+        {/* Every sector switched off: an empty map says why, and offers the way back. */}
+        {!loading && !valuationsLoading && allSectors.length > 0 && enabled.size === 0 && !timelineOpen && !game.active && (
+          <div
+            role="status"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 6,
+              display: "grid",
+              placeItems: "center",
+              pointerEvents: "none",
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+            }}
+          >
+            <div
+              style={{
+                pointerEvents: "auto",
+                textAlign: "center",
+                padding: "22px 26px",
+                borderRadius: 14,
+                background: "rgba(7,14,32,0.92)",
+                boxShadow: PILL_HAIRLINE,
+                backdropFilter: "blur(6px)",
+                color: "#e6edf7",
+                maxWidth: 320,
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 6 }}>No sectors selected</div>
+              <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 16, lineHeight: 1.45 }}>
+                {isMobile ? "Choose sectors with the + Sectors button, or show them all." : "Tick sectors in the side panel, or show them all."}
+              </div>
+              <button onClick={() => setAll(true)} className="mm-blue-btn" style={{ padding: "10px 18px", borderRadius: 8, border: "none", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+                Show all sectors
+              </button>
+            </div>
+          </div>
+        )}
         <div
           ref={mapLayerRef}
           style={{
@@ -7484,10 +7962,24 @@ export default function MediaMap() {
         >
         <div
           ref={containerRef}
+          tabIndex={viewMode === "map" || viewMode === "linear" ? 0 : -1}
+          aria-hidden={!(viewMode === "map" || viewMode === "linear")}
+          role="application"
+          aria-label="Media universe map"
+          aria-describedby="mm-map-help"
+          onKeyDown={onMapKeyDown}
+          onFocus={(e) => {
+            if (e.target !== e.currentTarget) return;
+            setMapHasFocus(true);
+            if (e.currentTarget.matches(":focus-visible")) landOnMap();
+          }}
+          onBlur={(e) => { if (e.target === e.currentTarget) setMapHasFocus(false); }}
           style={{
             width: "100%",
             height: "100%",
             position: "relative",
+            // The focus ring is drawn around the focused planet instead.
+            outline: "none",
             overflowX: layoutMode === "linear" ? "auto" : "hidden",
             overflowY: "hidden",
             cursor: layoutMode === "linear" ? "default" : "grab",
@@ -7522,8 +8014,11 @@ export default function MediaMap() {
             }
           }}
         >
+          <p id="mm-map-help" className="sr-only">{a11ySummary}</p>
+          <div className="sr-only" aria-live="polite" aria-atomic="true">{a11yNote}</div>
           <svg
             ref={mapSvgRef}
+            aria-hidden="true"
             width={
               layoutMode === "linear" && containerH > 0
                 ? Math.max(containerW, (linearStripSlideWidth / canvas.h) * containerH * zoom)
@@ -8000,6 +8495,18 @@ export default function MediaMap() {
                   </g>
                 );
               })}
+            {/* Keyboard focus ring around the planet the arrow keys are on. */}
+            {kbRingNode && (
+              <circle
+                cx={kbRingNode.x}
+                cy={kbRingNode.y}
+                r={kbRingNode.r + 6 * slideUnitsPerPx}
+                fill="none"
+                stroke="#8196fe"
+                strokeWidth={3 * slideUnitsPerPx}
+                pointerEvents="none"
+              />
+            )}
           </svg>
           {exportPreview && exportPreviewMarkup && (
             <ExportPreviewOverlay containerW={containerW} containerH={containerH} imageW={exportImageW} markup={exportPreviewMarkup} />
@@ -8020,6 +8527,11 @@ export default function MediaMap() {
           active={viewMode === "list" && !timelineOpen}
           isMobile={isMobile}
           focusRow={listFocus}
+          onSelect={(name) => {
+            setInspectedPlanet(name);
+            setA11yNote(`Opened details for ${usdFlag(name).display}`);
+          }}
+          onEnter={() => speak(listSummary)}
         />
 
         {/* Aggregate view — stacked market-cap-over-time chart (overlay, like list). */}
@@ -8136,6 +8648,8 @@ export default function MediaMap() {
                 grows over the space they leave. */}
             <div
               ref={tabsRef}
+              role="tablist"
+              aria-label="Views"
               aria-hidden={searchOpen}
               style={{
                 display: "flex",
@@ -8153,8 +8667,9 @@ export default function MediaMap() {
                 <button
                   key={mode}
                   onClick={() => selectView(mode)}
-                  aria-pressed={active}
-                  aria-label={mode}
+                  role="tab"
+                  aria-selected={active}
+                  aria-label={VIEW_TAB_LABELS[mode]}
                   title={isMobile ? mode.charAt(0).toUpperCase() + mode.slice(1) : undefined}
                   className="mm-hover"
                   style={{
@@ -8228,6 +8743,19 @@ export default function MediaMap() {
         {timelineOpen && (
           <div
             onWheel={onTimelineWheel}
+            role="region"
+            aria-label="Time Machine"
+            // ← → step a year (as the arrow buttons do); Escape closes.
+            onKeyDown={(e) => {
+              if (exploring) return;
+              if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                const d = dateRange[clampIdx(focusIdx + (e.key === "ArrowLeft" ? -1 : 1))];
+                if (d) { e.preventDefault(); setHoveredDate(null); focusOn(d); }
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setTimelineOpen(false);
+              }
+            }}
             style={{
               position: "absolute",
               inset: 0,
@@ -8292,7 +8820,7 @@ export default function MediaMap() {
             type="button"
             onClick={game.start}
             className="eshap-logo eshap-logo--faint"
-            aria-label="Eshap"
+            aria-label="Eshap — play the game"
             style={{
               position: "absolute",
               left: 16,
@@ -8343,8 +8871,12 @@ export default function MediaMap() {
             // focus, with the other bottom controls: the detail panel sits there.
             opacity: timelineOpen || mobileFocus ? 0 : 1,
             pointerEvents: timelineOpen || mobileFocus ? "none" : undefined,
+            // Hidden: gone from the Tab order and screen readers too (after the fade).
+            visibility: timelineOpen || mobileFocus ? "hidden" : "visible",
             transform: mobileFocus ? "translateY(28px)" : "translateY(0)",
-            transition: mobileFocus || isMobile ? MOBILE_FOCUS_STEP_ASIDE : "opacity 200ms ease",
+            transition:
+              (mobileFocus || isMobile ? MOBILE_FOCUS_STEP_ASIDE : "opacity 200ms ease") +
+              (timelineOpen || mobileFocus ? ", visibility 0s linear 320ms" : ", visibility 0s"),
           }}
         >
           {displayedViewDates.map(d => {
@@ -8607,6 +9139,7 @@ export default function MediaMap() {
               }}
             >
               <button
+                id="mm-download-btn"
                 aria-label="Download the map and more about the Media Universe"
                 title="Download"
                 className="mm-hover"
