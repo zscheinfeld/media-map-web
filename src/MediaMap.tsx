@@ -4201,14 +4201,80 @@ function AggregateView({
 
   const hoverBand = hover?.k != null ? bands[hover.k] : null;
 
+  // Keyboard: the chart is one Tab stop. ← → move between years, ↑ ↓ between
+  // the companies stacked in a year (top to bottom on screen), Home / End to
+  // the first / last year. The chosen band shows its tooltip and is announced.
+  const [a11yNote, setA11yNote] = useState("");
+  const visibleBandsAt = (i: number) =>
+    bands.map((_, k) => k).filter((k) => bands[k].values[i] > 0).sort((a, b) => stacks.upper[a][i] - stacks.upper[b][i]);
+  const selectBand = (i: number, k: number) => {
+    const sx = xCenter(i), sy = (stacks.upper[k][i] + stacks.lower[k][i]) / 2;
+    // A zoomed chart scrolls sideways: keep the chosen bar in view.
+    const el = scrollRef.current;
+    if (el && (sx < el.scrollLeft + 20 || sx > el.scrollLeft + el.clientWidth - 20)) el.scrollTo({ left: Math.max(0, sx - el.clientWidth / 2), behavior: "smooth" });
+    setHover({ i, k, sx, sy, touch: false, scrollLeft: el?.scrollLeft ?? 0 });
+    setA11yNote(`${usdFlag(bands[k].name).display}, ${formatValuation(bands[k].values[i])}, ${formatDate(dates[i])}`);
+  };
+  const onChartKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || M === 0 || !scale) return;
+    const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    // Nothing chosen yet: the biggest company in the latest year.
+    if (!hover || hover.k == null) {
+      const i = M - 1, order = visibleBandsAt(i);
+      if (order.length) selectBand(i, order[0]);
+      return;
+    }
+    let { i, k } = hover;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+      i = e.key === "Home" ? 0 : e.key === "End" ? M - 1 : Math.max(0, Math.min(M - 1, i + (e.key === "ArrowLeft" ? -1 : 1)));
+      // Same company in that year if it is there, else the nearest band in the stack.
+      if (!(bands[k].values[i] > 0)) {
+        const order = visibleBandsAt(i);
+        if (!order.length) return;
+        const y = (stacks.upper[k][hover.i] + stacks.lower[k][hover.i]) / 2;
+        k = order.reduce((best, c) => (Math.abs((stacks.upper[c][i] + stacks.lower[c][i]) / 2 - y) < Math.abs((stacks.upper[best][i] + stacks.lower[best][i]) / 2 - y) ? c : best), order[0]);
+      }
+    } else {
+      const order = visibleBandsAt(i);
+      const at = order.indexOf(k);
+      k = order[Math.max(0, Math.min(order.length - 1, at + (e.key === "ArrowUp" ? -1 : 1)))];
+    }
+    selectBand(i, k);
+  };
+  const chartSummary =
+    maxTotal > 0 && M > 0
+      ? `Total market cap over time: one stacked bar per year from ${dates[0].year} to ${dates[M - 1].year}, each band a company, bar height relative to the peak of ${formatValuation(maxTotal)} in ${formatDate(dates[peakIdx])}. Use the left and right arrow keys to move between years, up and down to move between the companies in a year.`
+      : "";
+
   return (
     <div
       ref={wrapRef}
+      id="mm-aggregate"
+      // Hidden views are not Tab stops.
+      tabIndex={active ? 0 : -1}
+      role="application"
+      aria-label="Historical aggregate chart"
+      aria-describedby="mm-aggregate-summary"
+      aria-hidden={!active}
+      onKeyDown={onChartKeyDown}
+      onFocus={(e) => {
+        // Landing by keyboard: the tooltip appears on the biggest company of the latest year.
+        if (e.target === e.currentTarget && e.currentTarget.matches(":focus-visible") && (!hover || hover.k == null) && M > 0 && scale) {
+          const order = visibleBandsAt(M - 1);
+          if (order.length) selectBand(M - 1, order[0]);
+        }
+      }}
+      onBlur={(e) => {
+        if (e.target === e.currentTarget) setHover(null);
+      }}
       // A search pick stays pinned until the user clicks anywhere in the chart.
       onClick={() => {
         if (highlightCompany) onClearHighlight();
       }}
       style={{
+        outline: "none",
         position: "absolute",
         inset: 0,
         zIndex: 5,
@@ -4318,8 +4384,10 @@ function AggregateView({
         )}
       </div>
 
+      <p id="mm-aggregate-summary" className="sr-only">{chartSummary}</p>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{a11yNote}</div>
       {maxTotal > 0 && dims.w > 0 && (
-        <div style={{ position: "absolute", top: captionTop, left: 14, right: 14, lineHeight: 1.35, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
+        <div aria-hidden style={{ position: "absolute", top: captionTop, left: 14, right: 14, lineHeight: 1.35, fontSize: 11, letterSpacing: 0.6, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>
           Total market cap over time · height relative to peak ({formatValuation(maxTotal)}, {formatDate(dates[peakIdx])})
         </div>
       )}
@@ -7510,6 +7578,14 @@ export default function MediaMap() {
     moveKbFocus(biggest);
   };
   const focusMap = () => {
+    if (viewMode === "aggregate") {
+      document.getElementById("mm-aggregate")?.focus({ preventScroll: true });
+      return;
+    }
+    if (viewMode === "list") {
+      document.querySelector<HTMLElement>("tr[role='button'][tabindex='0']")?.focus({ preventScroll: true });
+      return;
+    }
     containerRef.current?.focus({ preventScroll: true });
     landOnMap();
   };
@@ -7632,7 +7708,9 @@ export default function MediaMap() {
       {/* The first Tab stops: straight to the map, the search or the download,
           ahead of the side panel's many sector checkboxes. */}
       <nav aria-label="Skip to">
-        <button className="mm-skip" onClick={focusMap}>Skip to the map</button>
+        <button className="mm-skip" onClick={focusMap}>
+          {viewMode === "aggregate" ? "Skip to the chart" : viewMode === "list" ? "Skip to the list" : "Skip to the map"}
+        </button>
         <button className="mm-skip" onClick={() => document.getElementById("mm-search-btn")?.focus()}>Skip to search</button>
         <button
           className="mm-skip"
@@ -7740,7 +7818,8 @@ export default function MediaMap() {
         >
         <div
           ref={containerRef}
-          tabIndex={0}
+          tabIndex={viewMode === "map" || viewMode === "linear" ? 0 : -1}
+          aria-hidden={!(viewMode === "map" || viewMode === "linear")}
           role="application"
           aria-label="Media universe map"
           aria-describedby="mm-map-help"
