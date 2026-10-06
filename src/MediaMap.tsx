@@ -550,6 +550,9 @@ function SectorPanelContent({
   onClose,
   sectorColorOverride,
 }: SectorPanelProps & { onClose?: () => void }) {
+  // Companies on the map with the current sector filter (the header reads
+  // "120 of 182 companies" while some sectors are off).
+  const visibleTotal = sectors.filter((sec) => enabled.has(sec)).reduce((a, sec) => a + (counts[sec] ?? 0), 0);
   // The mobile drawer is the only caller that passes `onClose`, so it doubles as
   // the mobile/desktop discriminator. Sector rows read larger on the phone
   // (touch target) and tighter on desktop.
@@ -586,7 +589,13 @@ function SectorPanelContent({
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: 0.4 }}>Sectors</div>
           <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-            {loading ? "Loading…" : error ? "Error" : `${total} companies`}
+            {loading
+              ? "Loading…"
+              : error
+                ? "Error"
+                : visibleTotal === total
+                  ? `${total} companies`
+                  : `${visibleTotal} of ${total} companies`}
           </div>
         </div>
         {onClose && (
@@ -7536,6 +7545,23 @@ export default function MediaMap() {
     routeLoadedRef.current = true;
     if (routePath(r) !== "/") applyRouteRef.current(r);
   }, [currentDate.year, nodes.length]);
+  // Escape anywhere (not only inside the panel or on the map) closes the
+  // company detail panel. The About modal, search and game handle their own.
+  const escapeRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    escapeRef.current = () => {
+      if (!inspectedPlanet || aboutOpen || game.active || timelineOpen || searchOpen) return;
+      setInspectedPlanet(null);
+      if (layoutMode !== "linear") resetView();
+    };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) escapeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // The Time Machine button gets focus back when the Time Machine closes.
   const timelineWasOpenRef = useRef(false);
   useEffect(() => {
@@ -7881,6 +7907,43 @@ export default function MediaMap() {
         {/* Live interactive map — always mounted so physics keeps running.
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
+        {/* Every sector switched off: an empty map says why, and offers the way back. */}
+        {!loading && !valuationsLoading && allSectors.length > 0 && enabled.size === 0 && !timelineOpen && !game.active && (
+          <div
+            role="status"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 6,
+              display: "grid",
+              placeItems: "center",
+              pointerEvents: "none",
+              fontFamily: '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif',
+            }}
+          >
+            <div
+              style={{
+                pointerEvents: "auto",
+                textAlign: "center",
+                padding: "22px 26px",
+                borderRadius: 14,
+                background: "rgba(7,14,32,0.92)",
+                boxShadow: PILL_HAIRLINE,
+                backdropFilter: "blur(6px)",
+                color: "#e6edf7",
+                maxWidth: 320,
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 6 }}>No sectors selected</div>
+              <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 16, lineHeight: 1.45 }}>
+                {isMobile ? "Choose sectors with the + Sectors button, or show them all." : "Tick sectors in the side panel, or show them all."}
+              </div>
+              <button onClick={() => setAll(true)} className="mm-blue-btn" style={{ padding: "10px 18px", borderRadius: 8, border: "none", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+                Show all sectors
+              </button>
+            </div>
+          </div>
+        )}
         <div
           ref={mapLayerRef}
           style={{
