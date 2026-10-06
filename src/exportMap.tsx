@@ -589,8 +589,8 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
   parts.push(`<text x="${PAD}" y="${cy.toFixed(1)}" font-family='${FONT}' font-weight="400" font-size="${c2Size}" fill="rgba(255,255,255,0.5)">${companyTotal} Companies</text>`);
   cy += 52;
 
-  // Legend: swatch + name per sector, set at the small planets' number size,
-  // `legendGap` apart. (No containers, no counts.)
+  // Legend: swatch + name per sector, set like the small planets' numbers
+  // (their size, Book weight), `legendGap` apart. (No containers, no counts.)
   const nameSize = legendNamePx;
   const swSize = Math.max(10, Math.round(nameSize * 0.72));
   const rowH = nameSize;
@@ -603,7 +603,7 @@ export function buildExportPanelMarkup(input: ExportPanelInput): string {
     const textY = (midY + nameSize * 0.34).toFixed(1); // baseline for vertical centre
     const swY = (midY - swSize / 2).toFixed(1);
     parts.push(`<rect x="${PAD}" y="${swY}" width="${swSize}" height="${swSize}" rx="${Math.max(2, Math.round(swSize / 5))}" fill="${primary}"${stroke ? ` stroke="${stroke}" stroke-width="1.5"` : ""}/>`);
-    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="500" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
+    parts.push(`<text x="${PAD + swSize + Math.round(nameSize * 0.6)}" y="${textY}" font-family='${FONT}' font-weight="400" font-size="${nameSize.toFixed(1)}" fill="#fff">${esc(sector)}</text>`);
     rowTop += rowH + settings.legendGap;
   }
 
