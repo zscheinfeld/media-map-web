@@ -1100,7 +1100,7 @@ function niceTicks(min: number, max: number, count: number): number[] {
 }
 
 /** Scrubable historical market-cap line chart with year (X) + value (Y) axes. */
-function HistoryChart({ series }: { series: { month: string; value: number }[] }) {
+function HistoryChart({ series, label }: { series: { month: string; value: number }[]; label?: string }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const W = 300, H = 132;
   const M = { top: 8, right: 6, bottom: 18, left: 36 };
@@ -1146,6 +1146,10 @@ function HistoryChart({ series }: { series: { month: string; value: number }[] }
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
+        // Keyboard / screen readers: a Tab stop that reads the whole series.
+        role="img"
+        tabIndex={0}
+        aria-label={label}
         style={{ display: "block", cursor: "crosshair", overflow: "visible" }}
         onMouseMove={onMove}
         onMouseLeave={() => setHoverIdx(null)}
@@ -1203,16 +1207,40 @@ function PlanetDetailPanel({
   const valuation = node?.valuation_b ?? 0;
   const mobile = mobileHeight !== null;
   const nodeName = node?.name ?? null;
+  const valuationLabel = VALUATION_LABELS[detail?.valuationType ?? "market_cap"];
+  // What a screen reader hears when the panel opens (focus lands on the panel):
+  // name, sector, the valuation, the data source and the vitals. The chart and
+  // any links are Tab stops after that.
+  const summary = node
+    ? [
+        `${node.sector}.`,
+        `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
+        detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
+        isPresent && detail && detail.vitals.length > 0
+          ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  const historyLabel =
+    history.length > 0
+      ? `Historical ${valuationLabel.replace(/^Latest /, "").toLowerCase()}, ${history[0].month.slice(0, 4)} to ${history[history.length - 1].month.slice(0, 4)}: ${history
+          .map((h) => `${h.month.slice(0, 4)} ${formatValuation(h.value)}`)
+          .join(", ")}.`
+      : undefined;
 
-  // Keyboard: focus moves to the ✕ when a company opens, Escape closes, and
-  // focus goes back to where it was (the map, or the List row) on close.
+  // Keyboard: focus moves to the panel when a company opens (it reads the
+  // summary above), Escape closes, and focus goes back to where it was (the
+  // map, or the List row) on close.
+  const panelRef = useRef<HTMLElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!open) return;
     const from = document.activeElement as HTMLElement | null;
-    if (from && !closeBtnRef.current?.contains(from)) returnFocusRef.current = from;
-    const id = requestAnimationFrame(() => closeBtnRef.current?.focus({ preventScroll: true }));
+    if (from && !panelRef.current?.contains(from)) returnFocusRef.current = from;
+    const id = requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }));
     return () => {
       cancelAnimationFrame(id);
       const back = returnFocusRef.current;
@@ -1255,9 +1283,12 @@ function PlanetDetailPanel({
 
   return (
     <aside
+      ref={panelRef}
       aria-hidden={!open}
       role="region"
-      aria-label={node ? `${usdFlag(node.name).display} details` : "Company details"}
+      tabIndex={-1}
+      aria-label={node ? `${usdFlag(node.name).display} detail panel` : "Company detail panel"}
+      aria-describedby="mm-detail-summary"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
@@ -1301,8 +1332,10 @@ function PlanetDetailPanel({
           "transform 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 380ms cubic-bezier(0.22, 1, 0.36, 1)",
         zIndex: 30,
         pointerEvents: open ? "auto" : "none",
+        outline: "none",
       }}
     >
+      <p id="mm-detail-summary" className="sr-only">{summary}</p>
       {node && (
         <div
           ref={scrollerRef}
@@ -1370,7 +1403,7 @@ function PlanetDetailPanel({
 
           {history.length >= CHART_YEARS_MIN && (
             <PanelSection label="Historical Market Cap">
-              <HistoryChart series={history} />
+              <HistoryChart series={history} label={historyLabel} />
             </PanelSection>
           )}
 
