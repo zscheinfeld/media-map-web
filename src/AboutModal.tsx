@@ -339,6 +339,33 @@ export function AboutModal({
     };
   }, [open, sections.length]);
 
+  // Analytics: how far down the modal's own scroll box the reader got, as the
+  // furthest point seen (the window itself never scrolls on this site, so the
+  // script's own scroll depth is always 100%). Each quarter is sent once per
+  // opening — whether reached by scrolling or by a tab jump.
+  useEffect(() => {
+    if (!open) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const sent = new Set<number>();
+    const check = () => {
+      const seen = root.scrollHeight > 0 ? ((root.scrollTop + root.clientHeight) / root.scrollHeight) * 100 : 0;
+      for (const depth of [25, 50, 75, 100] as const) {
+        if (seen >= depth - 0.5 && !sent.has(depth)) {
+          sent.add(depth);
+          track("About scrolled", { depth });
+        }
+      }
+    };
+    // What is in view on opening counts too (a tall screen may show a quarter at once).
+    const t = window.setTimeout(check, 700);
+    root.addEventListener("scroll", check, { passive: true });
+    return () => {
+      window.clearTimeout(t);
+      root.removeEventListener("scroll", check);
+    };
+  }, [open, sections.length]);
+
   // Reset to the top + first tab each time it opens — or, opened on the
   // Downloads tab (its address), scroll there once the content is in.
   const downloadsIdx = sections.findIndex((s) => /download/i.test(s.tabLabel));

@@ -7645,6 +7645,30 @@ export default function MediaMap() {
   useEffect(() => {
     trackGamePhase(game.phase, game.hud);
   }, [game.phase, game.hud]);
+  // Linear: how far along the strip the visitor got (the map area scrolls
+  // sideways in that view), as the furthest point seen; each quarter is sent
+  // once per visit to the view. A zoomed-out strip that fits at once is 100%.
+  useEffect(() => {
+    if (layoutMode !== "linear" || timelineOpen) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const sent = new Set<number>();
+    const check = () => {
+      const seen = el.scrollWidth > 0 ? ((el.scrollLeft + el.clientWidth) / el.scrollWidth) * 100 : 0;
+      for (const depth of [25, 50, 75, 100] as const) {
+        if (seen >= depth - 0.5 && !sent.has(depth)) {
+          sent.add(depth);
+          track("Linear scrolled", { depth });
+        }
+      }
+    };
+    const t = window.setTimeout(check, 1500); // once the strip has laid out
+    el.addEventListener("scroll", check, { passive: true });
+    return () => {
+      window.clearTimeout(t);
+      el.removeEventListener("scroll", check);
+    };
+  }, [layoutMode, timelineOpen]);
 
   // ---- Keyboard access to the map ----
   // The map area is one Tab stop. With it focused, the arrow keys move a focus

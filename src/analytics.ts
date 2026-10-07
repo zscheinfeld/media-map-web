@@ -23,6 +23,8 @@ export type AnalyticsEvent =
   | { name: "Time Machine year"; props: { year: number } }
   | { name: "Time Machine explore"; props: { year: number } }
   | { name: "Substack"; props: { placement: string } }
+  | { name: "About scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
+  | { name: "Linear scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
   | { name: "Game opened"; props?: undefined }
   | { name: "Game started"; props?: undefined }
   | { name: "Game ended"; props: { outcome: "finished" | "quit"; played: string; score: number; saved: number } };
