@@ -11,25 +11,31 @@
 
 const SCRIPT_SRC = "https://plausible.io/js/pa-zMVlgoGVgc5AQvzwaspbE.js";
 
-/** Every event the site sends, with its properties. */
+/** Every event the site sends, with its properties. Property names are what
+ *  the dashboard shows, so they say what they measure. */
 export type AnalyticsEvent =
-  | { name: "Company opened"; props: { company: string; sector: string; via: "map" | "linear" | "list" | "search" | "keyboard" } }
-  | { name: "Company closed"; props: { company: string; time: string } }
+  | { name: "Company opened"; props: { company: string; sector: string; "opened from": OpenedFrom } }
+  | { name: "Company closed"; props: { company: string; "time in detail panel": string } }
   | { name: "Search opened"; props?: undefined }
   | { name: "Search picked"; props: { company: string } }
   | { name: "Downloads opened"; props?: undefined }
-  | { name: "PNG downloaded"; props: { width: number } }
+  | { name: "PNG downloaded"; props: { "image width (px)": number } }
   | { name: "Time Machine opened"; props?: undefined }
   | { name: "Time Machine year"; props: { year: number } }
   | { name: "Time Machine explore"; props: { year: number } }
   | { name: "Outbound Substack from side panel"; props?: undefined }
   | { name: "Outbound Substack from download module"; props?: undefined }
-  | { name: "Outbound Substack from About"; props: { section: string } }
-  | { name: "About scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
-  | { name: "Linear scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
+  | { name: "Outbound Substack from About"; props: { "About section": string } }
+  | { name: "About scrolled"; props: { "About scroll depth": ScrollDepth } }
+  | { name: "Linear scrolled"; props: { "Linear scroll depth": ScrollDepth } }
   | { name: "Game opened"; props?: undefined }
   | { name: "Game started"; props?: undefined }
-  | { name: "Game ended"; props: { outcome: "finished" | "quit"; played: string; score: number; saved: number } };
+  | { name: "Game ended"; props: { outcome: "finished" | "quit"; "time played": string; "market cap saved ($B)": number; "planets saved": number } };
+
+export type OpenedFrom = "map" | "linear" | "list" | "search" | "keyboard";
+export type ScrollDepth = "25%" | "50%" | "75%" | "100%";
+/** The quarters a scroll-depth event reports, in order. */
+export const SCROLL_DEPTHS: ScrollDepth[] = ["25%", "50%", "75%", "100%"];
 
 type PlausibleFn = ((event: string, opts?: { props?: Record<string, string | number | boolean>; url?: string }) => void) & {
   init?: (opts?: Record<string, unknown>) => void;
@@ -141,27 +147,26 @@ export function playedBucket(seconds: number): string {
 
 // ---- Stateful helpers (module state, so the components stay pure) ----
 
-type OpenedVia = Extract<AnalyticsEvent, { name: "Company opened" }>["props"]["via"];
 let companyOpen: { name: string; at: number } | null = null;
-let nextOpenVia: OpenedVia | null = null;
+let nextOpenVia: OpenedFrom | null = null;
 
 /** Say how the next company panel is being opened when it isn't a plain click. */
-export function noteCompanyOpenedVia(via: OpenedVia): void {
+export function noteCompanyOpenedVia(via: OpenedFrom): void {
   nextOpenVia = via;
 }
 
 /** Call whenever the inspected company changes (null = panel closed): sends
  *  "Company closed" for the one that was open, with how long it was, and
  *  "Company opened" for the new one. */
-export function trackCompanyChange(name: string | null, sector: string, fallbackVia: OpenedVia): void {
+export function trackCompanyChange(name: string | null, sector: string, fallbackVia: OpenedFrom): void {
   const now = performance.now();
   if (companyOpen && companyOpen.name !== name) {
-    track("Company closed", { company: companyOpen.name, time: timeBucket((now - companyOpen.at) / 1000) });
+    track("Company closed", { company: companyOpen.name, "time in detail panel": timeBucket((now - companyOpen.at) / 1000) });
     companyOpen = null;
   }
   if (name && companyOpen?.name !== name) {
     companyOpen = { name, at: now };
-    track("Company opened", { company: name, sector, via: nextOpenVia ?? fallbackVia });
+    track("Company opened", { company: name, sector, "opened from": nextOpenVia ?? fallbackVia });
   }
   nextOpenVia = null;
 }
@@ -183,13 +188,13 @@ export function trackGamePhase(phase: string, hud: { savedCap: number; savedCoun
   const prev = gamePhase;
   gamePhase = phase;
   if (prev === phase) return;
-  const score = { score: Math.round(hud.savedCap), saved: hud.savedCount };
+  const score = { "market cap saved ($B)": Math.round(hud.savedCap), "planets saved": hud.savedCount };
   if (phase === "intro") track("Game opened");
   else if (phase === "playing") {
     gamePlayingSince = performance.now();
     track("Game started");
-  } else if (phase === "ended") track("Game ended", { outcome: "finished", played: "full round", ...score });
+  } else if (phase === "ended") track("Game ended", { outcome: "finished", "time played": "full round", ...score });
   else if (phase === "idle" && prev === "playing") {
-    track("Game ended", { outcome: "quit", played: playedBucket((performance.now() - gamePlayingSince) / 1000), ...score });
+    track("Game ended", { outcome: "quit", "time played": playedBucket((performance.now() - gamePlayingSince) / 1000), ...score });
   }
 }
