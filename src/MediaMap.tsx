@@ -23,6 +23,7 @@ import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBl
 import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
+import { noteCompanyOpenedVia, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
@@ -953,6 +954,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           target="_blank"
           rel="noreferrer"
           aria-label="Full map analysis on Substack"
+          onClick={() => track("Substack", { placement: "sidebar" })}
           // Royal blue → white with blue text on hover (colours in App.css).
           className="mm-blue-btn"
           style={{
@@ -5153,6 +5155,7 @@ export default function MediaMap() {
     setTimelineAnimate(true);
     setScrollIdx(i >= 0 ? i : Math.max(0, dateRange.length - 1));
     setTimelineOpen(true);
+    track("Time Machine opened");
   };
   // A click / arrow / strip pick eases to that exact year.
   const focusOn = (d: MapDate) => {
@@ -5171,6 +5174,7 @@ export default function MediaMap() {
   const onExploreMap = (d?: MapDate) => {
     if (exploring) return;
     const target = d ?? timelineFocus;
+    track("Time Machine explore", { year: target.year });
     setSavedViews(prev => (prev.some(p => sameDate(p, target)) ? prev : [...prev, target]));
     setActiveDate(target);
     const canGrow =
@@ -5385,6 +5389,9 @@ export default function MediaMap() {
   // from the sheet and the map never blanks. One-shot (ref) so user toggles
   // survive timeline scrubbing.
   const enabledSeeded = useRef(false);
+  // Whether the sectors have been switched on once (so an empty set means the
+  // visitor emptied it, not that the data is still on its way).
+  const [sectorsSeeded, setSectorsSeeded] = useState(false);
   useEffect(() => {
     if (enabledSeeded.current) return;
     if (isSanityConfigured() && sanityLoading) return; // wait for the Sanity read to settle
@@ -5397,6 +5404,7 @@ export default function MediaMap() {
     if (sectors.size === 0) return; // no data yet (sheet still loading)
     setEnabled(sectors);
     enabledSeeded.current = true;
+    setSectorsSeeded(true);
   }, [baseCompanies, sanity, sanityLoading]);
 
   const allSectors = useMemo(() => {
@@ -7136,6 +7144,7 @@ export default function MediaMap() {
     }
     if (!blob) return;
     downloadBlob(blob, `media-universe-${currentDate.year}.png`);
+    track("Download", { width: exportImageW });
   };
 
   // Zoom + center on the bounding box of all planets in a sector.
@@ -7408,6 +7417,8 @@ export default function MediaMap() {
 
   const onSearchSelect = (item: SearchItem) => {
     setSearchMatches(null);
+    track("Search picked", { company: item.name });
+    noteCompanyOpenedVia("search");
     if (viewMode === "aggregate") {
       setAggHighlight(item.name); // pinned like a hover; click anywhere releases it
       return;
@@ -7592,7 +7603,10 @@ export default function MediaMap() {
   }, [timelineOpen]);
   // Back / forward.
   useEffect(() => {
-    const onPop = () => applyRouteRef.current(parseRoute(window.location.pathname, currentDate.year));
+    const onPop = () => {
+      applyRouteRef.current(parseRoute(window.location.pathname, currentDate.year));
+      trackPageview(); // analytics: the address the browser went back / forward to
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [currentDate.year]);
@@ -7601,11 +7615,36 @@ export default function MediaMap() {
     if (typeof window === "undefined" || !routeLoadedRef.current) return;
     const path = routePath(currentRoute);
     document.title = routeTitle(currentRoute, "ESHAP Media Universe");
-    if (window.location.pathname === path) return;
-    const url = path + window.location.search + window.location.hash;
-    if (performance.now() < routeApplyingUntilRef.current) window.history.replaceState(null, "", url);
-    else window.history.pushState(null, "", url);
+    if (window.location.pathname !== path) {
+      const url = path + window.location.search + window.location.hash;
+      if (performance.now() < routeApplyingUntilRef.current) window.history.replaceState(null, "", url);
+      else window.history.pushState(null, "", url);
+    }
+    // Analytics: one page view per address. While a route from the address bar
+    // is being applied the address is only being corrected (the view for it was
+    // counted at load, or by the back / forward handler), so it isn't counted.
+    if (performance.now() >= routeApplyingUntilRef.current) trackPageview();
   }, [currentRoute]);
+
+  // ---- Analytics events (src/analytics.ts; the names are listed in CLAUDE.md) ----
+  useEffect(() => {
+    const fallbackVia = viewMode === "list" ? "list" : layoutMode === "linear" ? "linear" : "map";
+    trackCompanyChange(inspectedPlanet, inspectedPlanet ? nodeByName.get(inspectedPlanet)?.sector ?? "" : "", fallbackVia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectedPlanet]);
+  useEffect(() => {
+    trackDownloadsSection(aboutOpen && aboutSection === "downloads");
+  }, [aboutOpen, aboutSection]);
+  // A Time Machine year counts once it has been in front for a moment.
+  useEffect(() => {
+    if (!timelineOpen) return;
+    const year = timelineFocus.year;
+    const t = window.setTimeout(() => track("Time Machine year", { year }), 600);
+    return () => window.clearTimeout(t);
+  }, [timelineOpen, timelineFocus.year]);
+  useEffect(() => {
+    trackGamePhase(game.phase, game.hud);
+  }, [game.phase, game.hud]);
 
   // ---- Keyboard access to the map ----
   // The map area is one Tab stop. With it focused, the arrow keys move a focus
@@ -7713,6 +7752,7 @@ export default function MediaMap() {
     if ((e.key === "Enter" || e.key === " ") && kbCurrent) {
       e.preventDefault();
       travelToNode(kbCurrent, true);
+      noteCompanyOpenedVia("keyboard");
       setInspectedPlanet(kbCurrent.name);
       setA11yNote(`Opened details for ${usdFlag(kbCurrent.name).display}`);
       return;
@@ -7928,7 +7968,7 @@ export default function MediaMap() {
             Fades out (so it cross-fades with the overlay) in timeline mode
             (carousel) and list mode (table). */}
         {/* Every sector switched off: an empty map says why, and offers the way back. */}
-        {!loading && !valuationsLoading && allSectors.length > 0 && enabled.size === 0 && !timelineOpen && !game.active && (
+        {sectorsSeeded && !loading && !valuationsLoading && allSectors.length > 0 && enabled.size === 0 && !timelineOpen && !game.active && (
           <div
             role="status"
             style={{
@@ -8730,6 +8770,7 @@ export default function MediaMap() {
               open={searchOpen}
               onOpenChange={(o) => {
                 setSearchOpen(o);
+                if (o) track("Search opened");
                 if (o) setSwitcherOpen(false); // its menu would sit under the results
                 if (!o) setSearchMatches(null);
               }}

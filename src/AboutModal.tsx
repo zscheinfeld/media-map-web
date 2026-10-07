@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { isSanityConfigured, sanityQuery } from "./sanityClient";
+import { track } from "./analytics";
 
 // ── About / Welcome modal ───────────────────────────────────────────────────
 // Opened from the map's "About" (ⓘ) button. Dims the site, shows a welcome
@@ -429,8 +430,13 @@ export function AboutModal({
 
   const hrefFor = (b: { action: "link" | "download"; url: string }) =>
     b.action === "download" ? undefined : b.url;
-  const onClickFor = (b: { action: "link" | "download" }) =>
-    b.action === "download" ? onDownloadMap : undefined;
+  // A link to Substack counts, named for the section it was clicked in.
+  const substackClick = (url: string, sectionIdx?: number) =>
+    /substack\.com/i.test(url)
+      ? () => track("Substack", { placement: `about ${(sectionIdx !== undefined && sections[sectionIdx]?.tabLabel) || ""}`.trim().toLowerCase() })
+      : undefined;
+  const onClickFor = (b: { action: "link" | "download"; url: string }, sectionIdx?: number) =>
+    b.action === "download" ? onDownloadMap : substackClick(b.url, sectionIdx);
 
   const renderBlock = (b: Block, key: number, sectionIdx?: number) => {
     switch (b.kind) {
@@ -459,7 +465,7 @@ export function AboutModal({
       case "primary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
-            <ModalButton variant="blue" href={hrefFor(b)} onClick={onClickFor(b)}>
+            <ModalButton variant="blue" href={hrefFor(b)} onClick={onClickFor(b, sectionIdx)}>
               {b.label}
             </ModalButton>
           </div>
@@ -467,7 +473,7 @@ export function AboutModal({
       case "secondary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
-            <ModalButton variant="grey" href={hrefFor(b)} onClick={onClickFor(b)}>
+            <ModalButton variant="grey" href={hrefFor(b)} onClick={onClickFor(b, sectionIdx)}>
               {b.label}
             </ModalButton>
           </div>
@@ -475,7 +481,7 @@ export function AboutModal({
       case "link":
         return (
           <div key={key} style={{ marginBottom: 10 }}>
-            <LinkRow label={b.label} href={b.url} />
+            <LinkRow label={b.label} href={b.url} onClick={substackClick(b.url, sectionIdx)} />
           </div>
         );
       case "photo":
@@ -777,6 +783,14 @@ export function AboutModal({
               </section>
             );
           })}
+          {/* Privacy note: visits are counted with Plausible, which needs no consent banner. */}
+          <p style={{ margin: "48px 0 0", fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.5)" }}>
+            This site counts visits with{" "}
+            <a className="about-link" href="https://plausible.io/data-policy" target="_blank" rel="noopener noreferrer">
+              Plausible
+            </a>
+            , a privacy-friendly service that sets no cookies and collects no personal data.
+          </p>
         </div>
       </div>
       </div>
@@ -894,6 +908,7 @@ function ModalButton({
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noreferrer" : undefined}
+      onClick={onClick}
       style={style}
       {...handlers}
     >
@@ -906,7 +921,7 @@ function ModalButton({
   );
 }
 
-function LinkRow({ label, href }: { label: string; href: string }) {
+function LinkRow({ label, href, onClick }: { label: string; href: string; onClick?: () => void }) {
   const [hover, setHover] = useState(false);
   const external = /^https?:/i.test(href);
   return (
@@ -914,6 +929,7 @@ function LinkRow({ label, href }: { label: string; href: string }) {
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noreferrer" : undefined}
+      onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
