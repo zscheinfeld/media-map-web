@@ -18,11 +18,15 @@ export type AnalyticsEvent =
   | { name: "Search opened"; props?: undefined }
   | { name: "Search picked"; props: { company: string } }
   | { name: "Downloads opened"; props?: undefined }
-  | { name: "Download"; props: { width: number } }
+  | { name: "PNG downloaded"; props: { width: number } }
   | { name: "Time Machine opened"; props?: undefined }
   | { name: "Time Machine year"; props: { year: number } }
   | { name: "Time Machine explore"; props: { year: number } }
-  | { name: "Substack"; props: { placement: string } }
+  | { name: "Outbound Substack from side panel"; props?: undefined }
+  | { name: "Outbound Substack from download module"; props?: undefined }
+  | { name: "Outbound Substack from About"; props: { section: string } }
+  | { name: "About scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
+  | { name: "Linear scrolled"; props: { depth: 25 | 50 | 75 | 100 } }
   | { name: "Game opened"; props?: undefined }
   | { name: "Game started"; props?: undefined }
   | { name: "Game ended"; props: { outcome: "finished" | "quit"; played: string; score: number; saved: number } };

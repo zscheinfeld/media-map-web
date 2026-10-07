@@ -339,6 +339,56 @@ export function AboutModal({
     };
   }, [open, sections.length]);
 
+  // Analytics: a click on any link to Substack — a button, a link row or a link
+  // typed into the copy — counts, the Downloads tab's as its own goal and any
+  // other section's with the tab it was clicked in.
+  const sectionsRef = useRef(sections);
+  useEffect(() => {
+    sectionsRef.current = sections;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      if (!a || !/substack\.com/i.test(a.getAttribute("href") ?? "")) return;
+      const idx = Number((a.closest("section") as HTMLElement | null)?.dataset.index);
+      const tab = (Number.isNaN(idx) ? undefined : sectionsRef.current[idx]?.tabLabel) || "about";
+      if (/download/i.test(tab)) track("Outbound Substack from download module");
+      else track("Outbound Substack from About", { section: tab.toLowerCase() });
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
+  }, [open]);
+
+  // Analytics: how far down the modal's own scroll box the reader got, as the
+  // furthest point seen (the window itself never scrolls on this site, so the
+  // script's own scroll depth is always 100%). Each quarter is sent once per
+  // opening — whether reached by scrolling or by a tab jump.
+  useEffect(() => {
+    if (!open) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const sent = new Set<number>();
+    const check = () => {
+      const seen = root.scrollHeight > 0 ? ((root.scrollTop + root.clientHeight) / root.scrollHeight) * 100 : 0;
+      for (const depth of [25, 50, 75, 100] as const) {
+        if (seen >= depth - 0.5 && !sent.has(depth)) {
+          sent.add(depth);
+          track("About scrolled", { depth });
+        }
+      }
+    };
+    // What is in view on opening counts too (a tall screen may show a quarter at once).
+    const t = window.setTimeout(check, 700);
+    root.addEventListener("scroll", check, { passive: true });
+    return () => {
+      window.clearTimeout(t);
+      root.removeEventListener("scroll", check);
+    };
+  }, [open, sections.length]);
+
   // Reset to the top + first tab each time it opens — or, opened on the
   // Downloads tab (its address), scroll there once the content is in.
   const downloadsIdx = sections.findIndex((s) => /download/i.test(s.tabLabel));
@@ -430,13 +480,8 @@ export function AboutModal({
 
   const hrefFor = (b: { action: "link" | "download"; url: string }) =>
     b.action === "download" ? undefined : b.url;
-  // A link to Substack counts, named for the section it was clicked in.
-  const substackClick = (url: string, sectionIdx?: number) =>
-    /substack\.com/i.test(url)
-      ? () => track("Substack", { placement: `about ${(sectionIdx !== undefined && sections[sectionIdx]?.tabLabel) || ""}`.trim().toLowerCase() })
-      : undefined;
-  const onClickFor = (b: { action: "link" | "download"; url: string }, sectionIdx?: number) =>
-    b.action === "download" ? onDownloadMap : substackClick(b.url, sectionIdx);
+  const onClickFor = (b: { action: "link" | "download" }) =>
+    b.action === "download" ? onDownloadMap : undefined;
 
   const renderBlock = (b: Block, key: number, sectionIdx?: number) => {
     switch (b.kind) {
@@ -465,7 +510,7 @@ export function AboutModal({
       case "primary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
-            <ModalButton variant="blue" href={hrefFor(b)} onClick={onClickFor(b, sectionIdx)}>
+            <ModalButton variant="blue" href={hrefFor(b)} onClick={onClickFor(b)}>
               {b.label}
             </ModalButton>
           </div>
@@ -473,7 +518,7 @@ export function AboutModal({
       case "secondary":
         return (
           <div key={key} style={{ margin: "8px 0 24px" }}>
-            <ModalButton variant="grey" href={hrefFor(b)} onClick={onClickFor(b, sectionIdx)}>
+            <ModalButton variant="grey" href={hrefFor(b)} onClick={onClickFor(b)}>
               {b.label}
             </ModalButton>
           </div>
@@ -481,7 +526,7 @@ export function AboutModal({
       case "link":
         return (
           <div key={key} style={{ marginBottom: 10 }}>
-            <LinkRow label={b.label} href={b.url} onClick={substackClick(b.url, sectionIdx)} />
+            <LinkRow label={b.label} href={b.url} />
           </div>
         );
       case "photo":
