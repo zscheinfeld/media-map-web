@@ -23,7 +23,7 @@ import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBl
 import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
-import { noteCompanyOpenedVia, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
+import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
 import { useGameMode } from "./game/useGameMode";
@@ -7144,7 +7144,7 @@ export default function MediaMap() {
     }
     if (!blob) return;
     downloadBlob(blob, `media-universe-${currentDate.year}.png`);
-    track("PNG downloaded", { width: exportImageW });
+    track("PNG downloaded", { "image width (px)": exportImageW });
   };
 
   // Zoom + center on the bounding box of all planets in a sector.
@@ -7652,13 +7652,13 @@ export default function MediaMap() {
     if (layoutMode !== "linear" || timelineOpen) return;
     const el = containerRef.current;
     if (!el) return;
-    const sent = new Set<number>();
+    const sent = new Set<string>();
     const check = () => {
       const seen = el.scrollWidth > 0 ? ((el.scrollLeft + el.clientWidth) / el.scrollWidth) * 100 : 0;
-      for (const depth of [25, 50, 75, 100] as const) {
-        if (seen >= depth - 0.5 && !sent.has(depth)) {
+      for (const depth of SCROLL_DEPTHS) {
+        if (seen >= parseInt(depth) - 0.5 && !sent.has(depth)) {
           sent.add(depth);
-          track("Linear scrolled", { depth });
+          track("Linear scrolled", { "Linear scroll depth": depth });
         }
       }
     };

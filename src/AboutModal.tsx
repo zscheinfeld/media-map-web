@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { isSanityConfigured, sanityQuery } from "./sanityClient";
-import { track } from "./analytics";
+import { SCROLL_DEPTHS, track } from "./analytics";
 
 // ── About / Welcome modal ───────────────────────────────────────────────────
 // Opened from the map's "About" (ⓘ) button. Dims the site, shows a welcome
@@ -356,7 +356,7 @@ export function AboutModal({
       const idx = Number((a.closest("section") as HTMLElement | null)?.dataset.index);
       const tab = (Number.isNaN(idx) ? undefined : sectionsRef.current[idx]?.tabLabel) || "about";
       if (/download/i.test(tab)) track("Outbound Substack from download module");
-      else track("Outbound Substack from About", { section: tab.toLowerCase() });
+      else track("Outbound Substack from About", { "About section": tab.toLowerCase() });
     };
     root.addEventListener("click", onClick);
     return () => root.removeEventListener("click", onClick);
@@ -370,13 +370,13 @@ export function AboutModal({
     if (!open) return;
     const root = scrollRef.current;
     if (!root) return;
-    const sent = new Set<number>();
+    const sent = new Set<string>();
     const check = () => {
       const seen = root.scrollHeight > 0 ? ((root.scrollTop + root.clientHeight) / root.scrollHeight) * 100 : 0;
-      for (const depth of [25, 50, 75, 100] as const) {
-        if (seen >= depth - 0.5 && !sent.has(depth)) {
+      for (const depth of SCROLL_DEPTHS) {
+        if (seen >= parseInt(depth) - 0.5 && !sent.has(depth)) {
           sent.add(depth);
-          track("About scrolled", { depth });
+          track("About scrolled", { "About scroll depth": depth });
         }
       }
     };
