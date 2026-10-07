@@ -14,23 +14,23 @@ const SCRIPT_SRC = "https://plausible.io/js/pa-zMVlgoGVgc5AQvzwaspbE.js";
 /** Every event the site sends, with its properties. Property names are what
  *  the dashboard shows, so they say what they measure. */
 export type AnalyticsEvent =
-  | { name: "Company opened"; props: { company: string; sector: string; "opened from": OpenedFrom } }
+  | { name: "Company opened"; props: { company: string; sector: string; "Detail panel: opened from": OpenedFrom } }
   | { name: "Company closed"; props: { company: string; "time in detail panel": string } }
   | { name: "Search opened"; props?: undefined }
   | { name: "Search picked"; props: { company: string } }
   | { name: "Downloads opened"; props?: undefined }
-  | { name: "PNG downloaded"; props: { "image width (px)": number } }
+  | { name: "PNG downloaded"; props: { "Download: Image width": number } }
   | { name: "Time Machine opened"; props?: undefined }
   | { name: "Time Machine year"; props: { year: number } }
   | { name: "Time Machine explore"; props: { year: number } }
   | { name: "Outbound Substack from side panel"; props?: undefined }
   | { name: "Outbound Substack from download module"; props?: undefined }
-  | { name: "Outbound Substack from About"; props: { "About section": string } }
+  | { name: "Outbound Substack from About"; props: { "About section clicks": string } }
   | { name: "About scrolled"; props: { "About scroll depth": ScrollDepth } }
   | { name: "Linear scrolled"; props: { "Linear scroll depth": ScrollDepth } }
   | { name: "Game opened"; props?: undefined }
   | { name: "Game started"; props?: undefined }
-  | { name: "Game ended"; props: { outcome: "finished" | "quit"; "time played": string; "market cap saved ($B)": number; "planets saved": number } };
+  | { name: "Game ended"; props: { outcome: "finished" | "quit"; "Game: time played": string; "Game: market cap saved": number; "Game: planets saved": number } };
 
 export type OpenedFrom = "map" | "linear" | "list" | "search" | "keyboard";
 export type ScrollDepth = "25%" | "50%" | "75%" | "100%";
@@ -166,7 +166,7 @@ export function trackCompanyChange(name: string | null, sector: string, fallback
   }
   if (name && companyOpen?.name !== name) {
     companyOpen = { name, at: now };
-    track("Company opened", { company: name, sector, "opened from": nextOpenVia ?? fallbackVia });
+    track("Company opened", { company: name, sector, "Detail panel: opened from": nextOpenVia ?? fallbackVia });
   }
   nextOpenVia = null;
 }
@@ -188,13 +188,13 @@ export function trackGamePhase(phase: string, hud: { savedCap: number; savedCoun
   const prev = gamePhase;
   gamePhase = phase;
   if (prev === phase) return;
-  const score = { "market cap saved ($B)": Math.round(hud.savedCap), "planets saved": hud.savedCount };
+  const score = { "Game: market cap saved": Math.round(hud.savedCap), "Game: planets saved": hud.savedCount };
   if (phase === "intro") track("Game opened");
   else if (phase === "playing") {
     gamePlayingSince = performance.now();
     track("Game started");
-  } else if (phase === "ended") track("Game ended", { outcome: "finished", "time played": "full round", ...score });
+  } else if (phase === "ended") track("Game ended", { outcome: "finished", "Game: time played": "full round", ...score });
   else if (phase === "idle" && prev === "playing") {
-    track("Game ended", { outcome: "quit", "time played": playedBucket((performance.now() - gamePlayingSince) / 1000), ...score });
+    track("Game ended", { outcome: "quit", "Game: time played": playedBucket((performance.now() - gamePlayingSince) / 1000), ...score });
   }
 }

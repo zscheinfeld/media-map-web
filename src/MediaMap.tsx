@@ -7144,7 +7144,7 @@ export default function MediaMap() {
     }
     if (!blob) return;
     downloadBlob(blob, `media-universe-${currentDate.year}.png`);
-    track("PNG downloaded", { "image width (px)": exportImageW });
+    track("PNG downloaded", { "Download: Image width": exportImageW });
   };
 
   // Zoom + center on the bounding box of all planets in a sector.

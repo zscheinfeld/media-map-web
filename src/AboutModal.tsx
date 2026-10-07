@@ -356,7 +356,7 @@ export function AboutModal({
       const idx = Number((a.closest("section") as HTMLElement | null)?.dataset.index);
       const tab = (Number.isNaN(idx) ? undefined : sectionsRef.current[idx]?.tabLabel) || "about";
       if (/download/i.test(tab)) track("Outbound Substack from download module");
-      else track("Outbound Substack from About", { "About section": tab.toLowerCase() });
+      else track("Outbound Substack from About", { "About section clicks": tab.toLowerCase() });
     };
     root.addEventListener("click", onClick);
     return () => root.removeEventListener("click", onClick);
