@@ -954,7 +954,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           target="_blank"
           rel="noreferrer"
           aria-label="Full map analysis on Substack"
-          onClick={() => track("Substack", { placement: "sidebar" })}
+          onClick={() => track("Outbound Substack from side panel")}
           // Royal blue → white with blue text on hover (colours in App.css).
           className="mm-blue-btn"
           style={{
@@ -7144,7 +7144,7 @@ export default function MediaMap() {
     }
     if (!blob) return;
     downloadBlob(blob, `media-universe-${currentDate.year}.png`);
-    track("Download", { width: exportImageW });
+    track("PNG downloaded", { width: exportImageW });
   };
 
   // Zoom + center on the bounding box of all planets in a sector.
