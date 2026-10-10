@@ -24,6 +24,7 @@ import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { Paragraphs } from "./richText";
+import { COMPANY_SOURCES, type CompanySources, type SourceRef } from "./dataSources";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -1203,6 +1204,7 @@ function PlanetDetailPanel({
   node,
   detail,
   lastUpdated,
+  sources = null,
   history,
   isPresent,
   onClose,
@@ -1211,6 +1213,8 @@ function PlanetDetailPanel({
   node: PlanetNode | null;
   detail: CompanyDetail | null;
   lastUpdated?: string;
+  /** Where the numbers come from (prototype: src/dataSources.ts, keyed by slug). */
+  sources?: CompanySources | null;
   history: { month: string; value: number }[];
   /** True when the viewed year is the present — Vitals only show then. */
   isPresent: boolean;
@@ -1234,7 +1238,9 @@ function PlanetDetailPanel({
     ? [
         `${node.sector}.`,
         `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
-        detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
+        sources?.current
+          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.historical.length ? ` Historical data source ${sources.historical[0].label}${sources.historical.length > 1 ? ` and ${sources.historical.length - 1} more` : ""}.` : ""}`
+          : detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
         isPresent && detail && detail.vitals.length > 0
           ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
           : "",
@@ -1426,10 +1432,14 @@ function PlanetDetailPanel({
             </PanelSection>
           )}
 
-          {detail?.dataSource && (
-            <PanelSection label="Data Source">
-              <span style={{ fontSize: 14 }}>{detail.dataSource}</span>
-            </PanelSection>
+          {sources && (sources.current || sources.historical.length > 0) ? (
+            <DataSourcesSections sources={sources} key={nodeName ?? ""} />
+          ) : (
+            detail?.dataSource && (
+              <PanelSection label="Data Source">
+                <span style={{ fontSize: 14 }}>{detail.dataSource}</span>
+              </PanelSection>
+            )
           )}
 
           {detail?.description && (
@@ -1519,6 +1529,103 @@ function PanelSection({ label, children }: { label: string; children: React.Reac
       </div>
       {children}
     </div>
+  );
+}
+
+/** A source as a link when it has one, else plain text (a publisher named in the notes). */
+function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number }) {
+  return source.url ? (
+    <a className="about-link" href={source.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: size }}>
+      {source.label}
+    </a>
+  ) : (
+    <span style={{ fontSize: size }}>{source.label}</span>
+  );
+}
+
+/** "Live" / "Monthly" tag beside the current source. */
+function FrequencyPill({ frequency }: { frequency: CompanySources["frequency"] }) {
+  const live = frequency === "Live";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        marginLeft: 8,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 500,
+        letterSpacing: 0.8,
+        textTransform: "uppercase",
+        verticalAlign: "middle",
+        background: live ? "rgba(70, 200, 130, 0.16)" : "rgba(255,255,255,0.08)",
+        color: live ? "#7fe0a8" : "rgba(255,255,255,0.7)",
+        boxShadow: `inset 0 0 0 1px ${live ? "rgba(70,200,130,0.35)" : "rgba(255,255,255,0.14)"}`,
+      }}
+    >
+      {live && <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: "#7fe0a8" }} />}
+      {live ? "Live" : "Monthly"}
+    </span>
+  );
+}
+
+/** Current and historical data sources: where today's number comes from and how
+ *  often it updates, then the sources behind the past years — the newest shown,
+ *  the rest behind a "+ N more sources" button. */
+function DataSourcesSections({ sources }: { sources: CompanySources }) {
+  const [showAll, setShowAll] = useState(false);
+  const [first, ...rest] = sources.historical;
+  return (
+    <>
+      {sources.current && (
+        <PanelSection label="Current Data Source">
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 6 }}>
+            <SourceLink source={sources.current} />
+            <FrequencyPill frequency={sources.frequency} />
+          </div>
+        </PanelSection>
+      )}
+      {first && (
+        <PanelSection label="Historical Data Source">
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            <SourceLink source={first} />
+          </div>
+          {rest.length > 0 && (
+            <>
+              {showAll && (
+                <ul style={{ margin: "6px 0 0", padding: "0 0 0 18px", fontSize: 14, lineHeight: 1.6 }}>
+                  {rest.map((s, i) => (
+                    <li key={i}>
+                      <SourceLink source={s} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                aria-expanded={showAll}
+                onClick={() => setShowAll((v) => !v)}
+                style={{
+                  marginTop: 8,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.75)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {showAll ? "Show fewer sources" : `+ ${rest.length} more source${rest.length === 1 ? "" : "s"}`}
+              </button>
+            </>
+          )}
+        </PanelSection>
+      )}
+    </>
   );
 }
 
@@ -5070,6 +5177,12 @@ export default function MediaMap() {
   }, [baseCompanies, lastUpdatedBySlug]);
   // Yearly market-cap series (oldest → newest) for the inspected company's chart.
   // The `month` field carries a year key ("YYYY"); HistoryChart labels it as a year.
+  // Prototype: the inspected company's data sources, by slug (src/dataSources.ts).
+  const inspectedSources = useMemo<CompanySources | null>(() => {
+    if (!inspectedPlanet) return null;
+    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
+    return (slug && COMPANY_SOURCES[slug]) || null;
+  }, [inspectedPlanet, baseCompanies]);
   const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
     if (!inspectedPlanet) return [];
     const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
@@ -9301,6 +9414,7 @@ export default function MediaMap() {
         node={inspectedPlanet ? nodes.find((n) => n.name === inspectedPlanet) ?? null : null}
         detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}
         lastUpdated={inspectedPlanet ? lastUpdatedByName.get(inspectedPlanet) : undefined}
+        sources={inspectedSources}
         history={inspectedHistory}
         isPresent={activeDate.year === currentDate.year}
         onClose={() => {
