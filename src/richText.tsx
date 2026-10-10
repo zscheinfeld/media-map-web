@@ -13,8 +13,9 @@ const pStyle: React.CSSProperties = {
 };
 
 // Only web, mail and same-site addresses become links; anything else (e.g. a
-// `javascript:` address) is left as plain text.
-const LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+// `javascript:` address) is left as plain text. Spaces typed just inside the
+// round brackets ("(https://… )") are forgiven.
+const LINK_RE = /\[([^\]\n]+)\]\(\s*([^()\s]+)\s*\)/g;
 const isSafeHref = (href: string) => /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(href);
 
 /** One paragraph's text with its `[text](url)` links turned into anchors. */
