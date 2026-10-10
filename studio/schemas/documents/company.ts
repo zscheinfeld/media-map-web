@@ -83,7 +83,7 @@ export const company = defineType({
       type: 'text',
       group: 'basics',
       rows: 4,
-      description: 'Free-text context about this company, written by Evan. Not time-bound.',
+      description: 'Free-text context about this company, written by Evan. Not time-bound. A blank line starts a new paragraph; a link is written [link text](https://example.com), as in the About copy.',
     }),
     defineField({
       name: 'is_public',

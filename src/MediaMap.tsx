@@ -23,6 +23,7 @@ import { buildExportPanelMarkup, buildExportPng, clearTextWidthCache, downloadBl
 import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
+import { Paragraphs } from "./richText";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -1433,9 +1434,8 @@ function PlanetDetailPanel({
 
           {detail?.description && (
             <PanelSection label="Eshap's Overview">
-              <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, opacity: 0.9 }}>
-                {detail.description}
-              </p>
+              {/* Blank lines start paragraphs and `[text](url)` makes a link, as in the About copy. */}
+              <Paragraphs text={detail.description} fontSize={13} paragraphStyle={{ lineHeight: 1.55, margin: "0 0 10px", color: "inherit", opacity: 0.9 }} tight />
             </PanelSection>
           )}
 
