@@ -675,7 +675,14 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "years": []
+  "years": [
+   {
+    "from": 2015,
+    "to": 2025,
+    "label": "companiesmarketcap.com",
+    "url": "https://companiesmarketcap.com/lg-electronics/marketcap/"
+   }
+  ]
  },
  "liberty-global": {
   "frequency": "Live",
