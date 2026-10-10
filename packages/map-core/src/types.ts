@@ -79,6 +79,9 @@ export type PlanetNode = {
   // get collision spacing from their label box + the entity-padding knob.
   isEntity?: boolean
   r: number // currently-displayed radius (tweens toward targetR)
+  /** True while the first-load intro has not yet reached this planet (its turn
+   *  in the cascade hasn't come): drawn at its start size, its name held back. */
+  entering?: boolean
   targetR: number // radius implied by the current valuation
   hue: number
   style: PlanetStyle | null
@@ -132,4 +135,33 @@ export type LayoutInput = {
   // identity (connection/position matching); this only changes what's drawn, e.g.
   // to strip an authoring marker like " - CONVERT TO USD" from the shown name.
   labelText?: string
+}
+
+/** The first-load intro (planets flying out of their sector wells), tunable. */
+export type IntroEasing = "outCubic" | "outQuint" | "outExpo" | "outBack" | "inOutCubic"
+export type IntroOptions = {
+  /** Each planet's flight, ms. */
+  durationMs: number
+  /** Before the first planet moves, ms. */
+  startDelayMs: number
+  /** Added per sector, in `sectorOrder`, ms. */
+  sectorOffsetMs: number
+  /** Added per planet within its sector (largest first), ms. */
+  planetOffsetMs: number
+  easing: IntroEasing
+  /** A planet's size at the start of its flight, as a share of its final size. */
+  startScale: number
+  /** How far from the sector well the flight starts (± slide units of jitter). */
+  spread: number
+  /** Sector order for the per-sector offset (the sidebar's order). */
+  sectorOrder?: string[]
+}
+export const INTRO_DEFAULTS: IntroOptions = {
+  durationMs: 800,
+  startDelayMs: 0,
+  sectorOffsetMs: 0,
+  planetOffsetMs: 0,
+  easing: "outCubic",
+  startScale: 1,
+  spread: 80,
 }

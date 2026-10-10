@@ -13,6 +13,9 @@ import {
   type PlanetNode,
   type ViewMode,
   type LayoutInput,
+  INTRO_DEFAULTS,
+  type IntroEasing,
+  type IntroOptions,
 } from "@media-map/map-core";
 import { COMPANY_POSITIONS, type PlanetPosition } from "./layout";
 import { AboutModal } from "./AboutModal";
@@ -2209,6 +2212,96 @@ function EditorToolbar({
             ↺ Reset connections
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- The first-load intro (?intro=1) ---------------------------------------
+// The planets' flight out of their sector wells on first load (and on a Time
+// Machine "Explore"), tunable on localhost with ?intro=1: the shipped values are
+// INTRO_SHIPPED; edits live in localStorage until copied out and pasted here.
+type IntroTuning = Omit<IntroOptions, "sectorOrder">;
+const INTRO_SHIPPED: IntroTuning = { ...INTRO_DEFAULTS };
+const INTRO_STORE_KEY = "mm-intro-tuning";
+const INTRO_EASINGS: { value: IntroEasing; label: string }[] = [
+  { value: "outCubic", label: "Out cubic (today)" },
+  { value: "outQuint", label: "Out quint (snappier)" },
+  { value: "outExpo", label: "Out expo (snappiest)" },
+  { value: "outBack", label: "Out back (overshoot)" },
+  { value: "inOutCubic", label: "In-out cubic" },
+];
+function useIntroTuning() {
+  const enabled = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const v = new URLSearchParams(window.location.search).get("intro");
+    return v === "1" || v === "true";
+  }, []);
+  const [tuning, setTuning] = useState<IntroTuning>(() => {
+    if (!enabled) return INTRO_SHIPPED;
+    try {
+      const raw = JSON.parse(localStorage.getItem(INTRO_STORE_KEY) ?? "null") as Partial<IntroTuning> | null;
+      return { ...INTRO_SHIPPED, ...(raw ?? {}) };
+    } catch {
+      return INTRO_SHIPPED;
+    }
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    try {
+      localStorage.setItem(INTRO_STORE_KEY, JSON.stringify(tuning));
+    } catch {
+      /* storage blocked */
+    }
+  }, [enabled, tuning]);
+  return { enabled, tuning, setTuning };
+}
+
+/** The ?intro=1 panel: sliders for the planets' first-load flight. */
+function IntroTuningPanel({ tuning, setTuning, onReplay }: { tuning: IntroTuning; setTuning: (t: IntroTuning) => void; onReplay: () => void }) {
+  const [flash, setFlash] = useState<string | null>(null);
+  const font = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
+  const btn: React.CSSProperties = { background: "#1d2229", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: 7, padding: "5px 10px", font: "inherit", fontSize: 12, cursor: "pointer" };
+  const set = <K extends keyof IntroTuning>(k: K, v: IntroTuning[K]) => setTuning({ ...tuning, [k]: v });
+  const total = tuning.startDelayMs + 16 * tuning.sectorOffsetMs + 24 * tuning.planetOffsetMs + tuning.durationMs;
+  return (
+    <div
+      style={{
+        position: "fixed", top: 62, right: 16, width: 300, zIndex: 400, boxSizing: "border-box", padding: 12,
+        background: "#161a21", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: 10, fontFamily: font, fontSize: 12,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <strong style={{ fontSize: 12, letterSpacing: 0.5 }}>INTRO</strong>
+        <button style={{ ...btn, background: "#3657FD", borderColor: "#3657FD", color: "#fff" }} onClick={onReplay}>Replay</button>
+      </div>
+      <SliderRow label="Start delay" value={tuning.startDelayMs} min={0} max={1500} step={10} onChange={(v) => set("startDelayMs", v)} format={(v) => `${v} ms`} />
+      <SliderRow label="Sector offset (per sector, sidebar order)" value={tuning.sectorOffsetMs} min={0} max={300} step={5} onChange={(v) => set("sectorOffsetMs", v)} format={(v) => `${v} ms`} />
+      <SliderRow label="Company offset (per planet, largest first)" value={tuning.planetOffsetMs} min={0} max={150} step={5} onChange={(v) => set("planetOffsetMs", v)} format={(v) => `${v} ms`} />
+      <SliderRow label="Flight duration" value={tuning.durationMs} min={200} max={2500} step={25} onChange={(v) => set("durationMs", v)} format={(v) => `${v} ms`} />
+      <SliderRow label="Start size" value={tuning.startScale} min={0} max={1} step={0.05} onChange={(v) => set("startScale", v)} format={(v) => `${Math.round(v * 100)}%`} />
+      <SliderRow label="Spread from the well" value={tuning.spread} min={0} max={600} step={10} onChange={(v) => set("spread", v)} format={(v) => `${v}`} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, marginBottom: 2 }}>
+        <span style={{ opacity: 0.75 }}>Easing</span>
+      </div>
+      <select value={tuning.easing} onChange={(e) => set("easing", e.target.value as IntroEasing)} style={{ ...btn, width: "100%", marginBottom: 10 }}>
+        {INTRO_EASINGS.map((e) => (
+          <option key={e.value} value={e.value}>{e.label}</option>
+        ))}
+      </select>
+      <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 10 }}>Whole intro ≈ {(total / 1000).toFixed(1)} s (17 sectors, biggest sector 25 planets)</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          style={btn}
+          onClick={() => {
+            navigator.clipboard?.writeText(JSON.stringify(tuning, null, 2)).then(() => setFlash("Copied"), () => setFlash("Copy failed"));
+            window.setTimeout(() => setFlash(null), 1200);
+          }}
+        >
+          Copy JSON
+        </button>
+        <button style={btn} onClick={() => setTuning({ ...INTRO_SHIPPED })}>Reset</button>
+        {flash && <span style={{ alignSelf: "center", opacity: 0.8 }}>{flash}</span>}
       </div>
     </div>
   );
@@ -4951,6 +5044,7 @@ export default function MediaMap() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const mapSvgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
+  const introTune = useIntroTuning();
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
   // Gear panel open/close (phone view switcher).
@@ -6100,6 +6194,8 @@ export default function MediaMap() {
     presolved: () => (K ? solvedLayoutFor(activeDate.year, liveSolveOpts) : null),
     // Under the Time Machine the map isn't visible, so a year switch just lands.
     instant: timelineOpen,
+    // The first-load flight's timing (?intro=1 to tune); sectors in the sidebar's order.
+    intro: { ...introTune.tuning, sectorOrder: allSectors },
   });
   // ---- Time Machine: each year's real layout ------------------------------
   // The solve options for ANY year, built by the same helpers the live map
@@ -8538,7 +8634,7 @@ export default function MediaMap() {
                 ...visibleNodes.filter((n) => n.name !== hoveredPlanet),
                 ...visibleNodes.filter((n) => n.name === hoveredPlanet),
               ]
-                .filter((n) => !n.isEntity)
+                .filter((n) => !n.isEntity && !n.entering)
                 .map((n) => (
                   <Planet
                     key={`name-${n.name}`}
@@ -9033,6 +9129,10 @@ export default function MediaMap() {
               />
             )}
           </div>
+        )}
+
+        {introTune.enabled && !timelineOpen && (
+          <IntroTuningPanel tuning={introTune.tuning} setTuning={introTune.setTuning} onReplay={() => setFlyIntroToken((n) => n + 1)} />
         )}
 
         {/* Eshap logo — top-left of the map, hugging the side panel (desktop).
