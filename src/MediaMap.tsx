@@ -1239,7 +1239,7 @@ function PlanetDetailPanel({
         `${node.sector}.`,
         `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
         sources?.current
-          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.years.length ? ` Historical data source ${yearRange(sources.years[0])} ${sources.years[0].label}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
+          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.years.length ? ` Historical data source ${sources.years[0].label}, ${yearRange(sources.years[0])}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
           : detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
         isPresent && detail && detail.vitals.length > 0
           ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
@@ -1582,13 +1582,13 @@ function yearRange(y: YearSource): string {
   return y.from === y.to ? String(y.from) : `${y.from}–${y.to}`;
 }
 
-/** One past-year line: "2022–2024 — Forge Global". */
+/** One past-year line, source first like the current-source line: "Forge Global · 2022–2024". */
 function YearLine({ y }: { y: YearSource }) {
   return (
     <span style={{ fontSize: 14, lineHeight: 1.5 }}>
-      <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{yearRange(y)}</span>
-      <span style={{ opacity: 0.4 }}> — </span>
       <SourceLink source={y} />
+      <span style={{ opacity: 0.4 }}> · </span>
+      <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{yearRange(y)}</span>
     </span>
   );
 }
