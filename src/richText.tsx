@@ -1,5 +1,6 @@
 // Plain-text copy from Sanity, rendered with a little structure: a blank line
-// starts a new paragraph and a link is written `[link text](https://…)`. Used
+// starts a new paragraph, a single line break stays a line break (credits,
+// one name per line) and a link is written `[link text](https://…)`. Used
 // by the About modal's body copy and the company detail panel's overview, so
 // Evan writes the same way in both fields.
 
@@ -10,6 +11,7 @@ const pStyle: React.CSSProperties = {
   fontSize: 16,
   lineHeight: 1.6,
   color: "rgba(255,255,255,0.85)",
+  whiteSpace: "pre-line", // a single line break in the copy is a line break
 };
 
 // Only web, mail and same-site addresses become links; anything else (e.g. a
@@ -66,7 +68,8 @@ export function Paragraphs({
 }) {
   const paras = text
     .split(/\n\s*\n/)
-    .map((s) => s.trim())
+    // Trailing spaces at the end of a line are dropped so they can't wrap.
+    .map((s) => s.split("\n").map((l) => l.trim()).join("\n").trim())
     .filter(Boolean);
   return (
     <>
