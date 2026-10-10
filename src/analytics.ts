@@ -25,6 +25,7 @@ export type AnalyticsEvent =
   | { name: "Time Machine explore"; props: { year: number } }
   | { name: "Outbound Substack from side panel"; props?: undefined }
   | { name: "Outbound Substack from download module"; props?: undefined }
+  | { name: "Outbound Substack from feedback button"; props?: undefined }
   | { name: "Outbound Substack from About"; props: { "About section clicks": string } }
   | { name: "About scrolled"; props: { "About scroll depth": ScrollDepth } }
   | { name: "Linear scrolled"; props: { "Linear scroll depth": ScrollDepth } }

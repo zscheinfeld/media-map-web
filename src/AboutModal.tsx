@@ -341,8 +341,8 @@ export function AboutModal({
   }, [open, sections.length]);
 
   // Analytics: a click on any link to Substack — a button, a link row or a link
-  // typed into the copy — counts, the Downloads tab's as its own goal and any
-  // other section's with the tab it was clicked in.
+  // typed into the copy — counts: the Downloads and Feedback tabs' as their own
+  // goals, any other section's with the tab it was clicked in.
   const sectionsRef = useRef(sections);
   useEffect(() => {
     sectionsRef.current = sections;
@@ -357,6 +357,7 @@ export function AboutModal({
       const idx = Number((a.closest("section") as HTMLElement | null)?.dataset.index);
       const tab = (Number.isNaN(idx) ? undefined : sectionsRef.current[idx]?.tabLabel) || "about";
       if (/download/i.test(tab)) track("Outbound Substack from download module");
+      else if (/feedback/i.test(tab)) track("Outbound Substack from feedback button");
       else track("Outbound Substack from About", { "About section clicks": tab.toLowerCase() });
     };
     root.addEventListener("click", onClick);
