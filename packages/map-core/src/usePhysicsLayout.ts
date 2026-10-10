@@ -548,6 +548,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
         startR.set(n.name, n.targetR * Math.max(0, Math.min(1, io.startScale)))
         n.r = startR.get(n.name)!
         n.entering = (delay.get(n.name) ?? 0) > 0
+        n.introK = n.entering || io.fadeShare > 0 ? 0 : 1
       }
 
       const startPos = new Map<string, {x: number; y: number}>()
@@ -571,6 +572,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           const r0 = startR.get(n.name)!
           n.r = tn >= 1 ? n.targetR : r0 + (n.targetR - r0) * Math.max(0, Math.min(1, k))
           n.entering = elapsed < d
+          // Opacity: hidden until its turn, then up over the first `fadeShare` of the flight.
+          n.introK = elapsed < d ? 0 : io.fadeShare > 0 ? Math.min(1, tn / io.fadeShare) : 1
         }
         setNodes(built.slice())
 
@@ -580,6 +583,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           tweenRafRef.current = null
           introRef.current = null
           for (const n of built) {
+            n.introK = 1
+            n.entering = false
             const f = savedFx.get(n.name)
             if (f && f.fx !== null && f.fy !== null) {
               n.fx = f.fx

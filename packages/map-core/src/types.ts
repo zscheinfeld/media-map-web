@@ -82,6 +82,8 @@ export type PlanetNode = {
   /** True while the first-load intro has not yet reached this planet (its turn
    *  in the cascade hasn't come): drawn at its start size, its name held back. */
   entering?: boolean
+  /** The first-load intro's opacity for this planet, 0..1 (absent = 1). */
+  introK?: number
   targetR: number // radius implied by the current valuation
   hue: number
   style: PlanetStyle | null
@@ -153,6 +155,9 @@ export type IntroOptions = {
   startScale: number
   /** How far from the sector well the flight starts (± slide units of jitter). */
   spread: number
+  /** Share of each planet's flight over which it fades from transparent to
+   *  opaque (0 = no fade: visible from the start, today's look). */
+  fadeShare: number
   /** Sector order for the per-sector offset (the sidebar's order). */
   sectorOrder?: string[]
 }
@@ -164,4 +169,5 @@ export const INTRO_DEFAULTS: IntroOptions = {
   easing: "outCubic",
   startScale: 1,
   spread: 80,
+  fadeShare: 0,
 }

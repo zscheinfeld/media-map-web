@@ -13,7 +13,6 @@ import {
   type PlanetNode,
   type ViewMode,
   type LayoutInput,
-  INTRO_DEFAULTS,
   type IntroEasing,
   type IntroOptions,
 } from "@media-map/map-core";
@@ -500,6 +499,8 @@ type SectorPanelProps = {
   sectorColorOverride?: (s: string) => string | null;
   /** Style lab: solid background for the side panel. */
   panelBackground?: string | null;
+  /** Bump to replay the rows' entrance cascade (the ?intro=1 panel's Replay). */
+  introToken?: number;
 };
 
 /** Fill of the control pills over the map (view tabs; zoom / refresh; download). */
@@ -555,16 +556,21 @@ function SectorPanelContent({
   onFocusSector,
   onClose,
   sectorColorOverride,
+  introToken = 0,
 }: SectorPanelProps & { onClose?: () => void }) {
   // The rows cascade in like the List view's: each starts a touch lower and
   // transparent, and slides up a little after the one before it. The flag flips
   // one frame after the sectors arrive so the first paint is the "before" state.
-  const [rowsEntered, setRowsEntered] = useState(false);
+  // `enteredFor` is the replay token the rows have entered for: a new token
+  // (a replay) puts them back in the "before" state on that very render, and a
+  // frame later they cascade in again.
+  const [enteredFor, setEnteredFor] = useState<number | null>(null);
+  const rowsEntered = enteredFor === introToken;
   useEffect(() => {
     if (sectors.length === 0) return;
-    const id = requestAnimationFrame(() => setRowsEntered(true));
+    const id = requestAnimationFrame(() => setEnteredFor(introToken));
     return () => cancelAnimationFrame(id);
-  }, [sectors.length]);
+  }, [sectors.length, introToken]);
 
   // Companies on the map with the current sector filter (the header reads
   // "120 of 182 companies" while some sectors are off).
@@ -724,7 +730,8 @@ function SectorPanelContent({
                 // Visible card so the row's padding reads — no outline (hover is
                 // signalled by the background alone).
                 background: isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
-                transition: `background 120ms, opacity 320ms ease ${enterDelay}ms, transform 320ms ease ${enterDelay}ms`,
+                // Hidden instantly (a replay), shown with the cascade.
+                transition: rowsEntered ? `background 120ms, opacity 320ms ease ${enterDelay}ms, transform 320ms ease ${enterDelay}ms` : "background 120ms",
               }}
             >
               {/* Checkbox half — toggles visibility; hover handled by parent row */}
@@ -2222,7 +2229,17 @@ function EditorToolbar({
 // Machine "Explore"), tunable on localhost with ?intro=1: the shipped values are
 // INTRO_SHIPPED; edits live in localStorage until copied out and pasted here.
 type IntroTuning = Omit<IntroOptions, "sectorOrder">;
-const INTRO_SHIPPED: IntroTuning = { ...INTRO_DEFAULTS };
+const INTRO_SHIPPED: IntroTuning = {
+  // Tuned by eye in the ?intro=1 panel, 2026-10-10.
+  durationMs: 800,
+  startDelayMs: 0,
+  sectorOffsetMs: 40,
+  planetOffsetMs: 15,
+  easing: "outCubic",
+  startScale: 0.3,
+  spread: 80,
+  fadeShare: 0.3,
+};
 const INTRO_STORE_KEY = "mm-intro-tuning";
 const INTRO_EASINGS: { value: IntroEasing; label: string }[] = [
   { value: "outCubic", label: "Out cubic (today)" },
@@ -2281,6 +2298,7 @@ function IntroTuningPanel({ tuning, setTuning, onReplay }: { tuning: IntroTuning
       <SliderRow label="Flight duration" value={tuning.durationMs} min={200} max={2500} step={25} onChange={(v) => set("durationMs", v)} format={(v) => `${v} ms`} />
       <SliderRow label="Start size" value={tuning.startScale} min={0} max={1} step={0.05} onChange={(v) => set("startScale", v)} format={(v) => `${Math.round(v * 100)}%`} />
       <SliderRow label="Spread from the well" value={tuning.spread} min={0} max={600} step={10} onChange={(v) => set("spread", v)} format={(v) => `${v}`} />
+      <SliderRow label="Fade in (share of the flight)" value={tuning.fadeShare} min={0} max={1} step={0.05} onChange={(v) => set("fadeShare", v)} format={(v) => (v === 0 ? "off" : `${Math.round(v * 100)}%`)} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, marginBottom: 2 }}>
         <span style={{ opacity: 0.75 }}>Easing</span>
       </div>
@@ -5045,6 +5063,8 @@ export default function MediaMap() {
   const mapSvgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const introTune = useIntroTuning();
+  // The panel's Replay also re-runs the sidebar's row cascade, so both can be judged together.
+  const [sidebarIntroToken, setSidebarIntroToken] = useState(0);
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [mobileSectorsOpen, setMobileSectorsOpen] = useState(false);
   // Gear panel open/close (phone view switcher).
@@ -7689,6 +7709,7 @@ export default function MediaMap() {
 
   const sectorPanelProps: SectorPanelProps = {
     sectors: allSectors,
+    introToken: sidebarIntroToken,
     counts,
     enabled,
     onToggle: toggleSector,
@@ -8408,10 +8429,12 @@ export default function MediaMap() {
               const connDimmed =
                 (spotlitSector !== null && a.sector !== spotlitSector && b.sector !== spotlitSector) ||
                 (searchMatches !== null && !searchMatches.has(a.name) && !searchMatches.has(b.name));
+              // During the intro a line fades in with the slower of its two planets.
+              const introLine = Math.min(a.introK ?? 1, b.introK ?? 1);
               return (
                 <g
                   key={`conn-${idx}`}
-                  style={{ opacity: connDimmed ? 0.2 : 1, transition: "opacity 220ms ease" }}
+                  style={{ opacity: connDimmed ? 0.2 : introLine, transition: introLine < 1 ? "none" : "opacity 220ms ease" }}
                 >
                   <ConnectionLine
                     ax={ax}
@@ -8563,9 +8586,10 @@ export default function MediaMap() {
                   </g>
                 );
               }
+              const introOpacity = n.introK ?? 1;
               return (
+                <g key={n.name} opacity={introOpacity < 1 ? introOpacity : undefined}>
                 <Planet
-                  key={n.name}
                   part={namesOnTop ? "body" : "all"}
                   node={renderNode}
                   slideUnitsPerPx={slideUnitsPerPx}
@@ -8624,6 +8648,7 @@ export default function MediaMap() {
                   // Mobile: hide entities by default, reveal once zoomed in.
                   entityLabelSuppressed={mobileView && zoom < ENTITY_MOBILE_ZOOM_THRESHOLD}
                 />
+                </g>
               );
             })}
 
@@ -8636,8 +8661,8 @@ export default function MediaMap() {
               ]
                 .filter((n) => !n.isEntity && !n.entering)
                 .map((n) => (
+                  <g key={`name-${n.name}`} opacity={(n.introK ?? 1) < 1 ? n.introK : undefined}>
                   <Planet
-                    key={`name-${n.name}`}
                     part="label"
                     node={n}
                     slideUnitsPerPx={slideUnitsPerPx}
@@ -8658,6 +8683,7 @@ export default function MediaMap() {
                     )}
                     labelMinScreenDiameter={nameFloor}
                   />
+                  </g>
                 ))}
 
             {/* Draggable sector markers — edit mode only. Rendered after the
@@ -9132,7 +9158,14 @@ export default function MediaMap() {
         )}
 
         {introTune.enabled && !timelineOpen && (
-          <IntroTuningPanel tuning={introTune.tuning} setTuning={introTune.setTuning} onReplay={() => setFlyIntroToken((n) => n + 1)} />
+          <IntroTuningPanel
+            tuning={introTune.tuning}
+            setTuning={introTune.setTuning}
+            onReplay={() => {
+              setFlyIntroToken((n) => n + 1);
+              setSidebarIntroToken((n) => n + 1);
+            }}
+          />
         )}
 
         {/* Eshap logo — top-left of the map, hugging the side panel (desktop).
