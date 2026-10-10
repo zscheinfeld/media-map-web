@@ -1550,18 +1550,15 @@ function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number })
 }
 
 /** How often the current number updates, set like the year beside a historical
- *  source ("· 2025"): "Updated Monthly" in the same muted tone, "Live" in green
- *  with a dot. */
+ *  source ("· 2025"): "Updated Monthly" in the same muted tone, "Live" in green. */
+const LIVE_GREEN = "#A1FF62";
 function Frequency({ frequency }: { frequency: CompanySources["frequency"] }) {
   const live = frequency === "Live";
   return (
     <span style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: "nowrap" }}>
       <span style={{ opacity: 0.4 }}> · </span>
       {live ? (
-        <span style={{ color: "#7fe0a8", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: "#7fe0a8", display: "inline-block" }} />
-          Live
-        </span>
+        <span style={{ color: LIVE_GREEN }}>Live</span>
       ) : (
         <span style={{ opacity: 0.6 }}>Updated Monthly</span>
       )}
