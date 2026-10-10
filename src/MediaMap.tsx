@@ -553,6 +553,16 @@ function SectorPanelContent({
   onClose,
   sectorColorOverride,
 }: SectorPanelProps & { onClose?: () => void }) {
+  // The rows cascade in like the List view's: each starts a touch lower and
+  // transparent, and slides up a little after the one before it. The flag flips
+  // one frame after the sectors arrive so the first paint is the "before" state.
+  const [rowsEntered, setRowsEntered] = useState(false);
+  useEffect(() => {
+    if (sectors.length === 0) return;
+    const id = requestAnimationFrame(() => setRowsEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [sectors.length]);
+
   // Companies on the map with the current sector filter (the header reads
   // "120 of 182 companies" while some sectors are off).
   const visibleTotal = sectors.filter((sec) => enabled.has(sec)).reduce((a, sec) => a + (counts[sec] ?? 0), 0);
@@ -660,8 +670,9 @@ function SectorPanelContent({
         }}
         onMouseLeave={() => onHoverSector(null)}
       >
-        {sectors.map(s => {
+        {sectors.map((s, rowIdx) => {
           const hue = hueForSector(s);
+          const enterDelay = rowsEntered ? Math.min(rowIdx * 22, 360) : 0;
           const flat = flatStyleForSector(s);
           const labFill = sectorColorOverride?.(s) ?? null;
           const customBg = labFill ? null : (flat?.swatchBackground ?? null);
@@ -702,14 +713,15 @@ function SectorPanelContent({
                 flexShrink: 0,
                 borderRadius: 6,
                 overflow: "hidden",
-                opacity: on ? 1 : 0.45,
+                opacity: !rowsEntered ? 0 : on ? 1 : 0.45,
+                transform: rowsEntered ? "translateY(0)" : "translateY(10px)",
                 fontSize: rowFont,
                 lineHeight: 1.1,
                 marginBottom: rowGap,
                 // Visible card so the row's padding reads — no outline (hover is
                 // signalled by the background alone).
                 background: isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
-                transition: "background 120ms",
+                transition: `background 120ms, opacity 320ms ease ${enterDelay}ms, transform 320ms ease ${enterDelay}ms`,
               }}
             >
               {/* Checkbox half — toggles visibility; hover handled by parent row */}
