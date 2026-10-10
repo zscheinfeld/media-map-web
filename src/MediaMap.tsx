@@ -1617,18 +1617,21 @@ function DataSourcesSections({ sources }: { sources: CompanySources }) {
           </div>
           {rest.length > 0 && (
             <>
-              {showAll && (
-                <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none" }}>
+              {/* Always in the tree so it can unfold smoothly (App.css .mm-expand). */}
+              <div className="mm-expand" data-open={showAll} aria-hidden={!showAll}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                   {rest.map((y, i) => (
-                    <li key={i}>
+                    <li key={i} style={i === 0 ? { paddingTop: 4 } : undefined}>
                       <YearLine y={y} />
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
               <button
                 type="button"
+                className="mm-hover"
                 aria-expanded={showAll}
+                aria-label={showAll ? "Show fewer years" : `Show ${rest.length} more year${rest.length === 1 ? "" : "s"}`}
                 onClick={() => setShowAll((v) => !v)}
                 style={{
                   marginTop: 8,
@@ -1642,7 +1645,7 @@ function DataSourcesSections({ sources }: { sources: CompanySources }) {
                   cursor: "pointer",
                 }}
               >
-                {showAll ? "Show fewer years" : `+ ${rest.length} more year${rest.length === 1 ? "" : "s"}`}
+                {showAll ? "Show fewer" : `+ ${rest.length} more`}
               </button>
             </>
           )}
