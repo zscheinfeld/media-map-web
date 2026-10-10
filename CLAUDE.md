@@ -118,6 +118,10 @@ Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet 
 
 [src/historical.ts](src/historical.ts) does NOT fetch historical data — it generates **deterministic mock** valuations per (company, date) via `hashRand(seed)`. The "current date" is hardcoded as `{ year: 2026, month: 5 }`. The carousel/timeline interacts with this mock data; only the active map mode hits the sheet.
 
+### Copy from Sanity
+
+Plain-text fields that carry prose — the About modal's body blocks and a company's `description` ("Cartographer's Notes" in the detail panel) — go through `Paragraphs` in [src/richText.tsx](src/richText.tsx): a blank line starts a new paragraph and a link is written `[link text](https://example.com)` (web, mail and same-site addresses only; anything else stays plain text). The Studio field help says the same, so Evan writes one way everywhere.
+
 ### Interaction details worth knowing
 
 - `didDragRef` in MediaMap.tsx tracks whether a mouse-down → mouse-up exceeded a 4px movement threshold. The planet's `onClick` short-circuits if true so drag-pan doesn't accidentally trigger focus-zoom on a planet under the cursor.
