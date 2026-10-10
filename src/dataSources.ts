@@ -3,7 +3,9 @@
 // column read from the valuations snapshot once the sheet carries one.
 
 export type SourceRef = { label: string; url: string | null };
-export type CompanySources = { frequency: "Live" | "Monthly"; current: SourceRef | null; historical: SourceRef[] };
+/** One source for a run of years (newest first in the list). */
+export type YearSource = SourceRef & { from: number; to: number };
+export type CompanySources = { frequency: "Live" | "Monthly"; current: SourceRef | null; years: YearSource[] };
 
 export const COMPANY_SOURCES: Record<string, CompanySources> = {
  "accenture": {
@@ -12,8 +14,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/accenture/marketcap/"
    }
@@ -25,8 +29,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/alibaba/marketcap/"
    }
@@ -38,8 +44,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/alphabet-google/marketcap/"
    }
@@ -51,8 +59,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/amazon/marketcap/"
    }
@@ -64,8 +74,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/amc-entertainment/marketcap/"
    }
@@ -77,8 +89,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/amc-networks/marketcap/"
    }
@@ -90,12 +104,7 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
-   {
-    "label": "Yahoo Finance",
-    "url": "https://finance.yahoo.com/quote/ANGX/"
-   }
-  ]
+  "years": []
  },
  "apollo": {
   "frequency": "Live",
@@ -103,8 +112,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/apollo-global-management/marketcap/"
    }
@@ -116,8 +127,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/apple/marketcap/"
    }
@@ -129,8 +142,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/asmodee-group-ab/marketcap/"
    }
@@ -142,8 +157,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/att/marketcap/"
    }
@@ -155,8 +172,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/bandai-namco/marketcap/"
    }
@@ -168,8 +187,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Yahoo Finance",
     "url": "https://finance.yahoo.com/quote/BNJ.AS/"
    }
@@ -181,8 +202,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/bce/marketcap/"
    }
@@ -194,12 +217,7 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
-   {
-    "label": "companiesmarketcap.com",
-    "url": "https://companiesmarketcap.com/bending-spoons/marketcap/"
-   }
-  ]
+  "years": []
  },
  "canal-convert-to-usd": {
   "frequency": "Live",
@@ -207,8 +225,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2024,
+    "to": 2025,
     "label": "Yahoo Finance",
     "url": "https://finance.yahoo.com/quote/CAN.L/"
    }
@@ -220,8 +240,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/charter-communications/marketcap/"
    }
@@ -233,8 +255,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/cinemark-theatres/marketcap/"
    }
@@ -246,8 +270,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/cineplex/marketcap/"
    }
@@ -259,8 +285,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/comcast/marketcap/"
    }
@@ -272,8 +300,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/comscore/marketcap/"
    }
@@ -285,8 +315,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/dentsu/marketcap/"
    }
@@ -298,8 +330,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/deutsche-telekom/marketcap/"
    }
@@ -311,8 +345,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/walt-disney/marketcap/"
    }
@@ -324,8 +360,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2024,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/trump-media-technology-group/marketcap/"
    }
@@ -337,8 +375,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "BBC",
    "url": "https://www.bbc.com/news/articles/cjejyl34345o"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/electronic-arts/marketcap/"
    }
@@ -350,8 +390,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/echostar/marketcap/"
    }
@@ -363,8 +405,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/ew-scripps-company/marketcap/"
    }
@@ -376,8 +420,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/formula-one-group/marketcap/"
    }
@@ -389,8 +435,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/fox-corporation/marketcap/"
    }
@@ -402,8 +450,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/fubotv/marketcap/"
    }
@@ -415,8 +465,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/fuji-media-holdings/marketcap/"
    }
@@ -428,8 +480,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/gamestop/marketcap/"
    }
@@ -441,8 +495,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/gray-television/marketcap/"
    }
@@ -454,8 +510,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/metropole-television-groupe-m6/marketcap/"
    }
@@ -467,8 +525,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/televisa/marketcap/"
    }
@@ -480,8 +540,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/hasbro/marketcap/"
    }
@@ -493,8 +555,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/hisense-visual-technology/marketcap/"
    }
@@ -506,8 +570,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/hybe/marketcap/"
    }
@@ -519,8 +585,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/iac/marketcap/"
    }
@@ -532,8 +600,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/iheartmedia/marketcap/"
    }
@@ -545,8 +615,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/ipg/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/ipg/marketcap/"
    }
@@ -558,8 +630,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/ispos/marketcap/"
    }
@@ -571,8 +645,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/itv/marketcap/"
    }
@@ -584,8 +660,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/groupe-lagardere/marketcap/"
    }
@@ -597,7 +675,7 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": []
+  "years": []
  },
  "liberty-global": {
   "frequency": "Live",
@@ -605,8 +683,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/liberty-global/marketcap/"
    }
@@ -618,8 +698,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2024,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/lionsgate-studios/marketcap/"
    }
@@ -631,8 +713,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/live-nation/marketcap/"
    }
@@ -644,8 +728,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/meta-platforms/marketcap/"
    }
@@ -657,8 +743,16 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
+    "label": "companiesmarketcap.com",
+    "url": "https://companiesmarketcap.com/mfe-mediaforeurope/marketcap/"
+   },
+   {
+    "from": 2015,
+    "to": 2016,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/mfe-mediaforeurope/marketcap/"
    }
@@ -670,8 +764,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/microsoft/marketcap/"
    }
@@ -683,8 +779,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/madison-square-garden/marketcap/"
    }
@@ -696,8 +794,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/multichoice-group/marketcap/"
    }
@@ -709,8 +809,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2023,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/national-cinemedia/marketcap/"
    }
@@ -722,8 +824,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/netflix/marketcap/"
    }
@@ -735,8 +839,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/news-corp/marketcap/"
    }
@@ -748,8 +854,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/newsmax/marketcap/"
    }
@@ -761,8 +869,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/nexstar-media/marketcap/"
    }
@@ -774,8 +884,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/nine-entertainment-co-holdings/marketcap/"
    }
@@ -787,8 +899,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/nintendo/marketcap/"
    }
@@ -800,8 +914,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/nippon-television-holdings/marketcap/"
    }
@@ -813,8 +929,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/nvidia/marketcap/"
    }
@@ -826,8 +944,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/new-york-times/marketcap/"
    }
@@ -839,8 +959,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/omnicom/marketcap/"
    }
@@ -852,8 +974,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2017,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/altice-usa/marketcap/"
    }
@@ -865,8 +989,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/oracle/marketcap/"
    }
@@ -878,8 +1004,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/paramount-skydance/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/paramount-skydance/marketcap/"
    }
@@ -891,8 +1019,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/pinterest/marketcap/"
    }
@@ -904,8 +1034,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/prosiebensat1-media/marketcap/"
    }
@@ -917,8 +1049,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/publicis-groupe/marketcap/"
    }
@@ -930,8 +1064,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/quebecor/marketcap/"
    }
@@ -943,8 +1079,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2024,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/reddit/marketcap/"
    }
@@ -956,8 +1094,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/reliance-industries/marketcap/"
    }
@@ -969,8 +1109,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2021,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/roblox/marketcap/"
    }
@@ -982,8 +1124,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/rogers-communication/marketcap/"
    }
@@ -995,8 +1139,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2017,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/roku/marketcap/"
    }
@@ -1008,8 +1154,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/samsung/marketcap/"
    }
@@ -1021,8 +1169,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/schibsted/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/schibsted/marketcap/"
    }
@@ -1034,8 +1184,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sega-sammy-holdings/marketcap/"
    }
@@ -1047,8 +1199,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sinclair-broadcast/marketcap/"
    }
@@ -1060,8 +1214,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sirius-xm/marketcap/"
    }
@@ -1073,8 +1229,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2017,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/snap/marketcap/"
    }
@@ -1086,8 +1244,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sony/marketcap/"
    }
@@ -1099,12 +1259,7 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
-   {
-    "label": "companiesmarketcap.com",
-    "url": "https://companiesmarketcap.com/spacex/marketcap/"
-   }
-  ]
+  "years": []
  },
  "sphere": {
   "frequency": "Live",
@@ -1112,8 +1267,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sphere-entertainment/marketcap/"
    }
@@ -1125,8 +1282,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2018,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/spotify/marketcap/"
    }
@@ -1138,8 +1297,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/square-enix/marketcap/"
    }
@@ -1151,8 +1312,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2021,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/stagwell/marketcap/"
    }
@@ -1164,8 +1327,16 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
+    "label": "Yahoo Finance",
+    "url": "https://finance.yahoo.com/quote/STRZ/"
+   },
+   {
+    "from": 2015,
+    "to": 2015,
     "label": "Yahoo Finance",
     "url": "https://finance.yahoo.com/quote/STRZ/"
    }
@@ -1177,8 +1348,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/sun-tv-network/marketcap/"
    }
@@ -1190,8 +1363,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/t-mobile-us/marketcap/"
    }
@@ -1203,8 +1378,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/take-2-interactive/marketcap/"
    }
@@ -1216,8 +1393,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tcl-technology-group-corporation/marketcap/"
    }
@@ -1229,8 +1408,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tegna/marketcap/"
    }
@@ -1242,8 +1423,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/telus/marketcap/"
    }
@@ -1255,8 +1438,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tencent/marketcap/"
    }
@@ -1268,8 +1453,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tf1/marketcap/"
    }
@@ -1281,8 +1468,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2016,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/the-trade-desk/marketcap/"
    }
@@ -1294,8 +1483,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/thomson-reuters/marketcap/"
    }
@@ -1307,8 +1498,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2023,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tko-group/marketcap/"
    }
@@ -1320,8 +1513,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2022,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/tpg/marketcap/"
    }
@@ -1333,8 +1528,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/ubisoft/marketcap/"
    }
@@ -1346,8 +1543,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2021,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/universal-music-group/marketcap/"
    }
@@ -1359,8 +1558,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/unity-software/marketcap/"
    }
@@ -1372,8 +1573,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/usa-today-co/marketcap/"
    }
@@ -1385,8 +1588,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/verizon/marketcap/"
    }
@@ -1398,8 +1603,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/versant-media-group/marketcap/"
    }
@@ -1411,8 +1618,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/viaplay/marketcap/"
    }
@@ -1424,8 +1633,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/vivendi/marketcap/"
    }
@@ -1437,8 +1648,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/walmart/marketcap/"
    }
@@ -1450,8 +1663,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/warner-bros-discovery/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2022,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/warner-bros-discovery/marketcap/"
    }
@@ -1463,8 +1678,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2020,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/warner-music-group/marketcap/"
    }
@@ -1476,8 +1693,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/wpp/marketcap/"
    }
@@ -1489,8 +1708,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2018,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/xiaomi/marketcap/"
    }
@@ -1502,8 +1723,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/zee-entertainment/marketcap/"
    }
@@ -1515,8 +1738,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/ziff-davis/marketcap/"
    }
@@ -1528,8 +1753,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Google Finance",
    "url": null
   },
-  "historical": [
+  "years": [
    {
+    "from": 2019,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/zoom/marketcap/"
    }
@@ -1541,12 +1768,16 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Yahoo Finance",
    "url": "https://finance.yahoo.com/news/a24-valuation-jumps-3-5-110050443.html"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2023,
+    "to": 2025,
     "label": "Yahoo Finance",
     "url": "https://finance.yahoo.com/news/a24-valuation-jumps-3-5-110050443.html"
    },
    {
+    "from": 2021,
+    "to": 2022,
     "label": "Variety",
     "url": null
    }
@@ -1558,14 +1789,12 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "ABC annual report",
    "url": "https://www.abc.net.au/about/plans-reports-and-submissions/annual-reports/abc-annual-report-2024-25/105943122"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "ABC annual report",
     "url": "https://www.abc.net.au/about/plans-reports-and-submissions/annual-reports/abc-annual-report-2024-25/105943122"
-   },
-   {
-    "label": "financial statements",
-    "url": null
    }
   ]
  },
@@ -1575,8 +1804,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "GuruFocus",
    "url": "https://www.gurufocus.com/insider/17542/access-industries-holdings-llc"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "GuruFocus",
     "url": "https://www.gurufocus.com/insider/17542/access-industries-holdings-llc"
    }
@@ -1588,32 +1819,70 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "CNBC",
    "url": "https://www.cnbc.com/2025/07/08/cnbcs-most-valuable-sports-empires-2025-how-the-worlds-top-20-empires-rank.html"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "CNBC",
-    "url": "https://www.cnbc.com/2025/07/08/cnbcs-most-valuable-sports-empires-2025-how-the-worlds-top-20-empires-rank.html"
+    "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Forbes",
     "url": null
    },
    {
+    "from": 2023,
+    "to": 2023,
     "label": "Pollstar",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
+    "label": "Forbes",
+    "url": null
+   },
+   {
+    "from": 2021,
+    "to": 2021,
     "label": "Los Angeles Times",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "Bloomberg",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
+    "label": "Forbes",
+    "url": null
+   },
+   {
+    "from": 2018,
+    "to": 2018,
     "label": "Reuters",
     "url": null
    },
    {
+    "from": 2017,
+    "to": 2017,
+    "label": "The Wall Street Journal",
+    "url": null
+   },
+   {
+    "from": 2016,
+    "to": 2016,
+    "label": "Forbes",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2015,
     "label": "The Wall Street Journal",
     "url": null
    }
@@ -1625,25 +1894,23 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Reuters",
    "url": "https://www.reuters.com/business/anthropic-raises-65-billion-now-valued-965-billion-2026-05-28/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Reuters",
-    "url": "https://www.reuters.com/business/anthropic-raises-65-billion-now-valued-965-billion-2026-05-28/"
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Bloomberg",
     "url": null
    },
    {
-    "label": "CNBC",
+    "from": 2023,
+    "to": 2024,
+    "label": "Reuters",
     "url": null
    },
    {
-    "label": "The Wall Street Journal",
-    "url": null
-   },
-   {
-    "label": "Financial Times",
+    "from": 2021,
+    "to": 2022,
+    "label": "Bloomberg",
     "url": null
    }
   ]
@@ -1654,8 +1921,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Public Media Alliance",
    "url": "https://www.publicmediaalliance.org/whats-the-worlds-biggest-public-broadcaster-the-pma-briefing/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Public Media Alliance",
     "url": "https://www.publicmediaalliance.org/whats-the-worlds-biggest-public-broadcaster-the-pma-briefing/"
    }
@@ -1667,41 +1936,17 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Deadline",
    "url": "https://deadline.com/2023/10/caa-tpg-majority-stake-iacquired-francois-henri-pinault-artemis-bryan-lourd-ceo-1235539266/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Deadline",
-    "url": "https://deadline.com/2023/10/caa-tpg-majority-stake-iacquired-francois-henri-pinault-artemis-bryan-lourd-ceo-1235539266/"
-   },
-   {
-    "label": "Forbes",
-    "url": null
-   },
-   {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Groupe Artémis (official)",
     "url": null
    },
    {
-    "label": "Financial Times",
-    "url": null
-   },
-   {
-    "label": "Variety",
-    "url": null
-   },
-   {
-    "label": "The Wall Street Journal",
-    "url": null
-   },
-   {
-    "label": "CNBC",
-    "url": null
-   },
-   {
-    "label": "Reuters",
+    "from": 2015,
+    "to": 2024,
+    "label": "Forbes",
     "url": null
    }
   ]
@@ -1712,8 +1957,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/audacy/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2024,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/audacy/marketcap/"
    }
@@ -1725,8 +1972,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "BBC annual report",
    "url": "https://www.bbc.co.uk/aboutthebbc/annualreport2025-2026/our-finances"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "BBC annual report",
     "url": "https://www.bbc.co.uk/aboutthebbc/annualreport2025-2026/our-finances"
    }
@@ -1738,21 +1987,19 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "companiesmarketcap.com",
    "url": "https://companiesmarketcap.com/bertelsmann-se-co-kgaa/marketcap/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2024,
+    "to": 2025,
     "label": "companiesmarketcap.com",
     "url": "https://companiesmarketcap.com/bertelsmann-se-co-kgaa/marketcap/"
-   },
-   {
-    "label": "Not in Google Finance",
-    "url": null
    }
   ]
  },
  "bloomberg": {
   "frequency": "Monthly",
   "current": null,
-  "historical": []
+  "years": []
  },
  "bytedance": {
   "frequency": "Monthly",
@@ -1760,52 +2007,64 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Reuters",
    "url": "https://www.reuters.com/world/china/bytedance-valued-550-billion-proposed-share-sale-by-general-atlantic-sources-say-2026-02-25/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "Reuters",
     "url": "https://www.reuters.com/world/china/bytedance-valued-550-billion-proposed-share-sale-by-general-atlantic-sources-say-2026-02-25/"
    },
    {
-    "label": "TechFundingNews",
-    "url": null
-   },
-   {
-    "label": "Advisor Perspectives",
-    "url": null
-   },
-   {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "The Business Standard",
     "url": null
    },
    {
+    "from": 2023,
+    "to": 2023,
     "label": "TechNode",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "Straits Times",
     "url": null
    },
    {
+    "from": 2021,
+    "to": 2021,
+    "label": "Reuters",
+    "url": "https://www.reuters.com/world/china/bytedance-valued-550-billion-proposed-share-sale-by-general-atlantic-sources-say-2026-02-25/"
+   },
+   {
+    "from": 2020,
+    "to": 2020,
     "label": "The National",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "Tech in Asia",
     "url": null
    },
    {
-    "label": "Angel One Unlisted Analysis",
-    "url": null
+    "from": 2017,
+    "to": 2018,
+    "label": "Reuters",
+    "url": "https://www.reuters.com/world/china/bytedance-valued-550-billion-proposed-share-sale-by-general-atlantic-sources-say-2026-02-25/"
    },
    {
+    "from": 2016,
+    "to": 2016,
     "label": "China Daily Financing Report",
     "url": null
    },
    {
+    "from": 2015,
+    "to": 2015,
     "label": "36Kr Global Venture History",
     "url": null
    }
@@ -1817,8 +2076,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "CBC annual reports",
    "url": "https://cbc.radio-canada.ca/en/impact-and-accountability/finance/annual-reports"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "CBC annual reports",
     "url": "https://cbc.radio-canada.ca/en/impact-and-accountability/finance/annual-reports"
    }
@@ -1830,8 +2091,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Channel 4 reports",
    "url": "https://www.channel4.com/corporate/performance/reporting/reporting-library"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Channel 4 reports",
     "url": "https://www.channel4.com/corporate/performance/reporting/reporting-library"
    }
@@ -1843,8 +2106,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Hits Daily Double",
    "url": "https://www.hitsdailydouble.com/news/business/bmg-concord-merger-2026-04-28?year=2026"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Hits Daily Double",
     "url": "https://www.hitsdailydouble.com/news/business/bmg-concord-merger-2026-04-28?year=2026"
    }
@@ -1856,8 +2121,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Forbes",
    "url": "https://www.forbes.com/companies/cox-enterprises/?sh=503fa2075ef4"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Forbes",
     "url": "https://www.forbes.com/companies/cox-enterprises/?sh=503fa2075ef4"
    }
@@ -1869,8 +2136,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "DMGT annual reports",
    "url": "https://www.dmgt.com/investors/annual-reports/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "DMGT annual reports",
     "url": "https://www.dmgt.com/investors/annual-reports/"
    }
@@ -1882,49 +2151,65 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Yahoo Finance",
    "url": "https://finance.yahoo.com/quote/DISO.PVT/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Yahoo Finance",
-    "url": "https://finance.yahoo.com/quote/DISO.PVT/"
-   },
-   {
-    "label": "Forge Global",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2025,
     "label": "Resourcera",
     "url": null
    },
    {
-    "label": "Caplight",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Sacra",
     "url": null
    },
    {
-    "label": "Backlinko",
+    "from": 2022,
+    "to": 2022,
+    "label": "Forge Global",
     "url": null
    },
    {
-    "label": "TechCrunch",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "Untaylored Ownership Profile",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "Public.com Funding Archives",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
+    "label": "Resourcera",
+    "url": null
+   },
+   {
+    "from": 2018,
+    "to": 2018,
     "label": "Untaylored Profile",
     "url": null
    },
    {
-    "label": "Forbes",
+    "from": 2017,
+    "to": 2017,
+    "label": "Forge Global",
+    "url": null
+   },
+   {
+    "from": 2016,
+    "to": 2016,
+    "label": "Untaylored Ownership Profile",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2015,
+    "label": "Untaylored Profile",
     "url": null
    }
   ]
@@ -1935,8 +2220,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "RevenueMemo",
    "url": "https://www.revenuememo.com/p/who-owns-epic-games"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "RevenueMemo",
     "url": "https://www.revenuememo.com/p/who-owns-epic-games"
    }
@@ -1948,8 +2235,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "FIFA financial statements",
    "url": "https://inside.fifa.com/official-documents/annual-report/2025/financials/2025-financial-statements/consolidated-balance-sheet"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "FIFA financial statements",
     "url": "https://inside.fifa.com/official-documents/annual-report/2025/financials/2025-financial-statements/consolidated-balance-sheet"
    }
@@ -1961,8 +2250,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "France Télévisions annual report",
    "url": "https://issuu.com/francetelevisions/docs/rapport_annuel_2024_volet_financier"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "France Télévisions annual report",
     "url": "https://issuu.com/francetelevisions/docs/rapport_annuel_2024_volet_financier"
    }
@@ -1974,8 +2265,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Forbes",
    "url": "https://www.forbes.com/companies/hallmark/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Forbes",
     "url": "https://www.forbes.com/companies/hallmark/"
    }
@@ -1987,8 +2280,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Forbes",
    "url": "https://www.forbes.com/profile/hearst/?sh=30d8f915533d"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Forbes",
     "url": "https://www.forbes.com/profile/hearst/?sh=30d8f915533d"
    }
@@ -2000,69 +2295,71 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Wikipedia",
    "url": "https://en.wikipedia.org/wiki/Holtzbrinck_Publishing_Group"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Wikipedia",
-    "url": "https://en.wikipedia.org/wiki/Holtzbrinck_Publishing_Group"
-   },
-   {
-    "label": "Holtzbrinck (official)",
-    "url": null
-   },
-   {
-    "label": "ConnectSafely",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "M&A Insights",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Sullivan & Cromwell",
     "url": null
    },
    {
-    "label": "Private Equity Wire",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Finanzwire",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "InfluenceWatch Profile",
     "url": null
    },
    {
+    "from": 2021,
+    "to": 2021,
+    "label": "M&A Insights",
+    "url": null
+   },
+   {
+    "from": 2020,
+    "to": 2020,
     "label": "InfluenceWatch",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "SPARC Industry Analysis",
     "url": null
    },
    {
+    "from": 2018,
+    "to": 2018,
     "label": "SPARC Analysis",
     "url": null
    },
    {
-    "label": "Reuters",
-    "url": null
-   },
-   {
+    "from": 2017,
+    "to": 2017,
     "label": "Startup Intros",
     "url": null
    },
    {
+    "from": 2016,
+    "to": 2016,
     "label": "Springer Nature Corporate History",
     "url": null
    },
    {
+    "from": 2015,
+    "to": 2015,
     "label": "Springer Nature Joint Press Announcement",
-    "url": null
-   },
-   {
-    "label": "SPARC Research",
     "url": null
    }
   ]
@@ -2073,14 +2370,12 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2026/sports/news/ipl-valuation-rcb-rajasthan-royals-sales-1236822733/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Variety",
     "url": "https://variety.com/2026/sports/news/ipl-valuation-rcb-rajasthan-royals-sales-1236822733/"
-   },
-   {
-    "label": "gemini generated",
-    "url": null
    }
   ]
  },
@@ -2090,45 +2385,29 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "GeekWire",
    "url": "https://www.geekwire.com/2022/goldman-sachs-will-invest-325m-in-ispot-helping-to-break-nielsens-lock-on-tv-ad-measurement/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "GeekWire",
-    "url": "https://www.geekwire.com/2022/goldman-sachs-will-invest-325m-in-ispot-helping-to-break-nielsens-lock-on-tv-ad-measurement/"
-   },
-   {
-    "label": "Forge Global",
-    "url": null
-   },
-   {
-    "label": "Tracxn",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "GetLatka",
     "url": null
    },
    {
-    "label": "TexAu",
+    "from": 2024,
+    "to": 2024,
+    "label": "Tracxn",
     "url": null
    },
    {
+    "from": 2023,
+    "to": 2023,
     "label": "Broadcasting & Cable",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "TechCrunch",
-    "url": null
-   },
-   {
-    "label": "PR Newswire",
-    "url": null
-   },
-   {
-    "label": "Business Wire",
-    "url": null
-   },
-   {
-    "label": "Madrona Venture Group Portfolio Data",
     "url": null
    }
   ]
@@ -2139,14 +2418,12 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Reuters",
    "url": "https://www.reuters.com/technology/exclusive-kajabi-e-commerce-startup-knowledge-businesses-raises-550-million-2021-05-04/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Reuters",
     "url": "https://www.reuters.com/technology/exclusive-kajabi-e-commerce-startup-knowledge-businesses-raises-550-million-2021-05-04/"
-   },
-   {
-    "label": "gemini generated",
-    "url": null
    }
   ]
  },
@@ -2156,65 +2433,53 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "eMarketer",
    "url": "https://www.emarketer.com/content/kantar-media-gets-bought-1-billion-ad-measurement"
   },
-  "historical": [
+  "years": [
    {
-    "label": "eMarketer",
-    "url": "https://www.emarketer.com/content/kantar-media-gets-bought-1-billion-ad-measurement"
-   },
-   {
-    "label": "S&P Global",
-    "url": null
-   },
-   {
-    "label": "PitchBook",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Marketing Dive",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Financial Times",
     "url": null
    },
    {
-    "label": "AJ Bell",
+    "from": 2023,
+    "to": 2023,
+    "label": "S&P Global",
     "url": null
    },
    {
-    "label": "Social Samosa",
+    "from": 2022,
+    "to": 2022,
+    "label": "PitchBook",
     "url": null
    },
    {
-    "label": "Wikipedia",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "Cerner Investor Relations",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
+    "label": "S&P Global",
+    "url": null
+   },
+   {
+    "from": 2019,
+    "to": 2019,
     "label": "Bain Capital Press Release",
     "url": null
    },
    {
-    "label": "WPP Regulatory Filings",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "WPP Financial Disclosures",
-    "url": null
-   },
-   {
-    "label": "WPP Annual Report 2017",
-    "url": null
-   },
-   {
-    "label": "WPP Corporate Filings",
-    "url": null
-   },
-   {
-    "label": "WPP Annual Report 2015",
     "url": null
    }
   ]
@@ -2225,62 +2490,66 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Variety",
-    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
-   },
-   {
-    "label": "Music Business Worldwide",
-    "url": null
-   },
-   {
-    "label": "Primary Wave (official)",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "M&A Insights",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
+    "label": "Variety",
+    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
+   },
+   {
+    "from": 2023,
+    "to": 2023,
     "label": "Music Business Research",
     "url": null
    },
    {
-    "label": "Private Equity Wire",
-    "url": null
+    "from": 2022,
+    "to": 2022,
+    "label": "Variety",
+    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
    },
    {
-    "label": "Rap Industry",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "The Wall Street Journal",
     "url": null
    },
    {
-    "label": "PitchBook",
+    "from": 2020,
+    "to": 2020,
+    "label": "Music Business Worldwide",
     "url": null
    },
    {
-    "label": "TechCrunch",
+    "from": 2019,
+    "to": 2019,
+    "label": "Music Business Research",
     "url": null
    },
    {
-    "label": "Hiive Kobalt Valuation History",
+    "from": 2017,
+    "to": 2018,
+    "label": "Variety",
+    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
+   },
+   {
+    "from": 2016,
+    "to": 2016,
+    "label": "Music Business Research",
     "url": null
    },
    {
-    "label": "Hearst Official Series D Announcement",
-    "url": null
-   },
-   {
-    "label": "Hiive Market Tracker",
-    "url": null
-   },
-   {
-    "label": "Harvard Law Journal Profile",
-    "url": null
+    "from": 2015,
+    "to": 2015,
+    "label": "Variety",
+    "url": "https://variety.com/2026/music/news/primary-wave-to-acquire-kobalt-7-billion-company-1236696584/"
    }
   ]
  },
@@ -2290,57 +2559,65 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "U.S. News",
    "url": "https://money.usnews.com/investing/news/articles/2023-11-28/exclusive-frances-mediawan-weighs-takeover-of-kkr-backed-leonine-sources"
   },
-  "historical": [
+  "years": [
    {
-    "label": "U.S. News",
-    "url": "https://money.usnews.com/investing/news/articles/2023-11-28/exclusive-frances-mediawan-weighs-takeover-of-kkr-backed-leonine-sources"
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "S&P Global",
     "url": null
    },
    {
-    "label": "Fitch Ratings",
-    "url": null
-   },
-   {
-    "label": "Variety",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Private Equity Insights",
     "url": null
    },
    {
-    "label": "Reuters",
+    "from": 2023,
+    "to": 2023,
+    "label": "S&P Global",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "The Hollywood Reporter",
     "url": null
    },
    {
-    "label": "Deadline",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "Business Wire",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "AMF France Regulatory Filings",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "Euronext Paris Disclosures",
     "url": null
    },
    {
-    "label": "Financial Times",
+    "from": 2018,
+    "to": 2018,
+    "label": "Variety",
     "url": null
    },
    {
-    "label": "Euronext",
+    "from": 2017,
+    "to": 2017,
+    "label": "Reuters",
+    "url": null
+   },
+   {
+    "from": 2016,
+    "to": 2016,
+    "label": "Financial Times",
     "url": null
    }
   ]
@@ -2351,33 +2628,29 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "GetLatka",
    "url": "https://getlatka.com/companies/midjourney"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "GetLatka",
     "url": "https://getlatka.com/companies/midjourney"
    },
    {
-    "label": "RevenueMemo",
-    "url": null
-   },
-   {
-    "label": "Value Add VC",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Morphed",
     "url": null
    },
    {
-    "label": "DemandSage",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Sacra",
     "url": null
    },
    {
-    "label": "AIPRM",
+    "from": 2022,
+    "to": 2022,
+    "label": "Morphed",
     "url": null
    }
   ]
@@ -2388,8 +2661,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Sportico",
    "url": "https://www.sportico.com/valuations/teams/2026/mlb-team-values-2026-yankees-dodgers-1234887564/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Sportico",
     "url": "https://www.sportico.com/valuations/teams/2026/mlb-team-values-2026-yankees-dodgers-1234887564/"
    }
@@ -2401,8 +2676,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Sportico",
    "url": "https://www.sportico.com/feature/mls-soccer-team-value-ranking-1234689586/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Sportico",
     "url": "https://www.sportico.com/feature/mls-soccer-team-value-ranking-1234689586/"
    }
@@ -2414,8 +2691,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Sportico",
    "url": "https://www.sportico.com/feature/nba-team-values-ranking-list-1234697991/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Sportico",
     "url": "https://www.sportico.com/feature/nba-team-values-ranking-list-1234697991/"
    }
@@ -2427,29 +2706,53 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2026/film/news/neon-anora-longlegs-sells-stake-department-m-1236806707/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Variety",
-    "url": "https://variety.com/2026/film/news/neon-anora-longlegs-sells-stake-department-m-1236806707/"
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "TheWrap",
     "url": null
    },
    {
-    "label": "Deadline",
-    "url": null
-   },
-   {
-    "label": "Screen Daily",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "The Hollywood Reporter",
     "url": null
    },
    {
-    "label": "Paul Hastings LLP",
+    "from": 2023,
+    "to": 2023,
+    "label": "Screen Daily",
+    "url": null
+   },
+   {
+    "from": 2022,
+    "to": 2022,
+    "label": "Variety",
+    "url": null
+   },
+   {
+    "from": 2020,
+    "to": 2021,
+    "label": "Variety",
+    "url": "https://variety.com/2026/film/news/neon-anora-longlegs-sells-stake-department-m-1236806707/"
+   },
+   {
+    "from": 2019,
+    "to": 2019,
+    "label": "Variety",
+    "url": null
+   },
+   {
+    "from": 2018,
+    "to": 2018,
+    "label": "Deadline",
+    "url": null
+   },
+   {
+    "from": 2017,
+    "to": 2017,
+    "label": "TheWrap",
     "url": null
    }
   ]
@@ -2460,8 +2763,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "CNBC",
    "url": "https://www.cnbc.com/2025/09/04/cnbcs-official-nfl-team-valuations-2025.html"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "CNBC",
     "url": "https://www.cnbc.com/2025/09/04/cnbcs-official-nfl-team-valuations-2025.html"
    }
@@ -2473,73 +2778,59 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "ITmedia",
    "url": "https://www.itmedia.co.jp/news/article/2606/24/1260624129/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "ITmedia",
-    "url": "https://www.itmedia.co.jp/news/article/2606/24/1260624129/"
-   },
-   {
-    "label": "Mainichi Shimbun",
-    "url": null
-   },
-   {
-    "label": "NHK (disclosures)",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Nikkei",
     "url": null
    },
    {
-    "label": "One Career",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2024,
     "label": "State Media Monitor",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "Minpo Online",
     "url": null
    },
    {
+    "from": 2021,
+    "to": 2021,
     "label": "Media Innovation",
     "url": null
    },
    {
-    "label": "The Japan Times",
-    "url": null
-   },
-   {
+    "from": 2020,
+    "to": 2020,
     "label": "ZAITEN Magazine",
     "url": null
    },
    {
-    "label": "The Asahi Shimbun",
-    "url": null
-   },
-   {
+    "from": 2019,
+    "to": 2019,
     "label": "Livedoor News",
     "url": null
    },
    {
-    "label": "Sankei Shimbun",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "Kigyolog Financial Reports",
     "url": null
    },
    {
+    "from": 2017,
+    "to": 2017,
+    "label": "Livedoor News",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2016,
     "label": "House of Representatives Japan",
-    "url": null
-   },
-   {
-    "label": "Shugiin Records",
-    "url": null
-   },
-   {
-    "label": "Mynavi News",
     "url": null
    }
   ]
@@ -2550,8 +2841,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Sportico",
    "url": "https://www.sportico.com/feature/nhl-team-values-ranking-list-1234693065/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Sportico",
     "url": "https://www.sportico.com/feature/nhl-team-values-ranking-list-1234693065/"
    }
@@ -2563,76 +2856,58 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2022/tv/news/nielsen-sold-private-equity-measurement-media-1235217649/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Variety",
-    "url": "https://variety.com/2022/tv/news/nielsen-sold-private-equity-measurement-media-1235217649/"
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Brookfield (filings)",
     "url": null
    },
    {
-    "label": "Reuters",
-    "url": null
-   },
-   {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2022,
+    "to": 2024,
     "label": "PR Newswire",
     "url": null
    },
    {
-    "label": "The Wall Street Journal",
-    "url": null
-   },
-   {
-    "label": "Private Equity Insights",
-    "url": null
-   },
-   {
-    "label": "MediaPost",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "SEC EDGAR Form 10-K Filing",
     "url": null
    },
    {
-    "label": "CompaniesMarketCap Nielsen Historical Data",
-    "url": null
-   },
-   {
+    "from": 2020,
+    "to": 2020,
     "label": "SEC EDGAR Form 10-K (2020 Report",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "SEC EDGAR Form 10-K (2018",
     "url": null
    },
    {
-    "label": "2019 Data",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "SEC EDGAR Form 10-K (2018 Filing",
     "url": null
    },
    {
+    "from": 2017,
+    "to": 2017,
     "label": "Nielsen Holdings Proxy & Annual Filings",
     "url": null
    },
    {
-    "label": "CompaniesMarketCap Data",
-    "url": null
-   },
-   {
+    "from": 2016,
+    "to": 2016,
     "label": "Nielsen Holdings Annual Report",
     "url": null
    },
    {
+    "from": 2015,
+    "to": 2015,
     "label": "SEC EDGAR Nielsen Holdings Archives",
     "url": null
    }
@@ -2644,8 +2919,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "NPR annual report",
    "url": "https://www.npr.org/2024/10/18/g-s1-27265/annual-report"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "NPR annual report",
     "url": "https://www.npr.org/2024/10/18/g-s1-27265/annual-report"
    }
@@ -2657,49 +2934,47 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2026/digital/news/onlyfans-valuation-3-15-billion-sale-stake-architect-capital-1236741700/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Variety",
-    "url": "https://variety.com/2026/digital/news/onlyfans-valuation-3-15-billion-sale-stake-architect-capital-1236741700/"
-   },
-   {
-    "label": "QuantumRun",
-    "url": null
-   },
-   {
-    "label": "Forge Global",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "European Business Magazine",
     "url": null
    },
    {
-    "label": "B9 Agency",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Fenix International (filings)",
     "url": null
    },
    {
-    "label": "Business Insider",
+    "from": 2022,
+    "to": 2023,
+    "label": "Forge Global",
     "url": null
    },
    {
-    "label": "TechCrunch",
+    "from": 2021,
+    "to": 2021,
+    "label": "B9 Agency",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
+    "label": "Forge Global",
+    "url": null
+   },
+   {
+    "from": 2019,
+    "to": 2019,
+    "label": "Fenix International (filings)",
+    "url": null
+   },
+   {
+    "from": 2018,
+    "to": 2018,
     "label": "BBC",
-    "url": null
-   },
-   {
-    "label": "Wikipedia",
-    "url": null
-   },
-   {
-    "label": "UK Companies House",
     "url": null
    }
   ]
@@ -2710,93 +2985,71 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "CNBC",
    "url": "https://www.cnbc.com/2026/03/31/openai-funding-round-ipo.html"
   },
-  "historical": [
+  "years": [
    {
-    "label": "CNBC",
-    "url": "https://www.cnbc.com/2026/03/31/openai-funding-round-ipo.html"
-   },
-   {
-    "label": "OpenAI (announcement)",
-    "url": null
-   },
-   {
-    "label": "Tracxn",
-    "url": null
-   },
-   {
-    "label": "Pinggy",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "PitchBook",
     "url": null
    },
    {
-    "label": "Visual Capitalist",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Reuters",
     "url": null
    },
    {
-    "label": "Economic Times",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Bloomberg",
     "url": null
    },
    {
-    "label": "TechCrunch",
-    "url": null
-   },
-   {
-    "label": "Sacra",
-    "url": null
-   },
-   {
+    "from": 2022,
+    "to": 2022,
     "label": "Fortune",
     "url": null
    },
    {
-    "label": "Forbes",
+    "from": 2021,
+    "to": 2021,
+    "label": "TechCrunch",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "MIT Technology Review",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "Microsoft Official Announcement",
     "url": null
    },
    {
-    "label": "Wired",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "Wired Financial Report",
     "url": null
    },
    {
-    "label": "The Verge",
-    "url": null
-   },
-   {
+    "from": 2017,
+    "to": 2017,
     "label": "OpenAI Research Archives",
     "url": null
    },
    {
+    "from": 2016,
+    "to": 2016,
     "label": "Y Combinator Blog Archives",
     "url": null
    },
    {
+    "from": 2015,
+    "to": 2015,
     "label": "OpenAI Founding Announcement",
-    "url": null
-   },
-   {
-    "label": "The New York Times",
     "url": null
    }
   ]
@@ -2807,45 +3060,59 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Fueler",
    "url": "https://fueler.io/blog/patreon-usage-revenue-valuation-growth-statistics"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Fueler",
-    "url": "https://fueler.io/blog/patreon-usage-revenue-valuation-growth-statistics"
-   },
-   {
-    "label": "Caplight",
-    "url": null
-   },
-   {
-    "label": "Tracxn",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Sacra",
     "url": null
    },
    {
-    "label": "Access IPOs",
+    "from": 2024,
+    "to": 2024,
+    "label": "Caplight",
     "url": null
    },
    {
-    "label": "The Information",
+    "from": 2022,
+    "to": 2023,
+    "label": "Sacra",
     "url": null
    },
    {
+    "from": 2021,
+    "to": 2021,
     "label": "TechCrunch",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "Built In",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
+    "label": "Tracxn",
+    "url": null
+   },
+   {
+    "from": 2017,
+    "to": 2018,
     "label": "Tubefilter",
     "url": null
    },
    {
+    "from": 2016,
+    "to": 2016,
     "label": "Wikipedia",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2015,
+    "label": "Tracxn",
     "url": null
    }
   ]
@@ -2856,8 +3123,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "PBS financials",
    "url": "https://www.pbs.org/about/about-pbs/financials/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "PBS financials",
     "url": "https://www.pbs.org/about/about-pbs/financials/"
    }
@@ -2866,81 +3135,71 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
  "penske": {
   "frequency": "Monthly",
   "current": null,
-  "historical": [
+  "years": [
    {
-    "label": "TheWrap",
-    "url": null
-   },
-   {
-    "label": "Awful Announcing",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Forbes",
     "url": null
    },
    {
-    "label": "Penske Media (official)",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Variety",
     "url": null
    },
    {
-    "label": "Deadline",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "The Rebooting",
     "url": null
    },
    {
-    "label": "The Hollywood Reporter",
-    "url": null
-   },
-   {
+    "from": 2022,
+    "to": 2022,
     "label": "Artforum Announcement",
     "url": null
    },
    {
-    "label": "The Wall Street Journal",
+    "from": 2021,
+    "to": 2021,
+    "label": "Variety",
     "url": null
    },
    {
-    "label": "Eldridge Press Releases",
-    "url": null
-   },
-   {
+    "from": 2020,
+    "to": 2020,
     "label": "Media Play News",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "TechCrunch",
     "url": null
    },
    {
-    "label": "Billboard",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "WWD Corporate Disclosures",
     "url": null
    },
    {
-    "label": "Zippia Financing Index",
+    "from": 2017,
+    "to": 2017,
+    "label": "The Wall Street Journal",
     "url": null
    },
    {
+    "from": 2016,
+    "to": 2016,
+    "label": "Variety",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2015,
     "label": "The New York Times",
-    "url": null
-   },
-   {
-    "label": "Wikipedia",
-    "url": null
-   },
-   {
-    "label": "PMC Overview",
     "url": null
    }
   ]
@@ -2951,49 +3210,59 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Transfermarkt",
    "url": "https://www.transfermarkt.com/premier-league/startseite/wettbewerb/GB1"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Transfermarkt",
-    "url": "https://www.transfermarkt.com/premier-league/startseite/wettbewerb/GB1"
-   },
-   {
+    "from": 2024,
+    "to": 2025,
     "label": "Deloitte",
     "url": null
    },
    {
-    "label": "SportsPro",
-    "url": null
-   },
-   {
-    "label": "FC Business",
-    "url": null
-   },
-   {
-    "label": "Forbes",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "BBC Sport",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "The Guardian",
     "url": null
    },
    {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "Financial Times",
     "url": null
    },
    {
-    "label": "Reuters",
+    "from": 2019,
+    "to": 2020,
+    "label": "Deloitte",
     "url": null
    },
    {
+    "from": 2018,
+    "to": 2018,
+    "label": "Forbes",
+    "url": null
+   },
+   {
+    "from": 2017,
+    "to": 2017,
+    "label": "Deloitte",
+    "url": null
+   },
+   {
+    "from": 2016,
+    "to": 2016,
     "label": "BBC",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2015,
+    "label": "Deloitte",
     "url": null
    }
   ]
@@ -3004,8 +3273,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "RAI Way investor reports",
    "url": "https://www.raiway.it/en/investors/reports-and-results"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "RAI Way investor reports",
     "url": "https://www.raiway.it/en/investors/reports-and-results"
    }
@@ -3017,57 +3288,53 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "RedBird (official)",
    "url": "https://redbirdcap.com/about/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "RedBird (official)",
-    "url": "https://redbirdcap.com/about/"
-   },
-   {
-    "label": "Altss",
     "url": null
    },
    {
-    "label": "Reuters",
-    "url": null
-   },
-   {
-    "label": "Wikipedia",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "GlobeNewswire",
     "url": null
    },
    {
-    "label": "ZoomInvestors",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Deadline",
     "url": null
    },
    {
-    "label": "The New York Times",
-    "url": null
-   },
-   {
+    "from": 2022,
+    "to": 2022,
     "label": "AC Milan (official)",
     "url": null
    },
    {
-    "label": "Calcio e Finanza",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "The Guardian",
     "url": null
    },
    {
-    "label": "Le Parisien",
+    "from": 2019,
+    "to": 2020,
+    "label": "Deadline",
     "url": null
    },
    {
+    "from": 2018,
+    "to": 2018,
     "label": "Bloomberg",
+    "url": null
+   },
+   {
+    "from": 2015,
+    "to": 2017,
+    "label": "RedBird (official)",
     "url": null
    }
   ]
@@ -3078,8 +3345,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Variety",
    "url": "https://variety.com/2026/tv/news/reelshort-1-billion-revenue-profit-2026-mpa-1236828885/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2017,
+    "to": 2025,
     "label": "Variety",
     "url": "https://variety.com/2026/tv/news/reelshort-1-billion-revenue-profit-2026-mpa-1236828885/"
    }
@@ -3091,97 +3360,71 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Dealroom",
    "url": "https://app.dealroom.co/companies/riot_games"
   },
-  "historical": [
+  "years": [
    {
-    "label": "LoLTheory",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Tencent (filings)",
     "url": null
    },
    {
-    "label": "GamesIndustry.biz",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "Companies Registration Office (Ireland)",
     "url": null
    },
    {
+    "from": 2023,
+    "to": 2023,
     "label": "HeadphonesAddict",
     "url": null
    },
    {
-    "label": "Newzoo",
-    "url": null
-   },
-   {
+    "from": 2022,
+    "to": 2022,
     "label": "Sensor Tower",
     "url": null
    },
    {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "Forbes",
     "url": null
    },
    {
-    "label": "TechCrunch",
-    "url": null
-   },
-   {
+    "from": 2020,
+    "to": 2020,
     "label": "SuperData Research",
     "url": null
    },
    {
-    "label": "Nielsen",
-    "url": null
-   },
-   {
-    "label": "The Verge",
-    "url": null
-   },
-   {
+    "from": 2019,
+    "to": 2019,
     "label": "SuperData Industry Report",
     "url": null
    },
    {
-    "label": "Statista",
-    "url": null
-   },
-   {
+    "from": 2018,
+    "to": 2018,
     "label": "SuperData Year-In-Review 2018",
     "url": null
    },
    {
-    "label": "The Information",
-    "url": null
-   },
-   {
+    "from": 2017,
+    "to": 2017,
     "label": "SuperData Research 2017",
     "url": null
    },
    {
-    "label": "Reuters",
-    "url": null
-   },
-   {
+    "from": 2016,
+    "to": 2016,
     "label": "SuperData Games Report 2016",
     "url": null
    },
    {
+    "from": 2015,
+    "to": 2015,
     "label": "SEC",
-    "url": null
-   },
-   {
-    "label": "Wikipedia",
-    "url": null
-   },
-   {
-    "label": "Acquisition History",
     "url": null
    }
   ]
@@ -3192,8 +3435,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "RTVE transparency",
    "url": "https://www.rtve.es/rtve/20231016/transparencia-cuentas/943360.shtml"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "RTVE transparency",
     "url": "https://www.rtve.es/rtve/20231016/transparencia-cuentas/943360.shtml"
    }
@@ -3205,41 +3450,41 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "TechCrunch",
    "url": "https://techcrunch.com/2026/02/10/ai-video-startup-runway-raises-315m-at-5-3b-valuation-eyes-more-capable-world-models/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "TechCrunch",
-    "url": "https://techcrunch.com/2026/02/10/ai-video-startup-runway-raises-315m-at-5-3b-valuation-eyes-more-capable-world-models/"
-   },
-   {
-    "label": "Bloomberg",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "The Verge",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Sacra",
     "url": null
    },
    {
-    "label": "GetLatka",
+    "from": 2023,
+    "to": 2023,
+    "label": "Bloomberg",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "Forbes",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2021,
     "label": "VentureBeat",
     "url": null
    },
    {
+    "from": 2019,
+    "to": 2019,
     "label": "Dealroom Profile",
-    "url": null
-   },
-   {
-    "label": "Crunchbase Data",
     "url": null
    }
   ]
@@ -3250,33 +3495,41 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "TechCrunch",
    "url": "https://techcrunch.com/2024/09/10/creator-startup-spotter-raises-another-7-4m/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "TechCrunch",
     "url": "https://techcrunch.com/2024/09/10/creator-startup-spotter-raises-another-7-4m/"
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Variety",
     "url": null
    },
    {
-    "label": "Tracxn",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Forge Global",
     "url": null
    },
    {
-    "label": "The Wall Street Journal",
+    "from": 2022,
+    "to": 2022,
+    "label": "TechCrunch",
     "url": null
    },
    {
+    "from": 2021,
+    "to": 2021,
     "label": "Business Insider",
     "url": null
    },
    {
-    "label": "Growjo",
+    "from": 2019,
+    "to": 2020,
+    "label": "Tracxn",
     "url": null
    }
   ]
@@ -3287,49 +3540,53 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "TechCrunch",
    "url": "https://techcrunch.com/2025/07/17/substack-raises-100m-from-chernin-group-andreessen-horowitz-skims-ceo-and-more/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "TechCrunch",
-    "url": "https://techcrunch.com/2025/07/17/substack-raises-100m-from-chernin-group-andreessen-horowitz-skims-ceo-and-more/"
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Tracxn",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "Sacra",
     "url": null
    },
    {
-    "label": "PM Insights",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Wefunder",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "The New York Times",
     "url": null
    },
    {
-    "label": "The Wall Street Journal",
+    "from": 2021,
+    "to": 2021,
+    "label": "TechCrunch",
     "url": null
    },
    {
-    "label": "Forbes",
-    "url": null
-   },
-   {
+    "from": 2020,
+    "to": 2020,
     "label": "Business Insider",
     "url": null
    },
    {
-    "label": "Y Combinator Company Index",
+    "from": 2019,
+    "to": 2019,
+    "label": "TechCrunch",
     "url": null
    },
    {
-    "label": "RevenueMemo",
+    "from": 2018,
+    "to": 2018,
+    "label": "Y Combinator Company Index",
     "url": null
    }
   ]
@@ -3340,53 +3597,47 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "CNBC",
    "url": "https://www.cnbc.com/2026/01/26/nvidia-alphabet-vc-arms-back-synthesia.html"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2025,
+    "to": 2025,
     "label": "CNBC",
-    "url": "https://www.cnbc.com/2026/01/26/nvidia-alphabet-vc-arms-back-synthesia.html"
-   },
-   {
-    "label": "Seedcamp",
     "url": null
    },
    {
-    "label": "The Guardian",
-    "url": null
-   },
-   {
-    "label": "The Times",
-    "url": null
-   },
-   {
+    "from": 2024,
+    "to": 2024,
     "label": "VentureBeat",
     "url": null
    },
    {
-    "label": "Financial Times",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "Yahoo Finance",
     "url": null
    },
    {
-    "label": "Business Wire",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2022,
     "label": "TechCrunch",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
     "label": "Vox Media Analysis",
     "url": null
    },
    {
-    "label": "Dealroom Profile",
+    "from": 2019,
+    "to": 2019,
+    "label": "TechCrunch",
     "url": null
    },
    {
-    "label": "UK Companies House",
+    "from": 2018,
+    "to": 2018,
+    "label": "Dealroom Profile",
     "url": null
    }
   ]
@@ -3397,8 +3648,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "TechCrunch",
    "url": "https://techcrunch.com/2024/09/29/fidelity-has-cut-xs-value-by-79-since-musk-purchase/"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2022,
     "label": "TechCrunch",
     "url": "https://techcrunch.com/2024/09/29/fidelity-has-cut-xs-value-by-79-since-musk-purchase/"
    }
@@ -3410,8 +3663,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "RevenueMemo",
    "url": "https://www.revenuememo.com/p/who-owns-valve"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2017,
+    "to": 2025,
     "label": "RevenueMemo",
     "url": "https://www.revenuememo.com/p/who-owns-valve"
    }
@@ -3423,49 +3678,41 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Forbes",
    "url": "https://www.forbes.com/sites/mattcraig/2025/10/30/why-videoamp-thinks-it-can-bust-nielsens-tv-ratings-monopoly/"
   },
-  "historical": [
+  "years": [
    {
-    "label": "Forbes",
-    "url": "https://www.forbes.com/sites/mattcraig/2025/10/30/why-videoamp-thinks-it-can-bust-nielsens-tv-ratings-monopoly/"
-   },
-   {
-    "label": "Forge Global",
-    "url": null
-   },
-   {
-    "label": "Startup Intros",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "Growjo",
     "url": null
    },
    {
+    "from": 2024,
+    "to": 2024,
     "label": "GetLatka",
     "url": null
    },
    {
-    "label": "AdExchanger",
-    "url": null
-   },
-   {
+    "from": 2023,
+    "to": 2023,
     "label": "FinSMEs",
     "url": null
    },
    {
+    "from": 2022,
+    "to": 2022,
     "label": "CNBC",
     "url": null
    },
    {
-    "label": "Daily Research News",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2021,
     "label": "TechCrunch",
     "url": null
    },
    {
-    "label": "Tracxn",
+    "from": 2015,
+    "to": 2020,
+    "label": "Forge Global",
     "url": null
    }
   ]
@@ -3476,8 +3723,10 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "Axios",
    "url": "https://www.axios.com/2026/05/20/vox-media-lupa-systems-james-murdoch"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "Axios",
     "url": "https://www.axios.com/2026/05/20/vox-media-lupa-systems-james-murdoch"
    }
@@ -3486,53 +3735,51 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
  "weigel": {
   "frequency": "Monthly",
   "current": null,
-  "historical": []
+  "years": []
  },
  "whalar": {
   "frequency": "Monthly",
   "current": null,
-  "historical": [
+  "years": [
    {
-    "label": "Tubefilter",
-    "url": null
-   },
-   {
-    "label": "Digiday",
-    "url": null
-   },
-   {
-    "label": "NetInfluencer",
-    "url": null
-   },
-   {
+    "from": 2025,
+    "to": 2025,
     "label": "The Daily Upside",
     "url": null
    },
    {
+    "from": 2023,
+    "to": 2024,
     "label": "RockWater",
     "url": null
    },
    {
-    "label": "Adweek",
-    "url": null
-   },
-   {
+    "from": 2021,
+    "to": 2022,
     "label": "UK Companies House",
     "url": null
    },
    {
+    "from": 2020,
+    "to": 2020,
+    "label": "Tubefilter",
+    "url": null
+   },
+   {
+    "from": 2019,
+    "to": 2019,
     "label": "Growjo",
     "url": null
    },
    {
+    "from": 2018,
+    "to": 2018,
     "label": "Inven Financial Profiles",
     "url": null
    },
    {
-    "label": "dot.LA",
-    "url": null
-   },
-   {
+    "from": 2016,
+    "to": 2017,
     "label": "Dealroom Profile",
     "url": null
    }
@@ -3544,26 +3791,24 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
    "label": "ZDF finances",
    "url": "https://www.zdf.de/unternehmen/organisation/finanzen-110.html"
   },
-  "historical": [
+  "years": [
    {
+    "from": 2015,
+    "to": 2025,
     "label": "ZDF finances",
     "url": "https://www.zdf.de/unternehmen/organisation/finanzen-110.html"
-   },
-   {
-    "label": "gemini generated",
-    "url": null
    }
   ]
  },
  "Vend": {
   "frequency": "Monthly",
   "current": null,
-  "historical": []
+  "years": []
  },
  "mount-bros-sept-26": {
   "frequency": "Monthly",
   "current": null,
-  "historical": []
+  "years": []
  }
 };
 

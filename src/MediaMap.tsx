@@ -24,7 +24,7 @@ import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { Paragraphs } from "./richText";
-import { COMPANY_SOURCES, SLUG_BY_NAME, type CompanySources, type SourceRef } from "./dataSources";
+import { COMPANY_SOURCES, SLUG_BY_NAME, type CompanySources, type SourceRef, type YearSource } from "./dataSources";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -1239,7 +1239,7 @@ function PlanetDetailPanel({
         `${node.sector}.`,
         `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
         sources?.current
-          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.historical.length ? ` Historical data source ${sources.historical[0].label}${sources.historical.length > 1 ? ` and ${sources.historical.length - 1} more` : ""}.` : ""}`
+          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.years.length ? ` Historical data source ${yearRange(sources.years[0])} ${sources.years[0].label}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
           : detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
         isPresent && detail && detail.vitals.length > 0
           ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
@@ -1432,7 +1432,7 @@ function PlanetDetailPanel({
             </PanelSection>
           )}
 
-          {sources && (sources.current || sources.historical.length > 0) ? (
+          {sources && (sources.current || sources.years.length > 0) ? (
             <DataSourcesSections sources={sources} key={nodeName ?? ""} />
           ) : (
             detail?.dataSource && (
@@ -1535,7 +1535,13 @@ function PanelSection({ label, children }: { label: string; children: React.Reac
 /** A source as a link when it has one, else plain text (a publisher named in the notes). */
 function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number }) {
   return source.url ? (
-    <a className="about-link" href={source.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: size }}>
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      // Set like the plain text beside it (same colour, weight and size), underlined.
+      style={{ fontSize: size, color: "inherit", textDecoration: "underline", textDecorationThickness: "0.06em", textUnderlineOffset: "0.14em" }}
+    >
       {source.label}
     </a>
   ) : (
@@ -1571,12 +1577,29 @@ function FrequencyPill({ frequency }: { frequency: CompanySources["frequency"] }
   );
 }
 
+/** "2026" or "2015–2025". */
+function yearRange(y: YearSource): string {
+  return y.from === y.to ? String(y.from) : `${y.from}–${y.to}`;
+}
+
+/** One past-year line: "2022–2024 — Forge Global". */
+function YearLine({ y }: { y: YearSource }) {
+  return (
+    <span style={{ fontSize: 14, lineHeight: 1.5 }}>
+      <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{yearRange(y)}</span>
+      <span style={{ opacity: 0.4 }}> — </span>
+      <SourceLink source={y} />
+    </span>
+  );
+}
+
 /** Current and historical data sources: where today's number comes from and how
- *  often it updates, then the sources behind the past years — the newest shown,
- *  the rest behind a "+ N more sources" button. */
+ *  often it updates, then one source per past year (consecutive years that share
+ *  a source collapsed into a range) — the newest shown, the rest behind a
+ *  "+ N more years" button. */
 function DataSourcesSections({ sources }: { sources: CompanySources }) {
   const [showAll, setShowAll] = useState(false);
-  const [first, ...rest] = sources.historical;
+  const [first, ...rest] = sources.years;
   return (
     <>
       {sources.current && (
@@ -1589,16 +1612,16 @@ function DataSourcesSections({ sources }: { sources: CompanySources }) {
       )}
       {first && (
         <PanelSection label="Historical Data Source">
-          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-            <SourceLink source={first} />
+          <div>
+            <YearLine y={first} />
           </div>
           {rest.length > 0 && (
             <>
               {showAll && (
-                <ul style={{ margin: "6px 0 0", padding: "0 0 0 18px", fontSize: 14, lineHeight: 1.6 }}>
-                  {rest.map((s, i) => (
+                <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none" }}>
+                  {rest.map((y, i) => (
                     <li key={i}>
-                      <SourceLink source={s} />
+                      <YearLine y={y} />
                     </li>
                   ))}
                 </ul>
@@ -1619,7 +1642,7 @@ function DataSourcesSections({ sources }: { sources: CompanySources }) {
                   cursor: "pointer",
                 }}
               >
-                {showAll ? "Show fewer sources" : `+ ${rest.length} more source${rest.length === 1 ? "" : "s"}`}
+                {showAll ? "Show fewer years" : `+ ${rest.length} more year${rest.length === 1 ? "" : "s"}`}
               </button>
             </>
           )}
