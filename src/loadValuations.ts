@@ -137,6 +137,7 @@ function parseValuationCsv(text: string): ValuationLoad | null {
     .filter(({h}) => /^\d{4}$/.test(h))
   const currentYear = Math.max(0, ...yearCols.map(({h}) => Number(h)))
   const dataSourceIdx = header.indexOf("data source")
+  const sectorIdx = header.indexOf("sector")
   const linkIdx = header.indexOf("link to data source")
 
   for (let r = headerRow + 1; r < rows.length; r++) {
@@ -162,6 +163,7 @@ function parseValuationCsv(text: string): ValuationLoad | null {
       const src = parseSourceCell(
         row[linkIdx] ?? "",
         dataSourceIdx >= 0 ? (row[dataSourceIdx] ?? "") : "",
+        sectorIdx >= 0 ? (row[sectorIdx] ?? "") : "",
         [...years.keys()].map(Number),
         currentYear,
       )
