@@ -1549,30 +1549,22 @@ function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number })
   );
 }
 
-/** "Live" / "Monthly" tag beside the current source. */
-function FrequencyPill({ frequency }: { frequency: CompanySources["frequency"] }) {
+/** How often the current number updates, set like the year beside a historical
+ *  source ("· 2025"): "Updated Monthly" in the same muted tone, "Live" in green
+ *  with a dot. */
+function Frequency({ frequency }: { frequency: CompanySources["frequency"] }) {
   const live = frequency === "Live";
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        marginLeft: 8,
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 500,
-        letterSpacing: 0.8,
-        textTransform: "uppercase",
-        verticalAlign: "middle",
-        background: live ? "rgba(70, 200, 130, 0.16)" : "rgba(255,255,255,0.08)",
-        color: live ? "#7fe0a8" : "rgba(255,255,255,0.7)",
-        boxShadow: `inset 0 0 0 1px ${live ? "rgba(70,200,130,0.35)" : "rgba(255,255,255,0.14)"}`,
-      }}
-    >
-      {live && <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: "#7fe0a8" }} />}
-      {live ? "Live" : "Updated Monthly"}
+    <span style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: "nowrap" }}>
+      <span style={{ opacity: 0.4 }}> · </span>
+      {live ? (
+        <span style={{ color: "#7fe0a8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: "#7fe0a8", display: "inline-block" }} />
+          Live
+        </span>
+      ) : (
+        <span style={{ opacity: 0.6 }}>Updated Monthly</span>
+      )}
     </span>
   );
 }
@@ -1604,9 +1596,9 @@ function DataSourcesSections({ sources }: { sources: CompanySources }) {
     <>
       {sources.current && (
         <PanelSection label="Current Data Source">
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 6 }}>
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
             <SourceLink source={sources.current} />
-            <FrequencyPill frequency={sources.frequency} />
+            <Frequency frequency={sources.frequency} />
           </div>
         </PanelSection>
       )}
