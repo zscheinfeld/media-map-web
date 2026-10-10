@@ -15,7 +15,9 @@
 export type SourceRef = { label: string; url: string | null };
 /** One source for a run of years (newest first in the list). */
 export type YearSource = SourceRef & { from: number; to: number };
-export type CompanySources = { frequency: "Live" | "Monthly"; current: SourceRef | null; years: YearSource[] };
+/** Live = Google Finance; Yearly = public service media (annual reports); Monthly = every other manual company. */
+export type UpdateFrequency = "Live" | "Monthly" | "Yearly";
+export type CompanySources = { frequency: UpdateFrequency; current: SourceRef | null; years: YearSource[] };
 
 const YEARS_RE = /^(\d{4})(?:\s*[–—-]\s*(\d{4}))?$/;
 const URL_RE = /^https?:\/\/\S+$/i;
@@ -30,11 +32,13 @@ function hostLabel(url: string): string {
 
 /**
  * Parse one company's cell. `dataSource` is the sheet's Data Source column
- * ("Google Finance" / "Manual entry" / …), `valueYears` the years the company has
- * a number for, `currentYear` the sheet's newest year column.
+ * ("Google Finance" / "Manual entry" / …), `sector` its sector (PSM companies
+ * are updated from annual reports, so "Yearly"), `valueYears` the years the
+ * company has a number for, `currentYear` the sheet's newest year column.
  */
-export function parseSourceCell(cell: string, dataSource: string, valueYears: number[], currentYear: number): CompanySources | null {
+export function parseSourceCell(cell: string, dataSource: string, sector: string, valueYears: number[], currentYear: number): CompanySources | null {
   const live = /google finance/i.test(dataSource);
+  const frequency: UpdateFrequency = live ? "Live" : /^psm$/i.test(sector.trim()) ? "Yearly" : "Monthly";
   type Line = { from: number | null; to: number | null; label: string; url: string | null };
   const lines: Line[] = [];
   for (const raw of cell.split(/\r?\n/)) {
@@ -79,5 +83,5 @@ export function parseSourceCell(cell: string, dataSource: string, valueYears: nu
   }
   years.sort((a, b) => b.to - a.to);
   if (!current && years.length === 0) return null;
-  return { frequency: live ? "Live" : "Monthly", current, years };
+  return { frequency, current, years };
 }

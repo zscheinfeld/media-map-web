@@ -1239,7 +1239,7 @@ function PlanetDetailPanel({
         `${node.sector}.`,
         `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
         sources?.current
-          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.years.length ? ` Historical data source${sources.years.length > 1 ? "s" : ""} ${sources.years[0].label}, ${yearRange(sources.years[0])}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
+          ? `Current data source ${sources.current.label}, updated ${sources.frequency.toLowerCase()}.${sources.years.length ? ` Historical data source${sources.years.length > 1 ? "s" : ""} ${sources.years[0].label}, ${yearRange(sources.years[0])}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
           : detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
         isPresent && detail && detail.vitals.length > 0
           ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
@@ -1550,7 +1550,8 @@ function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number })
 }
 
 /** How often the current number updates, set like the year beside a historical
- *  source ("· 2025"): "Updated Monthly" in the same muted tone, "Live" in green. */
+ *  source ("· 2025"): "Updated Monthly" / "Updated Yearly" in the same muted
+ *  tone, "Live" in green. */
 const LIVE_GREEN = "#A1FF62";
 function Frequency({ frequency }: { frequency: CompanySources["frequency"] }) {
   const live = frequency === "Live";
@@ -1560,7 +1561,7 @@ function Frequency({ frequency }: { frequency: CompanySources["frequency"] }) {
       {live ? (
         <span style={{ color: LIVE_GREEN }}>Live</span>
       ) : (
-        <span style={{ opacity: 0.6 }}>Updated Monthly</span>
+        <span style={{ opacity: 0.6 }}>Updated {frequency}</span>
       )}
     </span>
   );

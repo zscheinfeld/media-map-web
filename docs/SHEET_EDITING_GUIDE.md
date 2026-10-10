@@ -62,7 +62,8 @@ Yahoo Finance | https://finance.yahoo.com/…         ← no years = every year 
 ```
 
 - The line that covers the **current year** is shown as the current source (for
-  manual companies; Google Finance companies always show "Google Finance · Live").
+  manual companies, with "Updated Monthly" — or "Updated Yearly" for PSM companies;
+  Google Finance companies always show "Google Finance · Live").
 - Lines for **past years** are the history. Years that share a source can be
   written as one range. The site shows the newest line and tucks the rest behind
   a "+ N more" button.
