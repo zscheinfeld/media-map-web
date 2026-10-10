@@ -24,7 +24,7 @@ import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { Paragraphs } from "./richText";
-import { COMPANY_SOURCES, SLUG_BY_NAME, type CompanySources, type SourceRef, type YearSource } from "./dataSources";
+import { type CompanySources, type SourceRef, type YearSource } from "./dataSources";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -5089,6 +5089,7 @@ export default function MediaMap() {
   // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
   const {
     data: valData,
+    sources: valSources,
     hidden: hiddenByYear,
     lastUpdated: lastUpdatedBySlug,
     loading: valuationsLoading,
@@ -5192,12 +5193,12 @@ export default function MediaMap() {
   }, [baseCompanies, lastUpdatedBySlug]);
   // Yearly market-cap series (oldest → newest) for the inspected company's chart.
   // The `month` field carries a year key ("YYYY"); HistoryChart labels it as a year.
-  // Prototype: the inspected company's data sources, by slug (src/dataSources.ts).
+  // The inspected company's data sources, from the sheet (see dataSources.ts).
   const inspectedSources = useMemo<CompanySources | null>(() => {
     if (!inspectedPlanet) return null;
-    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug ?? SLUG_BY_NAME[inspectedPlanet];
-    return (slug && COMPANY_SOURCES[slug]) || null;
-  }, [inspectedPlanet, baseCompanies]);
+    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
+    return (slug && valSources.get(slug)) || null;
+  }, [inspectedPlanet, baseCompanies, valSources]);
   const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
     if (!inspectedPlanet) return [];
     const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;

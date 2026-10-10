@@ -49,6 +49,27 @@ Edit structure in **Sanity**. Edit numbers in **the sheet**.
    `$`, `B`, or other letters — a value like `$1.2B` is read as invalid and gets
    **erased on the next nightly run**. Just the number.
 
+## The `Link to Data Source` column — what the site shows as the sources
+
+The company detail panel on the site reads this column and shows two things: the
+**current data source** and the **historical data source(s)**, one per year. Write
+one source per line, newest first, with the parts separated by `|`:
+
+```
+2026 | Reuters | https://www.reuters.com/…          ← a single year
+2015–2025 | companiesmarketcap.com | https://…      ← a range of years
+Yahoo Finance | https://finance.yahoo.com/…         ← no years = every year the company has a number
+```
+
+- The line that covers the **current year** is shown as the current source (for
+  manual companies; Google Finance companies always show "Google Finance · Live").
+- Lines for **past years** are the history. Years that share a source can be
+  written as one range. The site shows the newest line and tucks the rest behind
+  a "+ N more" button.
+- The link is optional: `2023 | Variety` shows "Variety" as plain text.
+- A line with neither a year nor a link (e.g. "Not in google finance") is ignored.
+- Changes appear on the site the next morning, when the daily snapshot runs.
+
 ## Retiring a company (acquired, went private, shut down)
 
 When a company **stops existing** as a standalone (e.g. Twitter → taken private in

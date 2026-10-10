@@ -10,6 +10,7 @@
 // daily ingest appear without a redeploy. Columns are matched by NAME, so the
 // newest-first year ordering and the extra vetting columns don't matter here.
 import {useEffect, useState} from "react"
+import {parseSourceCell, type CompanySources} from "./dataSources"
 
 const CSV_URL = import.meta.env.VITE_VALUATIONS_CSV_URL as string | undefined
 
@@ -65,6 +66,8 @@ function parseCsv(text: string): string[][] {
 
 /** slug → set of years ("YYYY") the sheet explicitly hid via a "-" cell. */
 export type HiddenData = Map<string, Set<string>>
+/** Per slug: where the numbers come from (see dataSources.ts). */
+export type SourcesData = Map<string, CompanySources>
 
 export type ValuationLoad = {
   values: ValuationData
@@ -72,6 +75,7 @@ export type ValuationLoad = {
   hidden: HiddenData
   /** slug → the date ("YYYY-MM-DD") the ingest last refreshed that company. */
   lastUpdated: Map<string, string>
+  sources: SourcesData
 }
 
 // Where the values came from — surfaced in the console + on
@@ -112,6 +116,7 @@ function parseValuationCsv(text: string): ValuationLoad | null {
   const values: ValuationData = new Map()
   const hidden: HiddenData = new Map()
   const lastUpdated = new Map<string, string>()
+  const sources: SourcesData = new Map()
   const rows = parseCsv(text)
   if (rows.length < 2) return null
 
@@ -130,6 +135,9 @@ function parseValuationCsv(text: string): ValuationLoad | null {
   const yearCols = header
     .map((h, i) => ({i, h}))
     .filter(({h}) => /^\d{4}$/.test(h))
+  const currentYear = Math.max(0, ...yearCols.map(({h}) => Number(h)))
+  const dataSourceIdx = header.indexOf("data source")
+  const linkIdx = header.indexOf("link to data source")
 
   for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r]
@@ -150,8 +158,17 @@ function parseValuationCsv(text: string): ValuationLoad | null {
     values.set(slug, years)
     const lu = updatedIdx >= 0 ? (row[updatedIdx] ?? "").trim() : ""
     if (lu) lastUpdated.set(slug, lu)
+    if (linkIdx >= 0) {
+      const src = parseSourceCell(
+        row[linkIdx] ?? "",
+        dataSourceIdx >= 0 ? (row[dataSourceIdx] ?? "") : "",
+        [...years.keys()].map(Number),
+        currentYear,
+      )
+      if (src) sources.set(slug, src)
+    }
   }
-  return {values, hidden, lastUpdated}
+  return {values, hidden, lastUpdated, sources}
 }
 
 /** How many companies carry a value for `year`. */
@@ -261,7 +278,7 @@ export async function fetchLiveValuations(snapshotP: Promise<ValuationLoad | nul
  * instant, correct first paint, then the live upgrade in place.
  */
 export async function loadValuations(): Promise<ValuationLoad & {source: ValuationSource; detail?: string}> {
-  if (!CSV_URL) return {values: new Map(), hidden: new Map(), lastUpdated: new Map(), source: "legacy"}
+  if (!CSV_URL) return {values: new Map(), hidden: new Map(), lastUpdated: new Map(), sources: new Map(), source: "legacy"}
   const snapshotP = fetchSnapshotValuations()
   const live = await fetchLiveValuations(snapshotP)
   if ("load" in live) return {...live.load, source: live.source, detail: live.detail}
@@ -307,6 +324,7 @@ export function useValuations(): {
   data: ValuationData
   hidden: HiddenData
   lastUpdated: Map<string, string>
+  sources: SourcesData
   loading: boolean
   /** True once the LIVE sheet has answered (or given up) — i.e. the values
    *  won't change again. `loading` clears earlier, as soon as the snapshot paints. */
@@ -318,6 +336,7 @@ export function useValuations(): {
   const [source, setSource] = useState<ValuationSource>("legacy")
   const [hidden, setHidden] = useState<HiddenData>(() => new Map())
   const [lastUpdated, setLastUpdated] = useState<Map<string, string>>(() => new Map())
+  const [sources, setSources] = useState<SourcesData>(() => new Map())
   const [loading, setLoading] = useState(isValuationsConfigured())
   const [settled, setSettled] = useState(!isValuationsConfigured())
 
@@ -336,6 +355,7 @@ export function useValuations(): {
       setData(load.values)
       setHidden(load.hidden)
       setLastUpdated(load.lastUpdated)
+      setSources(load.sources)
       setSource(src)
       setLoading(false)
       note(src, detail)
@@ -377,5 +397,5 @@ export function useValuations(): {
     }
   }, [])
 
-  return {data, hidden, lastUpdated, loading, settled, source}
+  return {data, hidden, lastUpdated, sources, loading, settled, source}
 }
