@@ -120,7 +120,7 @@ Authored in design mode (`?edit=1`): a "Connect planets" sub-mode (click planet 
 
 ### Copy from Sanity
 
-Plain-text fields that carry prose — the About modal's body blocks and a company's `description` ("Eshap's Overview" in the detail panel) — go through `Paragraphs` in [src/richText.tsx](src/richText.tsx): a blank line starts a new paragraph and a link is written `[link text](https://example.com)` (web, mail and same-site addresses only; anything else stays plain text). The Studio field help says the same, so Evan writes one way everywhere.
+Plain-text fields that carry prose — the About modal's body blocks and a company's `description` ("Cartographer's Notes" in the detail panel) — go through `Paragraphs` in [src/richText.tsx](src/richText.tsx): a blank line starts a new paragraph and a link is written `[link text](https://example.com)` (web, mail and same-site addresses only; anything else stays plain text). The Studio field help says the same, so Evan writes one way everywhere.
 
 ### Interaction details worth knowing
 

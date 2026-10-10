@@ -1433,7 +1433,7 @@ function PlanetDetailPanel({
           )}
 
           {detail?.description && (
-            <PanelSection label="Eshap's Overview">
+            <PanelSection label="Cartographer's Notes">
               {/* Blank lines start paragraphs and `[text](url)` makes a link, as in the About copy. */}
               <Paragraphs text={detail.description} fontSize={13} paragraphStyle={{ lineHeight: 1.55, margin: "0 0 10px", color: "inherit", opacity: 0.9 }} tight />
             </PanelSection>
