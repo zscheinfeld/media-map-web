@@ -15,7 +15,8 @@
     "switch-datasource-to-gf": "tsx switch-datasource-to-gf.ts",
     "gf-audit-metadata": "tsx gf-audit-metadata.ts",
     "snapshot-valuations": "tsx snapshot-valuations.ts",
-    "migrate-palette": "tsx migrate-palette.ts"
+    "migrate-palette": "tsx migrate-palette.ts",
+    "fill-sources": "tsx fill-sources.ts"
   },
   "dependencies": {
     "@sanity/client": "^6.21.3",
