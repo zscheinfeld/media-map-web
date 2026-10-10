@@ -1,4 +1,4 @@
-// One-off: move a list of companies (jobs/manual-switch.json, from Zach's
+// One-off: move a list of companies (jobs/manual-switch.json — Quebecor and Banijay, from Zach's
 // "International Companies" sheet, 2026-10-10) from Google Finance to manual entry:
 //   1. Sanity: point each company's `data_source` at the "Manual entry" source.
 //   2. Sheet: write the hand-found current-year value over the GOOGLEFINANCE
