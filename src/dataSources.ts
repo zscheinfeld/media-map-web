@@ -1998,8 +1998,18 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
  },
  "bloomberg": {
   "frequency": "Monthly",
-  "current": null,
-  "years": []
+  "current": {
+   "label": "FOREX.com",
+   "url": "https://www.forex.com/en-au/news-and-analysis/bloomberg-ipo-everything-you-need-to-know-about-bloomberg/"
+  },
+  "years": [
+   {
+    "from": 2015,
+    "to": 2025,
+    "label": "FOREX.com",
+    "url": "https://www.forex.com/en-au/news-and-analysis/bloomberg-ipo-everything-you-need-to-know-about-bloomberg/"
+   }
+  ]
  },
  "bytedance": {
   "frequency": "Monthly",
