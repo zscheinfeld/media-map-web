@@ -1,0 +1,26 @@
+# One-off, run by hand: writes the cleaned data-source lists (jobs/sources-fill.json)
+# into the Google Finance sheet's "Link to Data Source" column, matched by slug.
+name: Fill data sources into the sheet
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write to the sheet (otherwise a dry run)"
+        type: boolean
+        default: false
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+        working-directory: jobs
+      - name: Fill sources
+        working-directory: jobs
+        env:
+          GF_SHEET_ID: ${{ secrets.GF_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: npm run fill-sources -- ${{ inputs.apply && '--apply' || '' }}
