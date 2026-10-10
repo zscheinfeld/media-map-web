@@ -1407,7 +1407,7 @@ function PlanetDetailPanel({
           </button>
 
           <div style={{ marginBottom: 24, paddingRight: 36 }}>
-            <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.1, marginBottom: 6 }}>
+            <div style={{ fontSize: 26, fontWeight: 500, lineHeight: 1.1, marginBottom: 6 }}>
               {usdFlag(node.name).display}
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1.5, textTransform: "uppercase" }}>
