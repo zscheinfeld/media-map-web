@@ -24,7 +24,7 @@ import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { Paragraphs } from "./richText";
-import { COMPANY_SOURCES, type CompanySources, type SourceRef } from "./dataSources";
+import { COMPANY_SOURCES, SLUG_BY_NAME, type CompanySources, type SourceRef } from "./dataSources";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -5180,7 +5180,7 @@ export default function MediaMap() {
   // Prototype: the inspected company's data sources, by slug (src/dataSources.ts).
   const inspectedSources = useMemo<CompanySources | null>(() => {
     if (!inspectedPlanet) return null;
-    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
+    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug ?? SLUG_BY_NAME[inspectedPlanet];
     return (slug && COMPANY_SOURCES[slug]) || null;
   }, [inspectedPlanet, baseCompanies]);
   const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
