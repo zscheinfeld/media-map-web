@@ -24,6 +24,7 @@ import { ExportPreviewOverlay } from "./exportPreview";
 import { StarfieldDefs } from "./exportScene";
 import { parseRoute, routePath, routeTitle, type AboutSection, type AppRoute } from "./urlState";
 import { Paragraphs } from "./richText";
+import { type CompanySources, type SourceRef, type YearSource } from "./dataSources";
 import { noteCompanyOpenedVia, SCROLL_DEPTHS, track, trackCompanyChange, trackDownloadsSection, trackGamePhase, trackPageview } from "./analytics";
 import { SearchBar } from "./SearchBar";
 import { getSolvedYears, solveLayoutInBackground, solvedLayoutFor, useSolvedYears, useYearLayoutSolver, type YearPlanet } from "./yearLayouts";
@@ -1203,6 +1204,7 @@ function PlanetDetailPanel({
   node,
   detail,
   lastUpdated,
+  sources = null,
   history,
   isPresent,
   onClose,
@@ -1211,6 +1213,8 @@ function PlanetDetailPanel({
   node: PlanetNode | null;
   detail: CompanyDetail | null;
   lastUpdated?: string;
+  /** Where the numbers come from (prototype: src/dataSources.ts, keyed by slug). */
+  sources?: CompanySources | null;
   history: { month: string; value: number }[];
   /** True when the viewed year is the present — Vitals only show then. */
   isPresent: boolean;
@@ -1234,7 +1238,9 @@ function PlanetDetailPanel({
     ? [
         `${node.sector}.`,
         `${valuationLabel} ${formatValuation(valuation)}${lastUpdated ? `, updated ${formatContentDate(lastUpdated)}` : ""}.`,
-        detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
+        sources?.current
+          ? `Current data source ${sources.current.label}, updated ${sources.frequency === "Live" ? "live" : "monthly"}.${sources.years.length ? ` Historical data source${sources.years.length > 1 ? "s" : ""} ${sources.years[0].label}, ${yearRange(sources.years[0])}${sources.years.length > 1 ? `, and ${sources.years.length - 1} more year${sources.years.length > 2 ? "s" : ""}` : ""}.` : ""}`
+          : detail?.dataSource ? `Data source ${detail.dataSource}.` : "",
         isPresent && detail && detail.vitals.length > 0
           ? `Vitals: ${detail.vitals.map((v) => (v.statistic ? `${v.name} ${v.statistic}` : v.name)).join(", ")}.`
           : "",
@@ -1401,7 +1407,7 @@ function PlanetDetailPanel({
           </button>
 
           <div style={{ marginBottom: 24, paddingRight: 36 }}>
-            <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.1, marginBottom: 6 }}>
+            <div style={{ fontSize: 26, fontWeight: 500, lineHeight: 1.1, marginBottom: 6 }}>
               {usdFlag(node.name).display}
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1.5, textTransform: "uppercase" }}>
@@ -1426,10 +1432,14 @@ function PlanetDetailPanel({
             </PanelSection>
           )}
 
-          {detail?.dataSource && (
-            <PanelSection label="Data Source">
-              <span style={{ fontSize: 14 }}>{detail.dataSource}</span>
-            </PanelSection>
+          {sources && (sources.current || sources.years.length > 0) ? (
+            <DataSourcesSections sources={sources} key={nodeName ?? ""} />
+          ) : (
+            detail?.dataSource && (
+              <PanelSection label="Data Source">
+                <span style={{ fontSize: 14 }}>{detail.dataSource}</span>
+              </PanelSection>
+            )
           )}
 
           {detail?.description && (
@@ -1519,6 +1529,118 @@ function PanelSection({ label, children }: { label: string; children: React.Reac
       </div>
       {children}
     </div>
+  );
+}
+
+/** A source as a link when it has one, else plain text (a publisher named in the notes). */
+function SourceLink({ source, size = 14 }: { source: SourceRef; size?: number }) {
+  return source.url ? (
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      // Set like the plain text beside it (same colour, weight and size), underlined.
+      style={{ fontSize: size, color: "inherit", textDecoration: "underline", textDecorationThickness: "0.06em", textUnderlineOffset: "0.14em" }}
+    >
+      {source.label}
+    </a>
+  ) : (
+    <span style={{ fontSize: size }}>{source.label}</span>
+  );
+}
+
+/** How often the current number updates, set like the year beside a historical
+ *  source ("· 2025"): "Updated Monthly" in the same muted tone, "Live" in green. */
+const LIVE_GREEN = "#A1FF62";
+function Frequency({ frequency }: { frequency: CompanySources["frequency"] }) {
+  const live = frequency === "Live";
+  return (
+    <span style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: "nowrap" }}>
+      <span style={{ opacity: 0.4 }}> · </span>
+      {live ? (
+        <span style={{ color: LIVE_GREEN }}>Live</span>
+      ) : (
+        <span style={{ opacity: 0.6 }}>Updated Monthly</span>
+      )}
+    </span>
+  );
+}
+
+/** "2026" or "2015–2025". */
+function yearRange(y: YearSource): string {
+  return y.from === y.to ? String(y.from) : `${y.from}–${y.to}`;
+}
+
+/** One past-year line, source first like the current-source line: "Forge Global · 2022–2024". */
+function YearLine({ y }: { y: YearSource }) {
+  return (
+    <span style={{ fontSize: 14, lineHeight: 1.5 }}>
+      <SourceLink source={y} />
+      <span style={{ opacity: 0.4 }}> · </span>
+      <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{yearRange(y)}</span>
+    </span>
+  );
+}
+
+/** Current and historical data sources: where today's number comes from and how
+ *  often it updates, then one source per past year (consecutive years that share
+ *  a source collapsed into a range) — the newest shown, the rest behind a
+ *  "+ N more years" button. */
+function DataSourcesSections({ sources }: { sources: CompanySources }) {
+  const [showAll, setShowAll] = useState(false);
+  const [first, ...rest] = sources.years;
+  return (
+    <>
+      {sources.current && (
+        <PanelSection label="Current Data Source">
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            <SourceLink source={sources.current} />
+            <Frequency frequency={sources.frequency} />
+          </div>
+        </PanelSection>
+      )}
+      {first && (
+        <PanelSection label={rest.length > 0 ? "Historical Data Sources" : "Historical Data Source"}>
+          <div>
+            <YearLine y={first} />
+          </div>
+          {rest.length > 0 && (
+            <>
+              {/* Always in the tree so it can unfold smoothly (App.css .mm-expand). */}
+              <div className="mm-expand" data-open={showAll} aria-hidden={!showAll}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {rest.map((y, i) => (
+                    <li key={i} style={i === 0 ? { paddingTop: 4 } : undefined}>
+                      <YearLine y={y} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                className="mm-hover"
+                aria-expanded={showAll}
+                aria-label={showAll ? "Show fewer years" : `Show ${rest.length} more year${rest.length === 1 ? "" : "s"}`}
+                onClick={() => setShowAll((v) => !v)}
+                style={{
+                  marginTop: 8,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.75)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {showAll ? "Show fewer" : `+ ${rest.length} more`}
+              </button>
+            </>
+          )}
+        </PanelSection>
+      )}
+    </>
   );
 }
 
@@ -4967,6 +5089,7 @@ export default function MediaMap() {
   // (slug, month). Falls back to the legacy sheet + mock when unconfigured/missing.
   const {
     data: valData,
+    sources: valSources,
     hidden: hiddenByYear,
     lastUpdated: lastUpdatedBySlug,
     loading: valuationsLoading,
@@ -5070,6 +5193,12 @@ export default function MediaMap() {
   }, [baseCompanies, lastUpdatedBySlug]);
   // Yearly market-cap series (oldest → newest) for the inspected company's chart.
   // The `month` field carries a year key ("YYYY"); HistoryChart labels it as a year.
+  // The inspected company's data sources, from the sheet (see dataSources.ts).
+  const inspectedSources = useMemo<CompanySources | null>(() => {
+    if (!inspectedPlanet) return null;
+    const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
+    return (slug && valSources.get(slug)) || null;
+  }, [inspectedPlanet, baseCompanies, valSources]);
   const inspectedHistory = useMemo<{ month: string; value: number }[]>(() => {
     if (!inspectedPlanet) return [];
     const slug = baseCompanies.find((c) => c.name === inspectedPlanet)?.slug;
@@ -9301,6 +9430,7 @@ export default function MediaMap() {
         node={inspectedPlanet ? nodes.find((n) => n.name === inspectedPlanet) ?? null : null}
         detail={inspectedPlanet ? sanity?.detailByName[inspectedPlanet] ?? null : null}
         lastUpdated={inspectedPlanet ? lastUpdatedByName.get(inspectedPlanet) : undefined}
+        sources={inspectedSources}
         history={inspectedHistory}
         isPresent={activeDate.year === currentDate.year}
         onClose={() => {
