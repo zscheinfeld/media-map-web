@@ -1954,8 +1954,8 @@ export const COMPANY_SOURCES: Record<string, CompanySources> = {
  "audacy": {
   "frequency": "Monthly",
   "current": {
-   "label": "companiesmarketcap.com",
-   "url": "https://companiesmarketcap.com/audacy/marketcap/"
+   "label": "Perplexity Finance",
+   "url": "https://www.perplexity.ai/finance/AUD"
   },
   "years": [
    {
