@@ -1566,7 +1566,7 @@ function FrequencyPill({ frequency }: { frequency: CompanySources["frequency"] }
       }}
     >
       {live && <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: "#7fe0a8" }} />}
-      {live ? "Live" : "Monthly"}
+      {live ? "Live" : "Updated Monthly"}
     </span>
   );
 }
