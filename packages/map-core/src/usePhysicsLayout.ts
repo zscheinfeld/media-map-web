@@ -1,6 +1,7 @@
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
 import type {Simulation} from "d3-force"
-import type {Bounds, LayoutInput, PlanetNode, PlanetPosition, ViewMode} from "./types.js"
+import type {Bounds, IntroOptions, LayoutInput, PlanetNode, PlanetPosition, ViewMode} from "./types.js"
+import {INTRO_DEFAULTS} from "./types.js"
 import {ANCHOR_DIAM_FALLBACK, diameterFor} from "./sizing.js"
 import {
   CONNECTION_PULL,
@@ -115,6 +116,9 @@ export type PhysicsOptions = {
    * isn't on screen (under the Time Machine), so there is nothing to animate.
    */
   instant?: boolean
+  /** The first-load intro's timing (see IntroOptions); read when an intro
+   *  starts, so changing it doesn't rebuild the layout. */
+  intro?: IntroOptions
 }
 
 /**
@@ -151,6 +155,7 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
     gapMin = 60,
     presolved,
     instant = false,
+    intro,
   } = opts
   const pure = seed != null
 
@@ -172,6 +177,10 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
   const prevRestartTokenRef = useRef(restartToken)
   const prevResettleTokenRef = useRef(resettleToken)
   const prevFlyTokenRef = useRef(flyIntroToken)
+  const introOptsRef = useRef<IntroOptions | undefined>(intro)
+  useLayoutEffect(() => {
+    introOptsRef.current = intro
+  })
   const prevSuspendedRef = useRef(false)
   // The first-load intro while it is in flight: when it started, how long it
   // runs, and the resolved targets it is tweening toward. Lets an effect re-run
@@ -503,37 +512,68 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       }
       cacheLayout() // built is at the resolved layout here — snapshot it for A/B tweens.
 
-      // Reset to each planet's resolved center (with mild noise) for the tween start.
+      // The intro's timing: each planet leaves its sector well after a delay set
+      // by its sector's place in the order and its size rank within the sector.
+      const io = {...INTRO_DEFAULTS, ...(introOptsRef.current ?? {})}
+      const sectorRank = new Map<string, number>()
+      for (const sName of io.sectorOrder ?? []) sectorRank.set(sName, sectorRank.size)
+      for (const n of built) if (!sectorRank.has(n.sector)) sectorRank.set(n.sector, sectorRank.size)
+      const bySector = new Map<string, PlanetNode[]>()
+      for (const n of built) (bySector.get(n.sector) ?? bySector.set(n.sector, []).get(n.sector)!).push(n)
+      const delay = new Map<string, number>()
+      for (const [sName, list] of bySector) {
+        list.sort((a, b) => b.targetR - a.targetR)
+        list.forEach((n, i) => delay.set(n.name, io.startDelayMs + sectorRank.get(sName)! * io.sectorOffsetMs + i * io.planetOffsetMs))
+      }
+      const ease = (t: number): number => {
+        switch (io.easing) {
+          case "outQuint": return 1 - Math.pow(1 - t, 5)
+          case "outExpo": return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)
+          case "outBack": { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
+          case "inOutCubic": return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+          default: return 1 - Math.pow(1 - t, 3)
+        }
+      }
+
+      // Reset to each planet's resolved center (with noise) for the tween start.
+      const startR = new Map<string, number>()
       for (const n of built) {
         const center = centerByName.get(n.name) ?? {x: n.targetX, y: n.targetY}
-        n.x = center.x + jit(n.name, "ix") * 80
-        n.y = center.y + jit(n.name, "iy") * 80
+        n.x = center.x + jit(n.name, "ix") * io.spread
+        n.y = center.y + jit(n.name, "iy") * io.spread
         n.vx = 0
         n.vy = 0
         n.fx = null
         n.fy = null
+        startR.set(n.name, n.targetR * Math.max(0, Math.min(1, io.startScale)))
+        n.r = startR.get(n.name)!
+        n.entering = (delay.get(n.name) ?? 0) > 0
+        n.introK = n.entering || io.fadeShare > 0 ? 0 : 1
       }
 
       const startPos = new Map<string, {x: number; y: number}>()
       for (const n of built) startPos.set(n.name, {x: n.x, y: n.y})
 
-      const TWEEN_MS = 800
+      const TWEEN_MS = Math.max(...[...delay.values()], 0) + io.durationMs
       const t0 = performance.now()
       introRef.current = {t0, ms: TWEEN_MS, settled}
 
       const tweenTick = (now: number) => {
-        const t = Math.max(0, Math.min(1, (now - t0) / TWEEN_MS)) // rAF time can predate t0 after a long solve
-        const k = 1 - Math.pow(1 - t, 3)
+        const elapsed = Math.max(0, now - t0) // rAF time can predate t0 after a long solve
+        const t = Math.min(1, elapsed / TWEEN_MS)
         for (const n of built) {
+          const d = delay.get(n.name) ?? 0
+          const tn = Math.max(0, Math.min(1, (elapsed - d) / io.durationMs))
+          const k = ease(tn)
           const s = startPos.get(n.name)!
           const e = settled.get(n.name)!
           n.x = s.x + (e.x - s.x) * k
           n.y = s.y + (e.y - s.y) * k
-          if (Math.abs(n.r - n.targetR) > 0.05) {
-            n.r += (n.targetR - n.r) * 0.08
-          } else {
-            n.r = n.targetR
-          }
+          const r0 = startR.get(n.name)!
+          n.r = tn >= 1 ? n.targetR : r0 + (n.targetR - r0) * Math.max(0, Math.min(1, k))
+          n.entering = elapsed < d
+          // Opacity: hidden until its turn, then up over the first `fadeShare` of the flight.
+          n.introK = elapsed < d ? 0 : io.fadeShare > 0 ? Math.min(1, tn / io.fadeShare) : 1
         }
         setNodes(built.slice())
 
@@ -543,6 +583,8 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
           tweenRafRef.current = null
           introRef.current = null
           for (const n of built) {
+            n.introK = 1
+            n.entering = false
             const f = savedFx.get(n.name)
             if (f && f.fx !== null && f.fy !== null) {
               n.fx = f.fx
