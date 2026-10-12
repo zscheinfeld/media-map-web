@@ -50,4 +50,4 @@ export {
   type YearWindow,
 } from "./timeScope.js"
 export {INTRO_DEFAULTS} from "./types.js"
-export type {IntroOptions, IntroEasing} from "./types.js"
+export type {IntroOptions, IntroEasing, IntroOrder} from "./types.js"

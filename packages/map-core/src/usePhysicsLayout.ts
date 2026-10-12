@@ -521,9 +521,15 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       const bySector = new Map<string, PlanetNode[]>()
       for (const n of built) (bySector.get(n.sector) ?? bySector.set(n.sector, []).get(n.sector)!).push(n)
       const delay = new Map<string, number>()
-      for (const [sName, list] of bySector) {
-        list.sort((a, b) => b.targetR - a.targetR)
-        list.forEach((n, i) => delay.set(n.name, io.startDelayMs + sectorRank.get(sName)! * io.sectorOffsetMs + i * io.planetOffsetMs))
+      if (io.order === "sidebar") {
+        for (const [sName, list] of bySector) {
+          list.sort((a, b) => b.targetR - a.targetR)
+          list.forEach((n, i) => delay.set(n.name, io.startDelayMs + sectorRank.get(sName)! * io.sectorOffsetMs + i * io.planetOffsetMs))
+        }
+      } else {
+        // Every company in one line by market cap (entities, which have no size, go last).
+        const line = [...built].sort((a, b) => (io.order === "biggestFirst" ? b.valuation_b - a.valuation_b : a.valuation_b - b.valuation_b))
+        line.forEach((n, i) => delay.set(n.name, io.startDelayMs + i * io.planetOffsetMs))
       }
       const ease = (t: number): number => {
         switch (io.easing) {

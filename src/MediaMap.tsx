@@ -15,6 +15,7 @@ import {
   type LayoutInput,
   type IntroEasing,
   type IntroOptions,
+  type IntroOrder,
 } from "@media-map/map-core";
 import { COMPANY_POSITIONS, type PlanetPosition } from "./layout";
 import { AboutModal } from "./AboutModal";
@@ -2236,11 +2237,17 @@ const INTRO_SHIPPED: IntroTuning = {
   sectorOffsetMs: 40,
   planetOffsetMs: 15,
   easing: "outCubic",
+  order: "sidebar",
   startScale: 0.3,
   spread: 80,
   fadeShare: 0.3,
 };
 const INTRO_STORE_KEY = "mm-intro-tuning";
+const INTRO_ORDERS: { value: IntroOrder; label: string }[] = [
+  { value: "sidebar", label: "Side panel (sector by sector)" },
+  { value: "biggestFirst", label: "Biggest market cap → smallest" },
+  { value: "smallestFirst", label: "Smallest → biggest" },
+];
 const INTRO_EASINGS: { value: IntroEasing; label: string }[] = [
   { value: "outCubic", label: "Out cubic (today)" },
   { value: "outQuint", label: "Out quint (snappier)" },
@@ -2280,7 +2287,7 @@ function IntroTuningPanel({ tuning, setTuning, onReplay }: { tuning: IntroTuning
   const font = '"franklin-gothic", "Libre Franklin", "Helvetica Neue", Arial, sans-serif';
   const btn: React.CSSProperties = { background: "#1d2229", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: 7, padding: "5px 10px", font: "inherit", fontSize: 12, cursor: "pointer" };
   const set = <K extends keyof IntroTuning>(k: K, v: IntroTuning[K]) => setTuning({ ...tuning, [k]: v });
-  const total = tuning.startDelayMs + 16 * tuning.sectorOffsetMs + 24 * tuning.planetOffsetMs + tuning.durationMs;
+  const total = tuning.order === "sidebar" ? tuning.startDelayMs + 16 * tuning.sectorOffsetMs + 24 * tuning.planetOffsetMs + tuning.durationMs : tuning.startDelayMs + 181 * tuning.planetOffsetMs + tuning.durationMs;
   return (
     <div
       style={{
@@ -2292,9 +2299,28 @@ function IntroTuningPanel({ tuning, setTuning, onReplay }: { tuning: IntroTuning
         <strong style={{ fontSize: 12, letterSpacing: 0.5 }}>INTRO</strong>
         <button style={{ ...btn, background: "#3657FD", borderColor: "#3657FD", color: "#fff" }} onClick={onReplay}>Replay</button>
       </div>
+      <div style={{ fontSize: 10, opacity: 0.75, marginBottom: 4 }}>Order</div>
+      <div role="radiogroup" aria-label="Order" style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+        {INTRO_ORDERS.map((o) => (
+          <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer" }}>
+            <input type="radio" name="mm-intro-order" value={o.value} checked={tuning.order === o.value} onChange={() => set("order", o.value)} style={{ accentColor: "#ffe066", margin: 0 }} />
+            {o.label}
+          </label>
+        ))}
+      </div>
       <SliderRow label="Start delay" value={tuning.startDelayMs} min={0} max={1500} step={10} onChange={(v) => set("startDelayMs", v)} format={(v) => `${v} ms`} />
-      <SliderRow label="Sector offset (per sector, sidebar order)" value={tuning.sectorOffsetMs} min={0} max={300} step={5} onChange={(v) => set("sectorOffsetMs", v)} format={(v) => `${v} ms`} />
-      <SliderRow label="Company offset (per planet, largest first)" value={tuning.planetOffsetMs} min={0} max={150} step={5} onChange={(v) => set("planetOffsetMs", v)} format={(v) => `${v} ms`} />
+      {tuning.order === "sidebar" && (
+        <SliderRow label="Sector offset (per sector, sidebar order)" value={tuning.sectorOffsetMs} min={0} max={300} step={5} onChange={(v) => set("sectorOffsetMs", v)} format={(v) => `${v} ms`} />
+      )}
+      <SliderRow
+        label={tuning.order === "sidebar" ? "Company offset (per planet within a sector, largest first)" : "Company offset (per planet, in order)"}
+        value={tuning.planetOffsetMs}
+        min={0}
+        max={tuning.order === "sidebar" ? 150 : 40}
+        step={1}
+        onChange={(v) => set("planetOffsetMs", v)}
+        format={(v) => `${v} ms`}
+      />
       <SliderRow label="Flight duration" value={tuning.durationMs} min={200} max={2500} step={25} onChange={(v) => set("durationMs", v)} format={(v) => `${v} ms`} />
       <SliderRow label="Start size" value={tuning.startScale} min={0} max={1} step={0.05} onChange={(v) => set("startScale", v)} format={(v) => `${Math.round(v * 100)}%`} />
       <SliderRow label="Spread from the well" value={tuning.spread} min={0} max={600} step={10} onChange={(v) => set("spread", v)} format={(v) => `${v}`} />
@@ -2307,7 +2333,7 @@ function IntroTuningPanel({ tuning, setTuning, onReplay }: { tuning: IntroTuning
           <option key={e.value} value={e.value}>{e.label}</option>
         ))}
       </select>
-      <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 10 }}>Whole intro ≈ {(total / 1000).toFixed(1)} s (17 sectors, biggest sector 25 planets)</div>
+      <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 10 }}>Whole intro ≈ {(total / 1000).toFixed(1)} s ({tuning.order === "sidebar" ? "17 sectors, biggest sector 25 planets" : "182 companies in a line"})</div>
       <div style={{ display: "flex", gap: 6 }}>
         <button
           style={btn}
