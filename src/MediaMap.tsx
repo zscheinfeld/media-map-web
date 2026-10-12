@@ -964,7 +964,7 @@ function Sidebar({ open, onCollapse, ...props }: SectorPanelProps & { open: bool
           bottom-left of the map instead. */}
       <div style={{ flex: "0 0 auto", paddingTop: 14, marginTop: 4 }}>
         <a
-          href="https://eshap.substack.com/"
+          href="https://eshap.substack.com/p/the-media-universe-is-in-your-hands"
           target="_blank"
           rel="noreferrer"
           aria-label="Full map analysis on Substack"
