@@ -515,21 +515,22 @@ export function usePhysicsLayout(opts: PhysicsOptions): PlanetNode[] {
       // The intro's timing: each planet leaves its sector well after a delay set
       // by its sector's place in the order and its size rank within the sector.
       const io = {...INTRO_DEFAULTS, ...(introOptsRef.current ?? {})}
-      const sectorRank = new Map<string, number>()
-      for (const sName of io.sectorOrder ?? []) sectorRank.set(sName, sectorRank.size)
-      for (const n of built) if (!sectorRank.has(n.sector)) sectorRank.set(n.sector, sectorRank.size)
       const bySector = new Map<string, PlanetNode[]>()
       for (const n of built) (bySector.get(n.sector) ?? bySector.set(n.sector, []).get(n.sector)!).push(n)
-      const delay = new Map<string, number>()
+      // Sector order: the sidebar's, or by each sector's total market cap.
+      const sectorRank = new Map<string, number>()
       if (io.order === "sidebar") {
-        for (const [sName, list] of bySector) {
-          list.sort((a, b) => b.targetR - a.targetR)
-          list.forEach((n, i) => delay.set(n.name, io.startDelayMs + sectorRank.get(sName)! * io.sectorOffsetMs + i * io.planetOffsetMs))
-        }
+        for (const sName of io.sectorOrder ?? []) sectorRank.set(sName, sectorRank.size)
+        for (const n of built) if (!sectorRank.has(n.sector)) sectorRank.set(n.sector, sectorRank.size)
       } else {
-        // Every company in one line by market cap (entities, which have no size, go last).
-        const line = [...built].sort((a, b) => (io.order === "biggestFirst" ? b.valuation_b - a.valuation_b : a.valuation_b - b.valuation_b))
-        line.forEach((n, i) => delay.set(n.name, io.startDelayMs + i * io.planetOffsetMs))
+        const totals = [...bySector.entries()].map(([sName, list]) => ({sName, total: list.reduce((sum, n) => sum + n.valuation_b, 0)}))
+        totals.sort((a, b) => (io.order === "biggestFirst" ? b.total - a.total : a.total - b.total))
+        totals.forEach(({sName}, i) => sectorRank.set(sName, i))
+      }
+      const delay = new Map<string, number>()
+      for (const [sName, list] of bySector) {
+        list.sort((a, b) => b.targetR - a.targetR)
+        list.forEach((n, i) => delay.set(n.name, io.startDelayMs + sectorRank.get(sName)! * io.sectorOffsetMs + i * io.planetOffsetMs))
       }
       const ease = (t: number): number => {
         switch (io.easing) {

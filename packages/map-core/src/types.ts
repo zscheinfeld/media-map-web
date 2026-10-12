@@ -141,8 +141,8 @@ export type LayoutInput = {
 
 /** The first-load intro (planets flying out of their sector wells), tunable. */
 export type IntroEasing = "outCubic" | "outQuint" | "outExpo" | "outBack" | "inOutCubic"
-/** Which planet goes first: sector by sector in the sidebar's order (largest
- *  first within each), or every company by market cap, biggest or smallest first. */
+/** Which sector goes first: the sidebar's order, or the sectors by their total
+ *  market cap, biggest or smallest first. Within a sector, largest planet first. */
 export type IntroOrder = "sidebar" | "biggestFirst" | "smallestFirst"
 export type IntroOptions = {
   /** Each planet's flight, ms. */
@@ -154,8 +154,7 @@ export type IntroOptions = {
   /** Added per planet within its sector (largest first), ms. */
   planetOffsetMs: number
   easing: IntroEasing
-  /** The order planets set off in. With a size order the sector offset is unused:
-   *  each planet starts `planetOffsetMs` after the one before it. */
+  /** The order the sectors set off in (see IntroOrder). */
   order: IntroOrder
   /** A planet's size at the start of its flight, as a share of its final size. */
   startScale: number
