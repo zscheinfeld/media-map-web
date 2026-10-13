@@ -7602,7 +7602,9 @@ export default function MediaMap() {
     // regardless of what was rendered.
     total: Object.values(counts).reduce((a, b) => a + b, 0),
     loading: loading || valuationsLoading,
-    error,
+    // The legacy sheet is only a fallback once Sanity (or its snapshot) has the
+    // roster, so its failure isn't worth a message then.
+    error: sanity ? null : error,
     hoveredSector,
     onHoverSector: hoverSector,
     onFocusSector: focusOnSector,

@@ -48,3 +48,25 @@ export async function sanityQuery<T>(groq: string): Promise<T> {
   const json = (await res.json()) as {result: T}
   return json.result
 }
+
+/** The Sanity docs as they were at build time (public/sanity-snapshot.json,
+ *  written by scripts/snapshot-sanity.mjs). Null when there is none. Fetched
+ *  once; the result is shared by every caller. */
+export type SanitySnapshot = {
+  generatedAt?: string
+  sectors?: unknown[]
+  companies?: unknown[]
+  connections?: unknown[]
+  entities?: unknown[]
+  settings?: unknown
+  about?: unknown
+}
+let snapshotP: Promise<SanitySnapshot | null> | null = null
+export function loadSanitySnapshot(): Promise<SanitySnapshot | null> {
+  if (!snapshotP) {
+    snapshotP = fetch("/sanity-snapshot.json", {cache: "no-cache"})
+      .then((r) => (r.ok ? (r.json() as Promise<SanitySnapshot>) : null))
+      .catch(() => null)
+  }
+  return snapshotP
+}

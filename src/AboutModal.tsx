@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { isSanityConfigured, sanityQuery } from "./sanityClient";
+import { isSanityConfigured, loadSanitySnapshot, sanityQuery } from "./sanityClient";
+import { ABOUT_Q } from "./sanityQueries.js";
 import { SCROLL_DEPTHS, track } from "./analytics";
 import { Paragraphs } from "./richText";
 
@@ -117,17 +118,6 @@ const DEFAULT_SECTIONS: SectionData[] = [
   },
 ];
 
-const ABOUT_Q = `*[_id == "about"][0]{
-  "heroUrl": heroImage.asset->url,
-  sections[]{
-    tabLabel,
-    blocks[]{
-      _type,
-      text, label, action, url, caption,
-      "photoUrl": image.asset->url
-    }
-  }
-}`;
 
 type RawBlock = {
   _type?: string;
@@ -182,22 +172,32 @@ function useAboutContent(): AboutContent {
   useEffect(() => {
     if (!isSanityConfigured()) return;
     let cancelled = false;
-    sanityQuery<{ heroUrl?: string; sections?: { tabLabel?: string; blocks?: RawBlock[] }[] } | null>(ABOUT_Q)
+    let haveLive = false;
+    type AboutDoc = { heroUrl?: string; sections?: { tabLabel?: string; blocks?: RawBlock[] }[] } | null;
+    const apply = (doc: AboutDoc) => {
+      if (cancelled || !doc) return;
+      const sections: SectionData[] = (doc.sections ?? [])
+        .map((s) => ({
+          tabLabel: (s.tabLabel ?? "").trim(),
+          blocks: (s.blocks ?? []).map(mapBlock).filter((b): b is Block => b !== null),
+        }))
+        .filter((s) => s.tabLabel && s.blocks.length > 0);
+      setContent({
+        heroUrl: typeof doc.heroUrl === "string" && doc.heroUrl ? doc.heroUrl : DEFAULT_HERO,
+        sections: sections.length ? sections : DEFAULT_SECTIONS,
+      });
+    };
+    // The build-time snapshot first, then the live document.
+    loadSanitySnapshot().then((snap) => {
+      if (!haveLive && snap?.about) apply(snap.about as AboutDoc);
+    });
+    sanityQuery<AboutDoc>(ABOUT_Q)
       .then((doc) => {
-        if (cancelled || !doc) return;
-        const sections: SectionData[] = (doc.sections ?? [])
-          .map((s) => ({
-            tabLabel: (s.tabLabel ?? "").trim(),
-            blocks: (s.blocks ?? []).map(mapBlock).filter((b): b is Block => b !== null),
-          }))
-          .filter((s) => s.tabLabel && s.blocks.length > 0);
-        setContent({
-          heroUrl: typeof doc.heroUrl === "string" && doc.heroUrl ? doc.heroUrl : DEFAULT_HERO,
-          sections: sections.length ? sections : DEFAULT_SECTIONS,
-        });
+        haveLive = true;
+        apply(doc);
       })
       .catch(() => {
-        /* keep defaults */
+        /* keep the snapshot or the defaults */
       });
     return () => {
       cancelled = true;

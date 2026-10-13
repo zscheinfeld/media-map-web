@@ -26,7 +26,7 @@ import {
   type PlanetStyle,
   type YearWindow,
 } from "@media-map/map-core"
-import {sanityQuery, isSanityConfigured} from "./sanityClient"
+import {sanityQuery, isSanityConfigured, loadSanitySnapshot} from "./sanityClient"
 
 // --- Raw GROQ shapes (mirror studio/tools/mapEditor/sanityMapData.ts) -------
 
@@ -403,35 +403,7 @@ export function resolveSanityMapAt(raw: RawMapDocs, at: Moment): ResolvedSanityM
 // empty companies array even though they exist — splitting avoids that.
 // Pull only the hex strings out of the color objects (projecting the full
 // @sanity/color-input objects on the anonymous read returns empty results).
-const STYLE_PROJ = `{
-  "fill": fill.hex,
-  "stripes": stripes[].hex,
-  stripe_orientation,
-  "stroke": stroke.hex,
-  stroke_width_px,
-  "glow": { "color": glow.color.hex, "blur_px": glow.blur_px, "spread_px": glow.spread_px },
-  "ombre": ombre{ "stops": stops[].hex, count, angle, blend, reverse, stripe_stroke_px, "stripe_stroke_color": stripe_stroke_color.hex }
-}`
-const SECTORS_Q = `*[_type == "sector"]{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} }`
-const COMPANIES_Q = `*[_type == "company"]{
-  ticker,
-  name, "slug": slug.current, description,
-  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date}, "default_style": default_style ${STYLE_PROJ} },
-  "planet_style": planet_style ${STYLE_PROJ}, position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date},
-  appearance_windows[]{start_year, end_year},
-  vitals[]{_key, name, statistic, start_date, end_date},
-  eshap_content[]{_key, kind, title, url, published_date},
-  external_articles[]{_key, title, url, source, published_date},
-  valuation_type, manual_valuations[]{value_billions_usd, as_of_date}, "data_source": data_source->name
-}`
-const CONNECTIONS_Q = `*[_type == "connection"]{ style, description, start_year, end_year, "from": from->name, "to": to->name }`
-const ENTITIES_Q = `*[_type == "entity"]{
-  name,
-  sector->{ name, desktop_center, mobile_center, desktop_center_overrides[]{x, y, start_date}, mobile_center_overrides[]{x, y, start_date} },
-  position_overrides[]{x, y, pin, start_date}, mobile_position_overrides[]{x, y, pin, start_date}, appearance_windows[]{start_year, end_year}
-}`
-const SETTINGS_KNOBS = `start_date, packing_density, collide_padding, label_size_px, connection_pull, entity_radius, size_spacing, sector_pull, repulsion`
-const SETTINGS_Q = `*[_id == "mapSettings"][0]{ overrides[]{${SETTINGS_KNOBS}}, square_overrides[]{${SETTINGS_KNOBS}}, "background": background{ "top": top.hex, "middle": middle.hex, "bottom": bottom.hex }, "panel_background": panel_background.hex, layout_lab }`
+import {SECTORS_Q, COMPANIES_Q, CONNECTIONS_Q, ENTITIES_Q, SETTINGS_Q} from "./sanityQueries.js"
 
 /**
  * Fetch the raw Sanity map docs once (one query per type). Returns null docs
@@ -445,6 +417,22 @@ export function useSanityMapDocs(): {docs: RawMapDocs | null; loading: boolean; 
   useEffect(() => {
     if (!isSanityConfigured()) return
     let cancelled = false
+    let haveLive = false
+
+    // The build-time snapshot first (same-origin, cached): the map paints at once
+    // and without any cross-origin request — which also means a crawler that
+    // renders the page sees the real map. The live read below then takes over.
+    loadSanitySnapshot().then((snap) => {
+      if (cancelled || haveLive || !snap || !Array.isArray(snap.companies)) return
+      setDocs({
+        sectors: (snap.sectors ?? []) as RawSector[],
+        companies: snap.companies as RawCompany[],
+        connections: (snap.connections ?? []) as RawConnection[],
+        entities: (snap.entities ?? []) as RawEntity[],
+        settings: (snap.settings ?? null) as RawMapDocs["settings"],
+      })
+      setLoading(false)
+    })
 
     Promise.all([
       sanityQuery<RawSector[]>(SECTORS_Q),
@@ -454,10 +442,19 @@ export function useSanityMapDocs(): {docs: RawMapDocs | null; loading: boolean; 
       sanityQuery<{overrides?: RawSettingsOverride[]; square_overrides?: RawSettingsOverride[]} | null>(SETTINGS_Q),
     ])
       .then(([sectors, companies, connections, entities, settings]) => {
-        if (!cancelled) setDocs({sectors: sectors ?? [], companies: companies ?? [], connections: connections ?? [], entities: entities ?? [], settings})
+        if (cancelled) return
+        haveLive = true
+        setDocs({sectors: sectors ?? [], companies: companies ?? [], connections: connections ?? [], entities: entities ?? [], settings})
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        // With a snapshot painted, a failed live read is a warning, not an error.
+        if (cancelled) return
+        const msg = e instanceof Error ? e.message : String(e)
+        loadSanitySnapshot().then((snap) => {
+          if (cancelled) return
+          if (snap) console.warn(`[media-map] Sanity live read failed (${msg}); showing the build-time snapshot`)
+          else setError(msg)
+        })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
