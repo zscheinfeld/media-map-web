@@ -7756,7 +7756,7 @@ export default function MediaMap() {
   useEffect(() => {
     if (typeof window === "undefined" || !routeLoadedRef.current) return;
     const path = routePath(currentRoute);
-    document.title = routeTitle(currentRoute, "ESHAP Media Universe");
+    document.title = routeTitle(currentRoute, "ESHAP Media Universe · Evan Shapiro’s Media Map");
     if (window.location.pathname !== path) {
       const url = path + window.location.search + window.location.hash;
       if (performance.now() < routeApplyingUntilRef.current) window.history.replaceState(null, "", url);
