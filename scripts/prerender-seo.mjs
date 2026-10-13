@@ -3,9 +3,11 @@
 //   1. Real text in the HTML: the About copy and an index of the companies by
 //      sector (from the build-time snapshots), in a visually hidden block that
 //      the app leaves alone. Same content the site shows; nothing a reader sees.
-//   2. One HTML file per address (dist/about/index.html …) with its own title,
-//      description, canonical and og:url. Netlify serves a real file before the
-//      SPA fallback, so /about gets its own headline in search results.
+//   2. One HTML file per address (dist/about.html, dist/map/2020.html …) with
+//      its own title, description, canonical and og:url. Netlify's pretty URLs
+//      serve `about.html` at /about without a redirect (a directory with an
+//      index.html would 301 to /about/, changing the app's addresses), and a
+//      real file wins over the SPA fallback, so /about gets its own headline.
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -98,7 +100,7 @@ for (const [path, t, d] of pages) {
     .replace(ogUrl, `<meta property="og:url" content="${SITE}${path}" />`)
     .replace(ogTitle, `<meta property="og:title" content="${esc(t)}" />`)
     .replace(twTitle, `<meta name="twitter:title" content="${esc(t)}" />`);
-  const out = join(dist, path, "index.html");
+  const out = join(dist, `${path}.html`);
   mkdirSync(dirname(out), {recursive: true});
   writeFileSync(out, page);
   n++;
