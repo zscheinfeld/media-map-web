@@ -65,12 +65,15 @@ export function routePath(r: AppRoute): string {
 const VIEW_LABEL: Record<AppView, string> = { map: "Map", linear: "Linear", aggregate: "Aggregate", list: "List" };
 
 /** The tab title for a state. */
+/** The tab title: the site's full name on the home address, the short name
+ *  ("ESHAP Media Universe") as the suffix of every other one. */
 export function routeTitle(r: AppRoute, site: string): string {
-  if (r.game) return `Game · ${site}`;
-  if (r.about) return `${r.about === "downloads" ? "Downloads" : "About"} · ${site}`;
-  if (r.timeMachine) return `Time Machine${r.timeMachine.year !== null ? ` ${r.timeMachine.year}` : ""} · ${site}`;
-  if (r.year !== null) return `${r.year} ${VIEW_LABEL[r.view]} · ${site}`;
-  return r.view === "map" ? site : `${VIEW_LABEL[r.view]} · ${site}`;
+  const short = site.split(" · ")[0];
+  if (r.game) return `Game · ${short}`;
+  if (r.about) return `${r.about === "downloads" ? "Downloads" : "About"} · ${short}`;
+  if (r.timeMachine) return `Time Machine${r.timeMachine.year !== null ? ` ${r.timeMachine.year}` : ""} · ${short}`;
+  if (r.year !== null) return `${r.year} ${VIEW_LABEL[r.view]} · ${short}`;
+  return r.view === "map" ? site : `${VIEW_LABEL[r.view]} · ${short}`;
 }
 
 /** Every address worth listing in the sitemap (the game is not one). */
