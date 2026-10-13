@@ -8,6 +8,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
     <link rel="icon" href="/favicon/favicon.ico" sizes="any" />
+    <!-- Google's favicon crawler wants a square icon that is a multiple of 48px. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon/android-chrome-192x192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -47,6 +49,22 @@
     <meta name="twitter:title" content="ESHAP Media Universe" />
     <meta name="twitter:description" content="The Media Universe Map charts the companies shaping media and tech as a living starfield. Each company is a planet, scaled by its market value, with planets clustered in sectors – studios, gaming, large-cap tech, streaming, and more – all held together like galaxies by industry gravity." />
     <meta name="twitter:image" content="https://map.eshap.tv/og-image-v2.jpg" />
+    <!-- Site name for search results. eshap.tv itself redirects to Linktree, so
+         without this Google names the subdomain after the domain's homepage. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "ESHAP Media Universe",
+        "alternateName": ["Media Universe", "The Media Universe Map"],
+        "url": "https://map.eshap.tv/",
+        "publisher": {
+          "@type": "Person",
+          "name": "Evan Shapiro",
+          "url": "https://eshap.substack.com/"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
