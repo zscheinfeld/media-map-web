@@ -48,6 +48,16 @@ if (snap) {
   for (const c of companies) (bySector.get(c.sector.name) ?? bySector.set(c.sector.name, []).get(c.sector.name)).push(c);
   const sectors = [...bySector.keys()].sort();
   block += `<div id="mm-seo" class="sr-only" aria-hidden="true">\n`;
+  // Real links to the main addresses, so crawlers can discover them from the
+  // homepage (the app opens these views with buttons, which a crawler can't follow).
+  block += `<nav><ul>\n` + [
+    ["/about", "About the Media Universe map"],
+    ["/about/downloads", "Download the map"],
+    ["/linear", "Linear view: every company by market value"],
+    ["/aggregate", "Aggregate view: the media universe year by year"],
+    ["/list", "List view: every company as a table"],
+    ["/time-machine", "Time Machine: the map for every year since 2015"],
+  ].map(([href, label]) => `<li><a href="${href}">${esc(label)}</a></li>`).join("\n") + `\n</ul></nav>\n`;
   block += `<h2>About the Media Universe map</h2>\n`;
   for (const s of snap.about?.sections ?? []) {
     for (const b of s.blocks ?? []) {
