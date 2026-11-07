@@ -1,5 +1,12 @@
 import type {MouseEvent as ReactMouseEvent} from "react"
 import type {ConnectionStyle} from "./types.js"
+import {boxEdgeDistance} from "./labelBox.js"
+
+/** A name box (half-extents, slide units) the line should stop short of. */
+export type LineEndBox = {hw: number; hh: number}
+
+/** Gap between a line's end and an entity's name, screen px. */
+export const ENTITY_LINE_GAP_PX = 8
 
 export type ConnectionLineProps = {
   ax: number
@@ -8,6 +15,11 @@ export type ConnectionLineProps = {
   by: number
   connectionStyle: ConnectionStyle
   slideUnitsPerPx: number
+  /** Entity ends: the name's box. The line stops ENTITY_LINE_GAP_PX short of it
+   *  rather than running through the text (planet ends need nothing — the
+   *  circle covers the line). */
+  aBox?: LineEndBox
+  bBox?: LineEndBox
   isSelected?: boolean
   isHovered?: boolean
   /** Shows a pointer cursor on the hit area (edit mode). */
@@ -28,6 +40,8 @@ export function ConnectionLine({
   by,
   connectionStyle,
   slideUnitsPerPx,
+  aBox,
+  bBox,
   isSelected = false,
   isHovered = false,
   interactive = false,
@@ -36,6 +50,19 @@ export function ConnectionLine({
   onMouseLeave,
   onClick,
 }: ConnectionLineProps) {
+  if (aBox || bBox) {
+    const len = Math.hypot(bx - ax, by - ay)
+    if (len > 0) {
+      const dx = (bx - ax) / len
+      const dy = (by - ay) / len
+      const gap = ENTITY_LINE_GAP_PX * slideUnitsPerPx
+      const cutA = aBox ? boxEdgeDistance(aBox.hw, aBox.hh, dx, dy) + gap : 0
+      const cutB = bBox ? boxEdgeDistance(bBox.hw, bBox.hh, dx, dy) + gap : 0
+      // Ends so close the names meet: draw nothing rather than a reversed stub.
+      if (cutA + cutB >= len) return null
+      ;[ax, ay, bx, by] = [ax + dx * cutA, ay + dy * cutA, bx - dx * cutB, by - dy * cutB]
+    }
+  }
   const strokeW = (isSelected ? 3.5 : isHovered ? 3 : 2) * slideUnitsPerPx
   const stroke = isSelected
     ? "#ffe066"

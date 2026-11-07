@@ -33,7 +33,9 @@ export {CONNECTION_PULL, solveLayout, solveLayoutSteps, type SolveLayoutOptions}
 
 export {Planet, type PlanetProps} from "./Planet.js"
 
-export {ConnectionLine, type ConnectionLineProps} from "./ConnectionLine.js"
+export {ConnectionLine, ENTITY_LINE_GAP_PX, type ConnectionLineProps, type LineEndBox} from "./ConnectionLine.js"
+
+export {labelHalfExtents} from "./labelBox.js"
 
 export {
   type Moment,

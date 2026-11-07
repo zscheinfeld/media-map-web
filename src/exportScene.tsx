@@ -2,7 +2,7 @@
 // component-only so React Fast Refresh can hot-swap them). The export logic
 // itself lives in exportMap.tsx.
 
-import { ConnectionLine, Planet, type PlanetNode } from "@media-map/map-core";
+import { ConnectionLine, Planet, labelHalfExtents, type PlanetNode } from "@media-map/map-core";
 import { CANVAS_DESKTOP } from "./sectors";
 
 export const EXPORT_W = 3840;
@@ -113,6 +113,8 @@ export function ExportMapScene({
             by={b.y}
             connectionStyle={conn.style}
             slideUnitsPerPx={su}
+            aBox={a.isEntity ? labelHalfExtents(a, labelPx(a) * su) : undefined}
+            bBox={b.isEntity ? labelHalfExtents(b, labelPx(b) * su) : undefined}
           />
         );
       })}

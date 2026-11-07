@@ -6,6 +6,7 @@ import {
   type SolveLayoutOptions,
   Planet,
   ConnectionLine,
+  labelHalfExtents,
   computeAnchorDiam,
   diameterFor,
   makeMoment,
@@ -8311,6 +8312,13 @@ export default function MediaMap() {
               const by = dragState?.name === b.name ? dragState.y : b.y;
               // Dim with the planets on sector-hover: a line stays lit if either
               // endpoint is in the hovered sector (its relationships), else it dims.
+              // An entity is only its name: stop the line short of the text
+              // (unless the name is hidden — mobile, zoomed out — so the line
+              // still reaches the point).
+              const entityBox = (n: PlanetNode) =>
+                n.isEntity && !(mobileView && zoom < ENTITY_MOBILE_ZOOM_THRESHOLD)
+                  ? labelHalfExtents(n, renderLabelPx(n) * slideUnitsPerPx)
+                  : undefined;
               const connDimmed =
                 (spotlitSector !== null && a.sector !== spotlitSector && b.sector !== spotlitSector) ||
                 (searchMatches !== null && !searchMatches.has(a.name) && !searchMatches.has(b.name));
@@ -8326,6 +8334,8 @@ export default function MediaMap() {
                     by={by}
                     connectionStyle={conn.style}
                     slideUnitsPerPx={slideUnitsPerPx}
+                    aBox={entityBox(a)}
+                    bBox={entityBox(b)}
                     isSelected={isEditMode && selectedConnIdx === idx}
                     isHovered={hoveredConn?.idx === idx}
                     interactive={isEditMode}
