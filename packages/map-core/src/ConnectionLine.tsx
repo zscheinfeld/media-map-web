@@ -6,7 +6,7 @@ import {boxEdgeDistance} from "./labelBox.js"
 export type LineEndBox = {hw: number; hh: number}
 
 /** Gap between a line's end and an entity's name, screen px. */
-export const ENTITY_LINE_GAP_PX = 8
+export const ENTITY_LINE_GAP_PX = 4
 
 export type ConnectionLineProps = {
   ax: number
